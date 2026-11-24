@@ -18,6 +18,14 @@ import (
 // wrangler config has "assets".
 const AssetsPrefix = "assets/"
 
+// AssetsOnlyMain is the module hostd supplies as the Worker of an
+// assets-only project (wrangler "assets" with no "main"): the assets router
+// answers every GET and HEAD, so only other methods reach it (405).
+const AssetsOnlyMain = "__tw_assets_only.js"
+
+const assetsOnlyJS = `export default { fetch() { return new Response(null, { status: 405, headers: { allow: "GET, HEAD" } }); } };
+`
+
 // Assets html_handling values (Cloudflare's).
 const (
 	HTMLAutoTrailingSlash  = "auto-trailing-slash" // the default
@@ -48,6 +56,16 @@ type Assets struct {
 	WorkerFirst WorkerFirst
 	// Files are the asset files by URL path ("/index.html" -> contents).
 	Files map[string][]byte
+
+	// Only is an assets-only project (no "main"): the router answers every
+	// request, with not_found_handling for a miss and 405 for a method
+	// other than GET and HEAD.
+	Only bool
+
+	// Redirects and Headers are the root _redirects and _headers files,
+	// parsed (assetrules.go). They are not served as files.
+	Redirects []Redirect
+	Headers   []HeaderRule
 }
 
 // WorkerFirst is assets.run_worker_first.
@@ -165,12 +183,33 @@ func parseAssets(wj []byte, files map[string][]byte, a *App) error {
 			as.Files["/"+strings.TrimPrefix(p, AssetsPrefix)] = b
 		}
 	}
+	if b, ok := as.Files["/_redirects"]; ok {
+		delete(as.Files, "/_redirects")
+		var err error
+		if as.Redirects, err = ParseRedirects(b); err != nil {
+			return fmt.Errorf("bundle: assets %w", err)
+		}
+	}
+	if b, ok := as.Files["/_headers"]; ok {
+		delete(as.Files, "/_headers")
+		var err error
+		if as.Headers, err = ParseHeaders(b); err != nil {
+			return fmt.Errorf("bundle: assets %w", err)
+		}
+	}
+	if as.Only = a.Main == AssetsOnlyMain; as.Only && (as.WorkerFirst.All || len(as.WorkerFirst.Patterns) > 0) {
+		return fmt.Errorf("bundle: wrangler.jsonc assets.run_worker_first needs a Worker (set \"main\")")
+	}
 	a.Assets = as
 	return nil
 }
 
 // CheckAssets validates wrangler JSON's "assets" settings (tw deploy checks
 // them before building).
-func CheckAssets(wj []byte) error {
-	return parseAssets(wj, nil, &App{})
+func CheckAssets(wj []byte, assetsOnly bool) error {
+	a := &App{}
+	if assetsOnly {
+		a.Main = AssetsOnlyMain
+	}
+	return parseAssets(wj, nil, a)
 }

@@ -33,6 +33,19 @@ test("serves the files in public/", async () => {
   assert.equal(again.status, 304);
 });
 
+test("_redirects and _headers apply", async () => {
+  const alice = app.as("alice");
+  const r = await alice.fetch("/home", { redirect: "manual" });
+  assert.equal(r.status, 301);
+  assert.equal(r.headers.get("location"), "/");
+
+  const css = await alice.fetch("/style.css");
+  assert.equal(css.headers.get("x-content-type-options"), "nosniff");
+  // Worker responses don't get them.
+  const api = await alice.fetch("/api/whoami");
+  assert.equal(api.headers.get("x-content-type-options"), null);
+});
+
 test("the Worker answers /api/* with the verified caller", async () => {
   const alice = app.as("alice");
   const me = await (await alice.fetch("/api/whoami")).json();

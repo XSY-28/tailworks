@@ -18,20 +18,14 @@ import (
 	"github.com/rosskukulinski/tailworks/hostd/bundle"
 )
 
-// assetsAlwaysIgnored are never uploaded (as wrangler: its own control
-// files, and the usual VCS and OS clutter).
+// assetsAlwaysIgnored are never uploaded (as wrangler: .assetsignore, and
+// the usual VCS and OS clutter). _redirects and _headers are uploaded and
+// read by the host, not served.
 var assetsAlwaysIgnored = map[string]bool{
 	".assetsignore": true,
 	".DS_Store":     true,
 	".git":          true,
 	"node_modules":  true,
-}
-
-// assetsNotYet are Cloudflare's assets control files tailworks doesn't read
-// yet: they are left out of the upload (assetsWarnings says so).
-var assetsNotYet = map[string]bool{
-	"_headers":   true,
-	"_redirects": true,
 }
 
 // assetsDir is the app's absolute assets.directory ("" without "assets").
@@ -45,22 +39,6 @@ func (a *app) assetsDir() string {
 		return d
 	}
 	return filepath.Join(a.Dir, d)
-}
-
-// assetsWarnings name the control files in assets.directory that tailworks
-// leaves out (loadWrangler adds them to the app's warnings).
-func (a *app) assetsWarnings(file string) []string {
-	dir := a.assetsDir()
-	if dir == "" {
-		return nil
-	}
-	var out []string
-	for _, n := range []string{"_headers", "_redirects"} {
-		if _, err := os.Stat(filepath.Join(dir, n)); err == nil {
-			out = append(out, fmt.Sprintf("%s: assets: %s is not supported yet and is not uploaded", file, n))
-		}
-	}
-	return out
 }
 
 // addAssets adds assets.directory's files to files under the assets prefix.
@@ -77,7 +55,7 @@ func (a *app) addAssets(files map[string][]byte) error {
 		return fail("bad_request", file+": assets: want an object like {\"directory\": \"./public\"}")
 	}
 	wj, _ := json.Marshal(map[string]any{"assets": raw})
-	if err := bundle.CheckAssets(wj); err != nil {
+	if err := bundle.CheckAssets(wj, a.assetsOnly()); err != nil {
 		return fail("bad_request", file+": "+strings.TrimPrefix(err.Error(), "bundle: wrangler.jsonc "))
 	}
 	dir := a.assetsDir()
@@ -105,7 +83,7 @@ func (a *app) addAssets(files map[string][]byte) error {
 		if r == "." {
 			return nil
 		}
-		skip := assetsAlwaysIgnored[d.Name()] || ignore.match(r, d.IsDir()) || !d.IsDir() && assetsNotYet[r]
+		skip := assetsAlwaysIgnored[d.Name()] || ignore.match(r, d.IsDir())
 		if skip {
 			if d.IsDir() {
 				return filepath.SkipDir
@@ -136,7 +114,26 @@ func (a *app) addAssets(files map[string][]byte) error {
 		}
 		return fail("bad_request", "reading assets.directory: "+err.Error())
 	}
+	// _redirects and _headers: a bad line fails here, before the upload
+	// (hostd parses them again; they are not served as files).
+	if b, ok := files[bundle.AssetsPrefix+"_redirects"]; ok {
+		if _, err := bundle.ParseRedirects(b); err != nil {
+			return fail("bad_request", rel(a.Dir, dir)+"/"+err.Error())
+		}
+	}
+	if b, ok := files[bundle.AssetsPrefix+"_headers"]; ok {
+		if _, err := bundle.ParseHeaders(b); err != nil {
+			return fail("bad_request", rel(a.Dir, dir)+"/"+err.Error())
+		}
+	}
 	return nil
+}
+
+// assetsOnly reports an assets-only project: wrangler "assets" and no
+// "main". tw bundles no Worker; hostd supplies one (bundle.AssetsOnlyMain).
+func (a *app) assetsOnly() bool {
+	_, ok := a.Wrangler["assets"]
+	return ok && wranglerMain(a.Wrangler) == ""
 }
 
 // checkBundleSize fails when the packed bundle is over what mgmt accepts

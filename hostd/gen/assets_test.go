@@ -45,9 +45,25 @@ var assetFiles = map[string]string{
 
 func startAssets(t *testing.T, worker string, assets map[string]any) *assetClient {
 	t.Helper()
-	w, _ := json.Marshal(map[string]any{"name": "w", "main": "index.js", "compatibility_date": "2026-04-01", "assets": assets})
-	files := map[string][]byte{"wrangler.jsonc": w, "index.js": []byte(worker)}
+	return startAssetsWith(t, worker, assets, nil)
+}
+
+// startAssetsWith is startAssets with extra asset files (e.g. _redirects);
+// worker "" is an assets-only project (no main).
+func startAssetsWith(t *testing.T, worker string, assets map[string]any, extra map[string]string) *assetClient {
+	t.Helper()
+	cfg := map[string]any{"name": "w", "compatibility_date": "2026-04-01", "assets": assets}
+	files := map[string][]byte{}
+	if worker != "" {
+		cfg["main"] = "index.js"
+		files["index.js"] = []byte(worker)
+	}
+	w, _ := json.Marshal(cfg)
+	files["wrangler.jsonc"] = w
 	for p, b := range assetFiles {
+		files[bundle.AssetsPrefix+p] = []byte(b)
+	}
+	for p, b := range extra {
 		files[bundle.AssetsPrefix+p] = []byte(b)
 	}
 	in := startFiles(t, files)
@@ -285,4 +301,111 @@ func TestGenerateAssetsFiles(t *testing.T) {
 	if g, _ := os.ReadFile(filepath.Join(gdir, "config.capnp")); !strings.Contains(string(g), `disk = (path = "assets", writable = false)`) {
 		t.Errorf("guest config.capnp: disk path not relative")
 	}
+}
+
+const testRedirects = `# static, dynamic, external, rewrite
+/old              /about
+/gone             /about       301
+/blog/*           /posts/:splat 308
+/u/:id/card       /people/:id?tab=card
+/ext/*            https://example.com/:splat
+/app/*            /index.html  200
+/about            /never       301
+`
+
+const testHeaders = `/*
+  X-Frame-Options: DENY
+  X-Shared: root
+/img/*
+  Cache-Control: public, max-age=31536000, immutable
+  X-Shared: img
+  ! X-Frame-Options
+/nested/:a/*
+  X-Seg: :a/:splat
+`
+
+// TestAssetsRedirects: _redirects with a Worker: static and dynamic rules,
+// status codes, query strings, external targets and 200 rewrites; rules
+// run before files (so /about's rule wins over about.html), and never for
+// run_worker_first paths.
+func TestAssetsRedirects(t *testing.T) {
+	c := startAssetsWith(t, assetsWorker, map[string]any{"directory": "public", "binding": "ASSETS", "run_worker_first": []string{"/api/*"}},
+		map[string]string{"_redirects": testRedirects + "/api/x /never\n"})
+	cases := []struct {
+		path, loc string
+		code      int
+	}{
+		{"/old", "/about", 302},
+		{"/old?q=1", "/about?q=1", 302},
+		{"/gone", "/about", 301},
+		{"/blog/2026/hello", "/posts/2026/hello", 308},
+		{"/u/42/card?x=1", "/people/42?tab=card", 302},
+		{"/ext/a/b", "https://example.com/a/b", 302},
+		{"/about", "/never", 301},
+	}
+	for _, k := range cases {
+		if r := c.get(k.path); r.code != k.code || r.h.Get("location") != k.loc {
+			t.Errorf("GET %s: %d %q, want %d %q", k.path, r.code, r.h.Get("location"), k.code, k.loc)
+		}
+	}
+	c.status("/app/some/route", 200, "<h1>home</h1>") // 200 rewrite to index.html
+	c.worker("/api/x")                                // run_worker_first beats _redirects
+	c.worker("/blog")                                 // /blog/* needs the slash
+	c.worker("/_redirects")                           // not a file: the Worker gets it
+	if r := c.get("/binding/old"); r.code != 302 || r.h.Get("location") != "/about" {
+		t.Errorf("env.ASSETS /old: %d %v", r.code, r.h) // env.ASSETS applies them too
+	}
+}
+
+// TestAssetsHeaders: _headers on file responses: a rule overrides the
+// router's default, values join across rules, ! removes, placeholders
+// fill in; 304s carry them, Worker responses don't.
+func TestAssetsHeaders(t *testing.T) {
+	c := startAssetsWith(t, assetsWorker, map[string]any{"directory": "public", "binding": "ASSETS", "not_found_handling": "404-page"},
+		map[string]string{"_headers": testHeaders})
+	r := c.file("/about", "<h1>about</h1>", "")
+	if r.h.Get("x-frame-options") != "DENY" || r.h.Get("x-shared") != "root" || r.h.Get("cache-control") != "public, max-age=0, must-revalidate" {
+		t.Errorf("/about headers: %v", r.h)
+	}
+	r = c.file("/img/logo.svg", "<svg/>", "image/svg+xml")
+	if r.h.Get("cache-control") != "public, max-age=31536000, immutable" || r.h.Get("x-shared") != "root, img" || r.h.Get("x-frame-options") != "" {
+		t.Errorf("/img headers: %v", r.h)
+	}
+	if r := c.get("/img/logo.svg", "if-none-match", r.h.Get("etag")); r.code != 304 || r.h.Get("cache-control") != "public, max-age=31536000, immutable" {
+		t.Errorf("304: %d %v", r.code, r.h)
+	}
+	if r := c.file("/nested/deep/f.json", `{"a":1}`, ""); r.h.Get("x-seg") != "deep/f.json" {
+		t.Errorf("placeholders: %q", r.h.Get("x-seg"))
+	}
+	if r := c.get("/nope"); r.worker() != "/nope" || r.h.Get("x-frame-options") != "" {
+		t.Errorf("a Worker response got _headers: %v", r.h)
+	}
+	if r := c.get("/binding/missing"); r.code != 404 || r.h.Get("x-frame-options") != "DENY" {
+		t.Errorf("404 page: %d %v", r.code, r.h)
+	}
+	c.worker("/_headers") // not a file
+}
+
+// TestAssetsOnly: no main. Files as usual, not_found_handling for every
+// miss (404-page here; SPA below), 405 for other methods, _redirects.
+func TestAssetsOnly(t *testing.T) {
+	c := startAssetsWith(t, "", map[string]any{"directory": "public", "not_found_handling": "404-page"},
+		map[string]string{"_redirects": "/old /about 301\n"})
+	c.file("/", "<h1>home</h1>", "")
+	c.file("/about", "<h1>about</h1>", "")
+	c.redirect("/docs", "/docs/")
+	c.status("/nope", 404, "root 404")
+	c.status("/docs/x/y", 404, "docs 404")
+	if r := c.get("/old"); r.code != 301 || r.h.Get("location") != "/about" {
+		t.Errorf("/old: %d %v", r.code, r.h)
+	}
+	if r := c.do("POST", "/about", "workload"); r.code != 405 || r.h.Get("allow") != "GET, HEAD" {
+		t.Errorf("POST: %d %v", r.code, r.h)
+	}
+
+	spa := startAssetsWith(t, "", map[string]any{"directory": "dist", "not_found_handling": "single-page-application"}, nil)
+	spa.status("/app/deep/route", 200, "<h1>home</h1>") // no navigation header needed: there is no Worker
+	spa.file("/app.js", "console.log(1)", "")
+	none := startAssetsWith(t, "", map[string]any{"directory": "dist"}, nil)
+	none.status("/nope", 404, "")
 }

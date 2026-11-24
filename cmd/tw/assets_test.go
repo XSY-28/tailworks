@@ -27,8 +27,8 @@ func assetsApp(t *testing.T, assets string, files map[string]string) *app {
 }
 
 // TestAddAssets: assets.directory's files go in the bundle under assets/,
-// except .assetsignore matches, VCS/OS clutter and the control files
-// tailworks doesn't read yet (warned at load).
+// except .assetsignore matches and VCS/OS clutter. _headers and _redirects
+// go too (the host reads them; they are not served).
 func TestAddAssets(t *testing.T) {
 	a := assetsApp(t, `"assets":{"directory":"./dist","binding":"ASSETS"}`, map[string]string{
 		"dist/index.html":               "<h1>hi</h1>",
@@ -52,17 +52,11 @@ func TestAddAssets(t *testing.T) {
 		got = append(got, p)
 	}
 	sort.Strings(got)
-	want := "assets/.well-known/security.txt,assets/index.html,assets/js/app.js,assets/sub/top-only.txt"
+	want := "assets/.well-known/security.txt,assets/_headers,assets/_redirects,assets/index.html,assets/js/app.js,assets/sub/top-only.txt"
 	if strings.Join(got, ",") != want {
 		t.Errorf("bundle assets:\n %s\nwant\n %s", strings.Join(got, ","), want)
 	}
-	w := strings.Join(a.Warnings, "\n")
-	for _, n := range []string{"_headers", "_redirects"} {
-		if !strings.Contains(w, "assets: "+n+" is not supported yet") {
-			t.Errorf("no warning for %s: %s", n, w)
-		}
-	}
-	if strings.Contains(w, "assets: not supported") {
+	if w := strings.Join(a.Warnings, "\n"); strings.Contains(w, "assets") {
 		t.Errorf("assets still warned as unsupported: %s", w)
 	}
 }
@@ -80,8 +74,25 @@ func TestAddAssetsErrors(t *testing.T) {
 			t.Errorf("%s: %v, want %q", c.assets, err, c.want)
 		}
 	}
+	// A bad _redirects or _headers line fails before the upload, naming it.
+	for f, c := range map[string]string{
+		"public/_redirects": "/a /b 404",
+		"public/_headers":   "  X-Orphan: 1",
+	} {
+		a := assetsApp(t, `"assets":{"directory":"./public"}`, map[string]string{"public/index.html": "x", f: c})
+		err := a.addAssets(map[string][]byte{})
+		if err == nil || !strings.Contains(err.Error(), "public/_") || !strings.Contains(err.Error(), ":1:") {
+			t.Errorf("%s %q: %v, want the file and line", f, c, err)
+		}
+	}
+	// Assets-only (no main): run_worker_first has no Worker to run.
+	a := assetsApp(t, "", nil)
+	a.Wrangler = map[string]any{"assets": map[string]any{"directory": "./public", "run_worker_first": true}}
+	if err := a.addAssets(map[string][]byte{}); err == nil || !strings.Contains(err.Error(), "needs a Worker") {
+		t.Errorf("assets-only run_worker_first: %v", err)
+	}
 	// A build output under assets/ would be taken for an asset.
-	a := assetsApp(t, `"assets":{"directory":"./public"}`, map[string]string{"public/index.html": "x"})
+	a = assetsApp(t, `"assets":{"directory":"./public"}`, map[string]string{"public/index.html": "x"})
 	if err := a.addAssets(map[string][]byte{bundle.AssetsPrefix + "x.js": nil}); err == nil || !strings.Contains(err.Error(), "where the bundle carries assets") {
 		t.Errorf("collision: %v", err)
 	}
@@ -107,5 +118,42 @@ func TestSnapshotAssetsDir(t *testing.T) {
 	os.Chtimes(p, future, future)
 	if snapshot(a.Dir, a.assetsDir()) == before {
 		t.Error("an asset edit did not change the snapshot")
+	}
+}
+
+// TestBuildAssetsOnly: a project with "assets" and no "main" bundles no
+// Worker; the host takes it as assets-only (it supplies the Worker).
+func TestBuildAssetsOnly(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"wrangler.jsonc":   `{"name":"spa","assets":{"directory":"./dist","not_found_handling":"single-page-application"}}`,
+		"dist/index.html":  "<div id=app></div>",
+		"dist/_redirects":  "/old /new 301",
+		"dist/assets/a.js": "1",
+	})
+	a, err := loadApp(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tb, js, err := a.build(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := bundle.Unpack(tb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := bundle.Parse(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if js != 0 || app.Main != bundle.AssetsOnlyMain || app.Assets == nil || !app.Assets.Only {
+		t.Fatalf("js %d main %q assets %+v", js, app.Main, app.Assets)
+	}
+	if _, ok := app.Assets.Files["/assets/a.js"]; !ok || len(app.Assets.Redirects) != 1 {
+		t.Errorf("files %v redirects %+v", app.Assets.AssetPaths(), app.Assets.Redirects)
+	}
+	if _, ok := app.Assets.Files["/_redirects"]; ok {
+		t.Error("_redirects is served as a file")
 	}
 }

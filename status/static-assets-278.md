@@ -11,8 +11,9 @@ until it is numbered).
 - **CLI** (`cmd/tw/assets.go`): `tw deploy` / `tw dev` read
   `assets.directory` and add its files to the bundle as `assets/<path>`.
   `.assetsignore` (gitignore subset), `.git`, `node_modules`, `.DS_Store`
-  are skipped; `_headers` / `_redirects` are left out with a load-time
-  warning. Settings are validated before the build
+  are skipped. `_redirects` / `_headers` are uploaded and checked before
+  the upload (`bundle.ParseRedirects` / `ParseHeaders`). Assets-only
+  projects (no `main`) bundle no code. Settings are validated before the build
   (`bundle.CheckAssets`). The packed bundle is checked against the deploy
   request's 64 MiB JSON body (`checkBundleSize`). The `assets: not
   supported` warning is gone (`site` still warns). `tw types` types the
@@ -69,8 +70,8 @@ until it is numbered).
 
 ## Gaps / next steps
 
-- `_headers`, `_redirects`; assets-only projects (no `main`); `env.ASSETS`
-  in facet-mode objects; a separate upload path for sites over ~48 MiB.
+- `env.ASSETS` in facet-mode objects; a separate upload path for sites
+  over ~48 MiB; domain-level `_redirects` / `_headers` rules.
 - `create-tailworks`'s `lib/build.mjs` (used by `hostdtest.Build`) doesn't
   read `assets`; `tw` does, for every bundler path.
 - microVM tier not run here (needs Linux KVM): covered by the generated

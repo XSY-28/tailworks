@@ -47,6 +47,7 @@ func TestRequiredAssets(t *testing.T) {
 	for w, want := range map[string]bool{
 		`{"name":"app","main":"index.js","assets":{"directory":"public"}}`: true,
 		`{"name":"app","main":"index.js"}`:                                 false,
+		`{"name":"app","assets":{"directory":"dist"}}`:                     true, // assets-only
 	} {
 		b, err := bundle.Pack(map[string][]byte{
 			"wrangler.jsonc":    []byte(w),

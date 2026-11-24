@@ -38,8 +38,8 @@ commands that call Cloudflare's API. See [below](#wrangler-commands-that-call-cl
   `tw secret`, `tw kv`, `tw d1`, `tw queues`, `tw r2` and `tw logs`
   stand in for their wrangler commands. Secrets apply on the next deploy.
 - **Not there:** Workers AI, Vectorize, Hyperdrive, Browser Rendering,
-  Email, service bindings, TCP `connect()`. Static assets work, without
-  `_headers` and `_redirects` yet ([below](#assets)). The full list,
+  Email, service bindings, TCP `connect()`. Static assets work, with
+  `_redirects` and `_headers` ([below](#assets)). The full list,
   with tests: [COMPAT.md](COMPAT.md).
 
 ## Config files
@@ -213,13 +213,16 @@ How a request is answered:
    any characters, `/` too; a `!` pattern excludes) goes to the Worker.
    It can answer, or check `getCaller(req)` and then serve a file with
    `env.ASSETS.fetch(req)`.
-2. A `GET` or `HEAD` for a file is answered with the file: `Content-Type`
+2. A `_redirects` rule that matches the path (first match wins) answers
+   with its redirect, or, for status `200`, with its destination's file
+   at the requested URL.
+3. A `GET` or `HEAD` for a file is answered with the file: `Content-Type`
    from its extension, a strong `ETag`, `Cache-Control: public, max-age=0,
    must-revalidate`, and `304 Not Modified` for a matching `If-None-Match`.
    `html_handling` maps `/about` to `about.html`, `/docs/` to
    `docs/index.html`, and redirects (307) the other spellings, the way
    Cloudflare does.
-3. Anything else goes to the Worker. In `single-page-application` mode a
+4. Anything else goes to the Worker. In `single-page-application` mode a
    browser navigation (`Sec-Fetch-Mode: navigate`) that matches no file
    gets `index.html` instead.
 
@@ -229,8 +232,59 @@ How a request is answered:
 
 What gets uploaded: every file under `directory`, except the patterns in
 its `.assetsignore` (gitignore-style: `*.map`, `private/`, `/top.txt`;
-no `!` or `**`), `.git`, `node_modules` and `.DS_Store`. `_headers` and
-`_redirects` are not read yet: they are left out, with a warning.
+no `!` or `**`), `.git`, `node_modules` and `.DS_Store`.
+
+### `_redirects` and `_headers`
+
+Put them at the top of `directory`. They are read by the host, never
+served as files, and `tw deploy` / `tw dev` reject a bad line (with its
+line number) before uploading.
+
+```
+# _redirects: <from> <to> [status]
+/old             /new                     # 302 by default
+/moved           /new             301     # 301, 302, 303, 307 or 308
+/blog/*          /posts/:splat    308     # * is a splat (any characters, / too)
+/u/:id/profile   /people/:id              # :name is one path segment
+/docs/*          https://docs.example.com/:splat
+/app/*           /index.html      200     # a rewrite: that file, at this URL
+```
+
+```
+# _headers: a path pattern, then indented headers
+/*
+  X-Frame-Options: DENY
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+  ! X-Frame-Options
+```
+
+- Rules match the URL path as sent (percent-encoded). `_redirects` keeps
+  the request's query string unless the destination has its own. A `200`
+  rewrite only names a path on the site; a destination with no file is a
+  miss.
+- `_headers` apply to file responses (including 304s and the 404 page),
+  not to redirects or the Worker's own responses. A rule's header replaces
+  tailworks' default (`Cache-Control`, `Content-Type`); the same header
+  from several matching rules is joined with `, `; `! Name` removes it.
+  `:splat` and `:name` fill in values too.
+- Limits, as on Cloudflare: 2,000 static and 100 dynamic redirects (1,000
+  characters a line); 100 header rules (2,000 characters a line). Only
+  paths: domain-level rules (`https://host/…` as the pattern) are refused.
+
+### Assets-only projects
+
+A config with `assets` and no `main` is a site with no Worker:
+
+```jsonc
+{ "name": "docs", "assets": { "directory": "./dist", "not_found_handling": "single-page-application" } }
+```
+
+Every `GET` and `HEAD` is answered from the files, and a miss gets
+`not_found_handling` (a single-page app gets `index.html` for any path,
+navigation or not). Other methods get `405`. `run_worker_first` needs a
+Worker, so it is an error here. `tw` bundles no code; the host supplies
+the stand-in Worker.
 
 `tw dev` serves the same way and reloads when a file in `directory`
 changes, even when it is `dist/`. Build your client (for example
@@ -246,7 +300,6 @@ Differences from Cloudflare:
   under a `run_worker_first` path.
 - `env.ASSETS` is in the Worker and in plain-mode Durable Objects
   (`"egress": "workload"`), not in facet-mode objects.
-- A project needs a `main` Worker (no assets-only projects yet).
 - The host must run a tailworks release with the `assets` feature; mgmt
   doesn't place an assets deployment on an older host.
 

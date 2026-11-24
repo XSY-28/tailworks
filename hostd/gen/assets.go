@@ -6,7 +6,8 @@ package gen
 //	assets/<path>              the files (read-only disk service "assets-disk")
 //	tw-assets.js               the router Worker (js/assets.js), service "assets"
 //	tw-assets-manifest.json    URL path -> ETag
-//	tw-assets-config.json      html_handling, not_found_handling, run_worker_first
+//	tw-assets-config.json      html_handling, not_found_handling, run_worker_first,
+//	                           assets-only, and the compiled _redirects / _headers rules
 //	__tw_assets.js             the tenant-side front (js/assets-front.js)
 //
 // The tenant service binds the router as __TW_ASSETS (props router: true)
@@ -55,6 +56,9 @@ func writeAssets(app *bundle.App, write func(string, []byte) error) error {
 		"htmlHandling":   as.HTMLHandling,
 		"notFound":       as.NotFound,
 		"runWorkerFirst": as.WorkerFirst,
+		"assetsOnly":     as.Only,
+		"redirects":      nonNilSlice(as.Redirects),
+		"headers":        nonNilSlice(as.Headers),
 	})
 	for name, b := range map[string][]byte{
 		"tw-assets-manifest.json": mb,
@@ -68,6 +72,13 @@ func writeAssets(app *bundle.App, write func(string, []byte) error) error {
 	}
 	// An app with no files still gets the directory the disk service names.
 	return write(assetsDir+"/.tw-keep", nil)
+}
+
+func nonNilSlice[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
 }
 
 // assetsMain wraps the tenant main module's default export expression.

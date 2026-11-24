@@ -75,7 +75,6 @@ func (a *app) loadWrangler(twName string) (string, error) {
 	a.Wrangler = w
 	a.Warnings = append(a.Warnings, notes...)
 	a.Warnings = append(a.Warnings, wranglerWarnings(file, w, a.Opts.builder())...)
-	a.Warnings = append(a.Warnings, a.assetsWarnings(file)...) // assets.go
 	base := twName
 	if base == "" {
 		base, _ = cfg["name"].(string)

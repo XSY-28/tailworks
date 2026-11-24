@@ -288,11 +288,15 @@ func Parse(files map[string][]byte) (*App, error) {
 	if a.CompatDate == "" {
 		a.CompatDate = "2026-04-01"
 	}
-	if w.Main == "" {
+	assets := hasAssetsConfig(StripJSONC(wb)) // assets.go: assets/ holds files, not modules
+	if w.Main == "" && !assets {
 		return nil, errors.New("bundle: wrangler.jsonc has no main")
 	}
+	assetsOnly := w.Main == "" // an assets-only project: hostd supplies the Worker
+	if assetsOnly {
+		w.Main = AssetsOnlyMain
+	}
 	a.Main = path.Clean(strings.TrimPrefix(w.Main, "./"))
-	assets := hasAssetsConfig(StripJSONC(wb)) // assets.go: assets/ holds files, not modules
 	for p, b := range files {
 		if assets && strings.HasPrefix(p, AssetsPrefix) {
 			continue
@@ -310,6 +314,9 @@ func Parse(files map[string][]byte) (*App, error) {
 				a.Modules[p] = b
 			}
 		}
+	}
+	if assetsOnly {
+		a.Modules[AssetsOnlyMain] = []byte(assetsOnlyJS)
 	}
 	if _, ok := a.Modules[a.Main]; !ok {
 		return nil, fmt.Errorf("bundle: main module %q not in bundle", a.Main)

@@ -253,6 +253,11 @@ func (a *app) build(vars map[string]string) ([]byte, int, error) {
 	var types map[string]string
 	var js int
 	main := "dist/index.js"
+	if a.assetsOnly() {
+		// An assets-only project (assets.go): no Worker to bundle.
+		tb, err := a.packWorkerd(map[string][]byte{}, "", nil, vars)
+		return tb, 0, err
+	}
 	if a.Opts.builder() == "wrangler" {
 		files, main, types, js, err = a.buildWrangler(out)
 	} else {

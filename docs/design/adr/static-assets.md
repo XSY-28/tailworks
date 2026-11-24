@@ -27,8 +27,7 @@ Number it when it merges (AGENTS.md rule 5).
    `tw dev` read `assets.directory` (relative to the config file) and add
    every file as `assets/<path>`, outside the module graph. They skip
    `.assetsignore` patterns (a gitignore subset), `.git`, `node_modules`
-   and `.DS_Store`, and leave `_headers` and `_redirects` out with a
-   warning. The resolved `wrangler.jsonc` keeps the `assets` settings.
+   and `.DS_Store`. The resolved `wrangler.jsonc` keeps the `assets` settings.
    When `wrangler.jsonc` has `assets`, `hostd/bundle` treats `assets/` as
    files, never modules; without it, `assets/` is an ordinary directory,
    as before. Assets are read by `tw` itself, so they work the same with
@@ -90,6 +89,26 @@ Number it when it merges (AGENTS.md rule 5).
     also watches `assets.directory` (even when it is `dist/`, which it
     otherwise skips), so an asset edit reloads.
 11. **`tw types`** types `env.<binding>` as `Fetcher`.
+12. **`_redirects` and `_headers`** (the root files of `directory`) are
+    parsed once, in `hostd/bundle/assetrules.go`: by `tw` before the
+    upload (a bad line fails with its line number) and by hostd at deploy,
+    which hands the compiled rules (patterns as JS regexps) to the router.
+    Neither file is served. Cloudflare's syntax and limits: `*` splat and
+    `:name` segment placeholders; statuses 301, 302 (default), 303, 307,
+    308 and 200 (a rewrite to a path on the site); 2,000 static and 100
+    dynamic redirects; 100 header rules. Redirects run after
+    `run_worker_first` and before file lookup, first match wins, for the
+    router and `env.ASSETS` alike. Headers apply to file responses (304s
+    and 404 pages too), not to redirects or Worker responses; a rule
+    replaces the router's default header, matching rules join with `, `,
+    and `! Name` removes. Domain-level rules are refused.
+13. **Assets-only projects:** `assets` with no `main`. `tw` bundles no
+    code; `hostd/bundle` supplies a stand-in Worker
+    (`bundle.AssetsOnlyMain`), and the router answers every `GET` and
+    `HEAD`, with `not_found_handling` for any miss (a single-page app gets
+    `index.html` whatever the request mode) and 405 for other methods.
+    `run_worker_first` is an error there. Only a host with the `assets`
+    feature accepts such a bundle (an older one fails it for no `main`).
 
 **Consequences.**
 
@@ -104,9 +123,9 @@ Number it when it merges (AGENTS.md rule 5).
 - Old bundles and apps without `assets` are unchanged: no extra services,
   modules or bindings are generated.
 
-**Not in this version.** `_headers` and `_redirects`; an assets-only
-project (no `main`); `env.ASSETS` in facet-mode objects; a separate upload
-path; content-hash deduplication across deploys; precompressed variants.
+**Not in this version.** `env.ASSETS` in facet-mode objects; a separate
+upload path; domain-level `_redirects` / `_headers` rules; content-hash
+deduplication across deploys; precompressed variants.
 
 **Open questions (from #278).**
 

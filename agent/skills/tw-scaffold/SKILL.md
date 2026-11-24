@@ -73,8 +73,8 @@ won't work on tailworks. More: `tw docs show wrangler.md`.
 
 Check before you reach for a Cloudflare binding: KV, R2, D1, Queues,
 Workflows, Workers AI, Vectorize, Hyperdrive, Browser Rendering, service
-bindings have no binding on tailworks. Static assets (`assets`) work, without
-`_headers` and `_redirects`. Durable Object storage
+bindings have no binding on tailworks. Static assets (`assets`) work, with
+`_redirects`, `_headers` and assets-only projects. Durable Object storage
 (KV API and SQLite) works. Call other services over the tailnet with
 `fetch("http://<magicdns-name>/...")`; the call leaves from the workload's
 own node. The full table: `tw docs show COMPAT.md`.

@@ -175,7 +175,7 @@ and the tests behind each row: [docs/COMPAT.md](docs/COMPAT.md).
 | Bindings | [Service bindings](docs/COMPAT.md#service-bindings) | ❌ | call the workload over the tailnet |
 | Bindings | [Secrets](docs/COMPAT.md#secrets) | ⚠️ | `tw secret`; applied on the next deploy |
 | Bindings | [Vars](docs/COMPAT.md#vars) | ✅ | |
-| Bindings | [Static assets](docs/COMPAT.md#assets) | ⚠️ | no `_headers` / `_redirects` yet; within the 64 MiB bundle |
+| Bindings | [Static assets](docs/COMPAT.md#assets) | ⚠️ | `_redirects`, `_headers` and assets-only work; within the 64 MiB bundle |
 | Triggers | [Cron](docs/COMPAT.md#cron) | ✅ | |
 | Triggers | [Queue consumers](docs/COMPAT.md#queue-consumers) | ⚠️ | competing consumers allowed; fixed concurrency |
 | Triggers | [Queue pull consumers](docs/COMPAT.md#queue-pull) | ⚠️ | tailworks' API, admin only |

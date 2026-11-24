@@ -2,8 +2,8 @@
 // Generated per deployment by hostd/gen/assets.go: one workerd service,
 // "assets", with the deployment's files on a read-only disk service
 // (env.FILES) and a manifest of their ETags. It follows Cloudflare's asset
-// worker: html_handling, not_found_handling, ETag / If-None-Match, and
-// run_worker_first.
+// worker: html_handling, not_found_handling, ETag / If-None-Match,
+// run_worker_first, _redirects and _headers, and assets-only projects.
 //
 // Two ways in:
 //   - the router (ctx.props.router, from the tenant's __tw_main.js) for a
@@ -118,9 +118,49 @@ function etagMatches(header, etag) {
   return header.split(",").some((t) => t.trim().replace(/^W\//, "") === etag);
 }
 
-async function serveFile(req, env, file, status) {
+// _redirects and _headers (compiled by hostd/bundle/assetrules.go): each
+// rule's re is matched against the request's URL path as sent; :splat and
+// :name in a destination or header value take what the pattern captured.
+const REDIRECTS = (CFG.redirects ?? []).map((r) => ({ ...r, rx: new RegExp(r.re) }));
+const HEADER_RULES = (CFG.headers ?? []).map((r) => ({ ...r, rx: new RegExp(r.re) }));
+
+function fill(s, groups) {
+  return s.replace(/:([A-Za-z][A-Za-z0-9_]*)/g, (m, n) => (groups && groups[n] !== undefined ? groups[n] : m));
+}
+
+// matchRedirect is the first _redirects rule matching rawPath, if any.
+function matchRedirect(rawPath) {
+  for (const r of REDIRECTS) {
+    const m = r.rx.exec(rawPath);
+    if (m) return { to: fill(r.to, m.groups), status: r.status };
+  }
+  return null;
+}
+
+// applyHeaders adds the matching _headers rules to h: a rule's header
+// replaces the router's default, several rules' values for one header are
+// joined with ", ", and "! Name" removes it (whoever set it before).
+function applyHeaders(h, rawPath) {
+  const custom = new Map();
+  for (const r of HEADER_RULES) {
+    const m = r.rx.exec(rawPath);
+    if (!m) continue;
+    for (const n of r.unset) {
+      custom.delete(n);
+      h.delete(n);
+    }
+    for (const [k, v] of r.set) {
+      const val = fill(v, m.groups);
+      custom.set(k, custom.has(k) ? custom.get(k) + ", " + val : val);
+    }
+  }
+  for (const [k, v] of custom) h.set(k, v);
+}
+
+async function serveFile(req, env, file, status, rawPath) {
   const etag = '"' + MANIFEST[file] + '"';
   const h = new Headers({ "content-type": contentType(file), etag, "cache-control": "public, max-age=0, must-revalidate" });
+  applyHeaders(h, rawPath);
   if (status === 200 && etagMatches(req.headers.get("if-none-match"), etag)) return new Response(null, { status: 304, headers: h });
   const r = await env.FILES.fetch("http://assets" + file.split("/").map(encodeURIComponent).join("/"));
   if (!r.ok) return new Response("asset unavailable", { status: 500 });
@@ -128,35 +168,53 @@ async function serveFile(req, env, file, status) {
   return new Response(req.method === "HEAD" ? null : r.body, { status, headers: h });
 }
 
-function redirect(url, to) {
-  return new Response(null, { status: 307, headers: { location: to + url.search } });
+function redirect(url, to, status = 307) {
+  // A destination without its own query string keeps the request's.
+  return new Response(null, { status, headers: { location: to.includes("?") ? to : to + url.search } });
 }
 
 const miss = () => new Response(null, { status: 404, headers: { [MISS]: "1" } });
+const notAllowed = () => new Response(null, { status: 405, headers: { allow: "GET, HEAD" } });
 
 export default {
   async fetch(req, env, ctx) {
-    const router = !!ctx?.props?.router;
+    // router: the front in the tenant service; a miss there runs the
+    // app's Worker. An assets-only project has none: misses get
+    // not_found_handling and other methods 405, as on Cloudflare.
+    const only = !!CFG.assetsOnly;
+    const router = !!ctx?.props?.router && !only;
     const url = new URL(req.url);
-    if (req.method !== "GET" && req.method !== "HEAD") {
-      return router ? miss() : new Response(null, { status: 405, headers: { allow: "GET, HEAD" } });
-    }
+    if (req.method !== "GET" && req.method !== "HEAD") return router ? miss() : notAllowed();
     if (router && workerFirst(url.pathname)) return miss();
+    const raw = url.pathname;
+    const rd = matchRedirect(raw);
+    if (rd && rd.status !== 200) return redirect(url, rd.to, rd.status);
+    if (rd) {
+      // A 200 rewrite: the destination's file, at the requested URL.
+      let tp = null;
+      try {
+        tp = decodeURIComponent(new URL(rd.to, url).pathname);
+      } catch {}
+      // The exact file first: a rewrite to /index.html must not become
+      // html_handling's redirect to /.
+      const t = tp && (has(tp) ? { serve: tp } : resolve(tp));
+      if (t?.serve) return serveFile(req, env, t.serve, 200, raw);
+    }
     let p;
     try {
-      p = decodeURIComponent(url.pathname);
+      p = decodeURIComponent(raw);
     } catch {
       return router ? miss() : new Response(null, { status: 404 });
     }
     const r = resolve(p);
-    if (r?.serve) return serveFile(req, env, r.serve, 200);
+    if (r?.serve) return serveFile(req, env, r.serve, 200, raw);
     if (r?.redirect) return redirect(url, r.redirect);
     // A miss. With a Worker, the router hands it to the Worker, except a
     // browser navigation in single-page-application mode, which gets
     // index.html (Cloudflare's assets_navigation_prefers_asset_serving).
     if (router && !(CFG.notFound === "single-page-application" && req.headers.get("sec-fetch-mode") === "navigate")) return miss();
     const nf = notFound(p);
-    if (nf) return serveFile(req, env, nf.file, nf.status);
+    if (nf) return serveFile(req, env, nf.file, nf.status, raw);
     return router ? miss() : new Response(null, { status: 404 });
   },
 };

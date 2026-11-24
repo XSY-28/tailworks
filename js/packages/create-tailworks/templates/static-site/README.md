@@ -35,6 +35,11 @@ as a tagged node.
   `env.ASSETS.fetch(req)`, which applies `not_found_handling`
   (`404-page`: the nearest `404.html`, with status 404).
 
+`public/_redirects` and `public/_headers` work as on Cloudflare:
+`/home` redirects to `/`, and every file gets `X-Content-Type-Options`
+and `Referrer-Policy`. Neither file is served itself, and `_headers`
+doesn't touch the Worker's own responses.
+
 For a single-page app, set `"not_found_handling": "single-page-application"`:
 a browser navigation to a path with no file gets `index.html`.
 
