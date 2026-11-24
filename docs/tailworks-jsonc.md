@@ -194,3 +194,33 @@ that an admin owns once, e.g. `tag:tw-app` for workloads and
 `tag:tw-agent` for agent classes. The catch: every app with the same tag
 gets the same grants. Grants are made per tag, so per-app tags are the only
 way to give two apps different access.
+
+### Reusing existing tags
+
+When your tailnet policy is managed by someone else, `tw init` can use tags
+the policy already has, so a new app needs no policy change:
+
+```sh
+tw init billing --template agent --tags tag:tw-app --object-tags tag:tw-agent
+tw policy    # nothing to add when the policy already owns and grants these tags
+```
+
+- `--tags tag:a,tag:b` sets the workload node's `tailnet.tags`.
+- `--object-tags tag:a,tag:b` sets the tags of every Durable Object class
+  that has its own node. `--object-tags <Class>=tag:a,tag:b` sets one class,
+  and wins over the form without a class. Repeat the flag for more classes.
+- Tags you don't set are still named after the app (or kept, with
+  `--keep-tags`).
+
+`tw init` checks the tags before it writes anything: they must be valid
+tags, can't be one of tailworks' own tags
+([`reserved_tag`](errors.md#reserved_tag)), and each class you name must
+have a node of its own in the template. The policy itself is checked later,
+by `tw policy` and `tw deploy`'s preflight: the tags still need a
+`tagOwners` entry that includes `tag:tw` (or your team's owner tag,
+[teams.md](teams.md)), and the grants for `tailnet.connects`.
+
+The tags are written to `tailworks.jsonc`, which has no environments, so
+`tw deploy --env <name>` uses the same tags. A project with only a wrangler
+config instead gets `tag:tw-wl-<name>-<env>` (unless the env sets its own
+`name`), a new tag per environment: add a `tailworks.jsonc` to keep one set.

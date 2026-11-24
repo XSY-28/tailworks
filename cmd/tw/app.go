@@ -36,6 +36,9 @@ func cmdInit(args []string) error {
 	tmpl := f.String("template", "hello", "hello | agent | mcp | ai-agent | lock | refund-approval | node-workflow")
 	name := f.String("name", "", "workload name (default: the directory name)")
 	keepTags := f.Bool("keep-tags", false, "keep the template's tags instead of naming them after the app (tag:tw-wl-<workload>, tag:tw-<workload>-<class>)")
+	tags := f.String("tags", "", "use these existing tags for the workload node instead of a new per-app tag (comma-separated, e.g. tag:tw-app); see docs/tailworks-jsonc.md#tags-and-tw-init")
+	var objectTags repeated
+	f.Var(&objectTags, "object-tags", "use existing tags for the Durable Object classes with their own node: tag:a,tag:b for every class, or <Class>=tag:a,tag:b for one (repeatable)")
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -59,6 +62,21 @@ func cmdInit(args []string) error {
 	}
 	if ents, err := os.ReadDir(dir); err == nil && len(ents) > 0 {
 		return fail("bad_request", dir+" exists and is not empty")
+	}
+	// --tags / --object-tags (inittags.go): check them against the template
+	// before anything is written.
+	tagSet, err := parseInitTagOverrides(*tags, objectTags)
+	if err != nil {
+		return err
+	}
+	if !tagSet.empty() {
+		b, err := os.ReadFile(filepath.Join(src, "tailworks.jsonc"))
+		if err != nil {
+			return fail("bad_request", "template "+*tmpl+" has no tailworks.jsonc, so --tags and --object-tags have nothing to set")
+		}
+		if _, err := setTags(b, tagSet); err != nil {
+			return err
+		}
 	}
 	wl := *name
 	if wl == "" {
@@ -101,12 +119,17 @@ func cmdInit(args []string) error {
 				b = nb
 			}
 		}
+		if fn == "tailworks.jsonc" && !tagSet.empty() {
+			if nb, err := setTags(b, tagSet); err == nil {
+				b = nb
+			}
+		}
 		os.WriteFile(p, b, 0o644)
 	}
 	// The template's workload tag (tailnet.tags, e.g. tag:tw-wl-hello)
 	// follows the workload name too, so the policy snippet `tw deploy`
 	// prints names this app, not the template it came from.
-	if p := filepath.Join(dir, "tailworks.jsonc"); true {
+	if p := filepath.Join(dir, "tailworks.jsonc"); len(tagSet.workload) == 0 {
 		if b, err := os.ReadFile(p); err == nil {
 			if m := regexp.MustCompile(`"tags"\s*:\s*\[\s*"(tag:tw-wl-[A-Za-z0-9._-]+)"`).FindSubmatch(b); m != nil {
 				if from, to := string(m[1]), "tag:tw-wl-"+wl; from != to {

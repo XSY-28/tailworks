@@ -388,7 +388,7 @@ create an app from a template
 ```text
 tw init: create an app from a template (node-workflow needs Node.js on the deploying machine)
 
-usage: tw init <dir> [--template hello|agent|mcp|ai-agent|lock|refund-approval|node-workflow] [--name <workload>]
+usage: tw init <dir> [--template hello|agent|mcp|ai-agent|lock|refund-approval|node-workflow] [--name <workload>] [--tags <tag>,…] [--object-tags [<Class>=]<tag>,…]…
 
 flags:
   -json
@@ -397,8 +397,12 @@ flags:
     	keep the template's tags instead of naming them after the app (tag:tw-wl-<workload>, tag:tw-<workload>-<class>)
   -name string
     	workload name (default: the directory name)
+  -object-tags value
+    	use existing tags for the Durable Object classes with their own node: tag:a,tag:b for every class, or <Class>=tag:a,tag:b for one (repeatable)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -tags string
+    	use these existing tags for the workload node instead of a new per-app tag (comma-separated, e.g. tag:tw-app); see docs/tailworks-jsonc.md#tags-and-tw-init
   -template string
     	hello | agent | mcp | ai-agent | lock | refund-approval | node-workflow (default "hello")
 ```
