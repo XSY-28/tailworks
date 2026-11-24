@@ -29,7 +29,7 @@ printed anywhere.
 409 · mgmt. **When:** a credential (auth key) was requested for an object that already has a node. **Fix:** nothing to do; hostd retries by rejoining. Report it if it repeats.
 
 ### already_running
-409 · cli. **When:** `tw up` finds a supervisor already running from this state dir, or `tw restore` was run while tailworks runs. **Fix:** `tw status`; `tw down` first if you meant to restart or restore.
+409 · cli. **When:** `tw up` finds a supervisor already running from this state dir, or `tw restore` or `tw custody migrate` was run while tailworks runs. **Fix:** `tw status`; `tw down` first if you meant to restart, restore or move custody.
 
 ### already_stopped
 409 · cli. **When:** `tw undeploy <workload>` of a workload whose latest deployment is already undeployed. **Fix:** `tw ls --all` to see what is live.
@@ -87,6 +87,12 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### credential_file_insecure
 403 · cli. **When:** a credential file (`tw tenant add --oauth-client-file`, `--api-key-file`, `--db-file`) is readable by other users, or is owned by another user. (`tw up` tightens its own OAuth client file to 0600 instead.) **Fix:** `chmod 600 <file>` then run the command again.
+
+### custody_migrate_failed
+500 · cli. **When:** `tw custody migrate` could not read an entry from file custody, or could not write, or read back the same value from, setec; `tw.json` still names file custody. **Fix:** fix the cause it names (setec unreachable, its grants), then run `tw custody migrate` again. Entries already copied with the same value are kept.
+
+### custody_unmapped
+409 · cli. **When:** `tw custody migrate` found file custody entries that no store row and no `custody_names` entry names, so it can't tell setec what to call them, and copied nothing. Nothing in tailworks reads such an entry: it is left by an interrupted write, or by data deleted before custody names were indexed. **Fix:** move the listed files out of `<state>/mgmt/custody/secrets`, then run `tw custody migrate` again; or keep file custody ([postgres.md](postgres.md#move-file-custody-to-setec)).
 
 ### d1_error
 400 · mgmt, cli. **When:** a statement of `tw d1 execute`, `tw d1 migrations apply` or `POST …/d1/{name}/query` failed: SQLite's error (syntax, constraint, no such table) or a D1 limit (statement over 100 KB, over 100 parameters, a value over 2 MB, a result over 16 MiB, one write over 2 MiB encoded). Nothing of the batch was applied (a failing migration isn't recorded). In a Worker the same failures throw `D1_ERROR: …`, as on Cloudflare. **Fix:** fix the SQL; split a large import into several files or batches.
@@ -389,7 +395,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 429 · mgmt, netd (SDK). **When:** too many live descendants (`maxLive`) or too deep a chain (`maxDepth`) under `tailnet.spawn` in `tailworks.jsonc`. **Fix:** kill finished sub-agents (`ttl` helps), or raise the budget.
 
 ### state_conflict
-409 · cli. **When:** the state dir is bound to another mint mode, tailnet, `--local-dev` setting or mgmt hostname than this command asks for; the API key file already serves another tenant; mgmt already has this host ID bound to another node; `tw link` on a machine that runs tailworks itself. **Fix:** the detail names the binding; use another `--state-dir`, or `tw down --purge` and start over.
+409 · cli. **When:** the state dir is bound to another mint mode, tailnet, `--local-dev` setting or mgmt hostname than this command asks for; the API key file already serves another tenant; mgmt already has this host ID bound to another node; `tw link` on a machine that runs tailworks itself; `tw custody migrate` on an install already on setec, or into a setec that holds another value under one of the install's names. **Fix:** the detail names the binding; use another `--state-dir`, or `tw down --purge` and start over.
 
 ### stop_timeout
 500 · cli. **When:** `tw down` waited 3 min for the supervisor to stop and killed it. **Fix:** `tw status`; `tw logs --component supervisor`.

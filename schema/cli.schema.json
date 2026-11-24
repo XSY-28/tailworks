@@ -3170,6 +3170,27 @@
       },
       "required": ["restored", "store"]
     },
+    "custody migrate": {
+      "type": "object",
+      "description": "tw custody migrate: every file custody entry mapped to its name, copied to setec and read back (--dry-run: what would be copied), the names indexed in custody_names, the state kept before tw.json was switched",
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "dryRun": { "type": "boolean" },
+        "files": { "type": "integer" },
+        "names": { "type": "array", "items": { "type": "string" } },
+        "backfilled": { "type": "array", "items": { "type": "string" } },
+        "unmapped": { "type": "array", "items": { "type": "string" } },
+        "partial": { "type": "array", "items": { "type": "string" } },
+        "conflicts": { "type": "array", "items": { "type": "string" } },
+        "copied": { "type": "integer" },
+        "present": { "type": "integer" },
+        "verified": { "type": "integer" },
+        "safetyBackup": { "type": "string" },
+        "switched": { "type": "boolean" }
+      },
+      "required": ["from", "to", "dryRun", "files", "names", "backfilled", "copied", "present", "verified", "switched"]
+    },
     "upgrade": {
       "type": "object",
       "description": "tw upgrade: on a tw up machine {plan, upgraded, backup?, rolledBack?, health?, notActiveBefore?}; with --fleet or a linked mgmt, the plan (--plan: {from, to, steps, breaking, blockers, warnings}) or the upgrade run {id, to, state, steps}; tw upgrade status|pause|resume|abort print the run ({runs: []} when there is none).",
