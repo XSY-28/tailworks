@@ -138,3 +138,67 @@ needed: (a) and (b) together do it.
 **Not in this decision.** Inbound raw TCP to an object (the RFC's PROXY-v2
 ingress); containers' `getTcpPort().connect()` (ADR-032); UDP; a Hyperdrive
 binding (`env.HYPERDRIVE`), which a pooling proxy could build on this.
+
+## Follow-up (2026-11-24): port policy
+
+Issue #339 (the review against Cloudflare's threat models) asked what a
+hostile workload can do with the host's address now that `connect()`
+reaches any public port: internet egress is on by default (ADR-049), the
+flow leaves from the host's own address, and the destination can't tell
+tenants on one host apart. It offered a default port policy, a rate cap on
+new flows, a separate opt-in for raw TCP, or documenting the exposure.
+
+**Decided: a default port policy on the internet path.**
+
+- TCP port 25 to a public address is refused by default, on every internet
+  path that names a port (`connect()`, `node:net`, the Node tier's CONNECT,
+  and a `fetch()` to `http://host:25/`, which takes the same dial path),
+  before DNS and before any dial, with the typed error
+  `internet_port_refused` (403). hostd audits the refusal as `deny` with
+  that code, like every other egress refusal. An agent with a
+  prompt-injected tool should not be able to send mail from the operator's
+  address by default. Ports 465 and 587 (authenticated submission) stay
+  open: they are not relay, and a workload that has credentials for a
+  submission server is mailing as that account, not as the host.
+- **Override:** `tailnet.egress.internet` entries may name a port, in the
+  syntax §6 gave `tailnet.connects`: `"smtp.example.com:25"`, `"*:25"`,
+  `"203.0.113.0/24:25"`, `"[2001:db8::1]:25"`. An entry that names a port
+  covers that port only; an entry without a port covers every port the
+  default policy allows. So `"*"` or `true` does not open port 25;
+  `["*", "*:25"]` does. No operator flag: the setting is the workload's
+  own, as the rest of the egress policy is.
+- **Where:** `publicip.RefusedPort` and the port-qualified `Allowlist`
+  (`netd/publicip`), applied by `internetPortPolicy`
+  (`netd/internetports.go`) on netd's path and by `Accept` on containers'
+  (`netd/sbxnet`), so the two paths can't disagree, as for the SSRF guard.
+  Containers already needed an allowlist entry for any internet host; with
+  the policy, port 25 needs an entry that names it.
+- **Mixed versions:** an older hostd reads `"smtp.example.com:25"` as a
+  name that matches nothing (it refuses, it doesn't open anything), so a
+  bundle with such an entry needs the host feature `internet-ports` and
+  mgmt places it only on upgraded hosts. A bad port in an entry fails the
+  deploy.
+
+**Deferred: a rate cap on new internet flows.** A per-workload token bucket
+needs a design for the refusal (`fetch()` and `ctx.tailnet.connect()` can
+carry a typed error, stock `connect()` can't, spike 3) and for the
+rolled-up audit record of a refused flood (as public ingress has, C03),
+without which the cap is itself a way to grow the audit log. Until then the
+absence is recorded in one place, docs/limits.md "Limits that don't exist",
+and docs/security-model.md's Egress section says what a hostile workload
+can do with the host's address and that `"internet": false` or a list is
+the control. **Also deferred: a separate opt-in for raw TCP.** HTTP(S) and
+TCP stay on by default together; the drivers this ADR exists for would
+otherwise need a setting before "hello world", which is what ADR-049
+removed for `fetch()`.
+
+**Tests.** `netd.TestInternetEgress` (`Port25Refused`,
+`SubmissionPortsProceed`, `Port25Override`: through netd's real dial path,
+`connect()` and `fetch()`; the refusal subtests fail without
+`internetPortPolicy`), `hostd.TestWorkerInternetEgress/Port25` (a Worker's
+`fetch()` to port 25 end to end: refused, audited as `deny`, allowed with
+the entry), `hostd.TestTCPEgressInternet/Port25` (stock `connect()` and
+`ctx.tailnet.connect()` from a facet object through real workerd),
+`sbxnet.TestInternetPortPolicy`, `publicip.TestAllowlistPorts`,
+`bundle.TestInternetEgressPorts`, `features.TestRequiredInternetPorts`.
+Ledger: H-egress-abuse, C-egress-port25.

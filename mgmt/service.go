@@ -862,6 +862,9 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	if err := m.checkReplicaName(ctx, r); err != nil { // workload_replicas.go (#348)
 		return resp, err
 	}
+	if err := m.checkCompatFlags(ctx, r); err != nil { // compatflags.go (#337)
+		return resp, err
+	}
 	classes := slices.Clone(r.Namespaces)
 	maxLive, maxDepth := DefaultMaxLive, DefaultMaxDepth
 	var svcCfg *TwConfig
@@ -1514,6 +1517,9 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 		in := ""
 		if workload != "" {
 			in = " of workload " + workload
+		}
+		if r.Namespace == PoolNamespace { // name the class the pool node is for (#359)
+			return resp, errf(404, "unknown_namespace", "no deployment%s of tenant %s declares namespace %q (for a %s node)", in, t.ID, classNS, PoolNamespace)
 		}
 		return resp, errf(404, "unknown_namespace", "no deployment%s of tenant %s declares namespace %q", in, t.ID, r.Namespace)
 	}

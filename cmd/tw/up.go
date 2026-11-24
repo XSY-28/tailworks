@@ -114,6 +114,7 @@ func cmdUp(args []string) error {
 	prefix := f.String("hostname-prefix", "tw-", "prefix for every object node hostname")
 	ephemeral := f.Bool("ephemeral", false, "join object nodes as ephemeral; `tw down` then deletes every device (tests, demos)")
 	insecureSH := f.Bool("insecure-shared-host", false, "on a host without a process sandbox (Linux without Landlock), still serve process-tier workloads of more than one tenant; tenants are then NOT isolated from each other")
+	allowExp := f.Bool("allow-experimental-flags", false, "let deployments on this host set compatibility flags workerd marks experimental (unsafe_module, rtti_api, precise_timers, …); refused by default (docs/COMPAT.md#experimental-flags)")
 	workerdFlag := f.String("workerd", "", "workerd binary")
 	hb := f.Duration("heartbeat", time.Second, "host heartbeat period")
 	tomb := f.Duration("kill-tombstone", 12*time.Second, "keep a killed node answering object_killed this long")
@@ -452,6 +453,7 @@ func cmdUp(args []string) error {
 	s.Cfg.ControlURL, s.Cfg.TSAPIURL, s.Cfg.HostID = *control, *tsapiURL, *hostID
 	s.Cfg.HostnamePrefix, s.Cfg.Ephemeral, s.Cfg.Workerd = *prefix, *ephemeral, wd
 	s.Cfg.InsecureSharedHost = *insecureSH
+	s.Cfg.AllowExperimentalFlags = *allowExp
 	s.Cfg.Heartbeat, s.Cfg.KillTombstone, s.Cfg.DeviceDeleteDelay = hb.String(), tomb.String(), delDelay.String()
 	s.Cfg.AllowSiblingEgress = *siblings
 	if *warmKeys < 0 || *poolNodes < 0 {
@@ -983,6 +985,9 @@ func cmdSupervise(args []string) error {
 	if s.Cfg.InsecureSharedHost {
 		hargs = append(hargs, "-insecure-shared-host")
 	}
+	if s.Cfg.AllowExperimentalFlags {
+		hargs = append(hargs, "-allow-experimental-flags")
+	}
 	if s.Cfg.AllowSiblingEgress {
 		hargs = append(hargs, "-allow-sibling-egress")
 	}
@@ -1134,6 +1139,8 @@ func superviseSingle(s *state, logf func(string, ...any)) error {
 		DataDir: filepath.Join(s.Dir, "hostd"), RunDir: s.hostdRunDir(), Workerd: s.Cfg.Workerd,
 		Heartbeat: hb, KillTombstone: tomb, HostnamePrefix: s.Cfg.HostnamePrefix, Sandbox: "auto", SandboxDeny: deny, PoolNodes: hostdrun.DefaultPoolNodes,
 		Ephemeral: s.Cfg.Ephemeral, InsecureSharedHost: s.Cfg.InsecureSharedHost, AllowSiblingEgress: s.Cfg.AllowSiblingEgress, Log: hlog}
+	// Experimental compatibility flags (hostd/gen/compatflags.go, #337).
+	ho.AllowExperimentalFlags = s.Cfg.AllowExperimentalFlags
 	s.Cfg.retentionSingle(nil, &ho) // up_retention.go
 	s.Cfg.workerInternetSingle(&ho) // up_workerinternet.go
 	hrt, err := hostdrun.New(ctx, ho)
