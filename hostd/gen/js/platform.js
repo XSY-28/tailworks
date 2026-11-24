@@ -99,6 +99,11 @@ async function routeObject(env, ctx, cls, name, req) {
 // scheduled() with a controller and answers {outcome, noRetry, error}.
 // (workerd's native Fetcher.scheduled() builds its own controller, so the
 // ticket could not ride on that.)
+function traceparentOnly(req) {
+  const tp = req.headers.get("traceparent");
+  return tp ? { traceparent: tp } : {};
+}
+
 async function scheduled(env, t, req) {
   const cron = t.cron;
   if (typeof cron !== "string" || !CFG.crons.includes(cron)) return errResponse("bad_request", "no such cron trigger in this deployment");
@@ -109,6 +114,8 @@ async function scheduled(env, t, req) {
       new Request("http://tenant/_tw/scheduled", {
         method: "POST",
         signal: req.signal,
+        // The run's root span (hostd crontrace.go): its record and egress join that trace.
+        headers: traceparentOnly(req),
         cf: { tw: { kind: "scheduled", cron, scheduledTime: st, ticket: t.ticket }, traceId: req.cf?.traceId },
       }),
     );
