@@ -38,6 +38,8 @@ func TestPolicyApplyService(t *testing.T) {
 	added := policy.Snippet{
 		TagOwners:     map[string][]string{"tag:tw-wl-support": {"autogroup:admin", "tag:tw"}},
 		AutoApprovers: policy.AutoApprovers{Services: map[string][]string{"svc:support": {"tag:tw-wl-support"}}},
+		// The caller grant to the node's own tag (callergrant.go); the one to svc:support stays manual.
+		Grants: []map[string]any{{"src": []string{"autogroup:member"}, "dst": []string{"tag:tw-wl-support"}, "ip": []string{"tcp:80"}}},
 	}
 	if err := policy.VerifyAdditive([]byte(operatorOnly), []byte(after), added); err != nil {
 		t.Fatalf("not purely additive: %v\n%s", err, after)

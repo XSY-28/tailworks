@@ -37,9 +37,14 @@ type PolicyApplyResult struct {
 	// Added is the snippet written (dryRun: to be written), as HuJSON.
 	Added string `json:"added,omitempty"`
 	// Manual: what is missing that tailworks doesn't write.
-	Manual  []string `json:"manual,omitempty"`
-	OldETag string   `json:"oldETag,omitempty"`
-	NewETag string   `json:"newETag,omitempty"`
+	Manual []string `json:"manual,omitempty"`
+
+	// CallerGrant: the grant in Added that lets every user of the tailnet
+	// call the app (callergrant.go); "" when Added has none.
+	CallerGrant string `json:"callerGrant,omitempty"`
+
+	OldETag string `json:"oldETag,omitempty"`
+	NewETag string `json:"newETag,omitempty"`
 	// Preflight is the bundle's preflight against the policy as it is
 	// after the write (dryRun: as it is now).
 	Preflight PreflightResult `json:"preflight"`
@@ -80,12 +85,32 @@ func (m *Mgmt) ApplyWorkloadPolicy(ctx context.Context, tenantID, workload strin
 	res.Preflight = pf
 	popts := policy.Options{Headscale: t.Headscale()}
 	defined := func(string) bool { return true }
-	if pol, err := m.policies.Get(ctx, t); err == nil {
+	pol, perr := m.policies.Get(ctx, t)
+	if perr == nil {
 		defined = func(tag string) bool { _, ok := pol.TagOwners[tag]; return ok }
+	} else {
+		pol = nil
 	}
 	snip, manual, err := preflightSnippet(pf, popts, defined)
 	if err != nil {
 		return res, err
+	}
+	// The caller grant (callergrant.go) is mgmt's own, added after the
+	// bundle's entries passed Check without its relaxation.
+	if cfg, cerr := BundleConfig(r.Bundle); len(r.Bundle) > 0 && cerr == nil {
+		cg, why := callerGrant(cfg.Tailnet.Tags, snip, pol, popts)
+		if why != "" {
+			manual = append(manual, why)
+		}
+		if cg != nil {
+			snip.Grants = append(snip.Grants, cg)
+			if !onlyCallerGrant(snip, cg) {
+				return res, errf(500, "internal", "the policy snippet has a grant from outside tag:tw* that isn't the caller grant")
+			}
+			popts = callerGrantOptions(popts)
+			cb, _ := json.Marshal(cg)
+			res.CallerGrant = string(cb)
+		}
 	}
 	res.Manual = manual
 	res.Added = snip.HuJSON()
@@ -116,7 +141,7 @@ func (m *Mgmt) ApplyWorkloadPolicy(ctx context.Context, tenantID, workload strin
 	}
 	res.Changed, res.OldETag, res.NewETag, res.Added = ar.Changed, ar.OldETag, ar.NewETag, ar.Added.HuJSON()
 	m.audit(ctx, AuditRecord{TenantID: tenantID, Kind: "policy_apply", ActingFor: by}, map[string]any{"workload": workload,
-		"ok": true, "changed": ar.Changed, "added": res.Added, "oldETag": ar.OldETag, "newETag": ar.NewETag, "by": by})
+		"ok": true, "changed": ar.Changed, "added": res.Added, "callerGrant": res.CallerGrant, "oldETag": ar.OldETag, "newETag": ar.NewETag, "by": by})
 	m.policies.Invalidate(t.ID)
 	if pf, err := m.PreflightBundle(ctx, dr); err == nil {
 		res.Preflight = pf

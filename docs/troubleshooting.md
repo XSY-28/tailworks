@@ -21,7 +21,9 @@ Your tags are in your app's `tailworks.jsonc` (`tailnet.tags` and
 that doesn't allow everything lets nothing reach a new tag until a grant
 does, and without a grant the node isn't even in your device's netmap.
 `tw deploy` doesn't check who may call your app, so the deploy succeeds
-anyway. Add a grant to the workload's tag on port 80 (workload nodes listen
+anyway. (`tw deploy --apply-policy` writes this grant for a new app, but
+not for a tag your policy already had: [the caller grant](tailworks-jsonc.md#the-caller-grant).)
+Add a grant to the workload's tag on port 80 (workload nodes listen
 on port 80):
 
 ```jsonc

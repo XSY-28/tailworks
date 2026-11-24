@@ -67,7 +67,8 @@ func TestCLIPolicyApply(t *testing.T) {
 	if cliCode(err) != "confirmation_required" || !strings.Contains(cliText(err), "tw policy --apply --yes") {
 		t.Fatalf("--apply without --yes: %v\n%s", err, out)
 	}
-	for _, want := range []string{`+ "tagOwners": {`, `+   "tag:tw-wl-support": ["autogroup:admin","tag:tw"],`, `"dst":["tag:db"]`} {
+	for _, want := range []string{`+ "tagOwners": {`, `+   "tag:tw-wl-support": ["autogroup:admin","tag:tw"],`, `"dst":["tag:db"]`,
+		`"src":["autogroup:member"]`, "lets every user in your tailnet call support"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("diff lacks %q:\n%s", want, out)
 		}
@@ -90,9 +91,21 @@ func TestCLIPolicyApply(t *testing.T) {
 		t.Fatalf("policy after apply (%d writes):\n%s", n, after)
 	}
 	want := policy.Snippet{TagOwners: map[string][]string{"tag:tw-wl-support": {"autogroup:admin", "tag:tw"}},
-		Grants: []map[string]any{{"src": []string{"tag:tw-wl-support"}, "dst": []string{"tag:db"}, "ip": []string{"tcp:80"}}}}
+		Grants: []map[string]any{{"src": []string{"tag:tw-wl-support"}, "dst": []string{"tag:db"}, "ip": []string{"tcp:80"}},
+			{"src": []string{"autogroup:member"}, "dst": []string{"tag:tw-wl-support"}, "ip": []string{"tcp:80"}}}} // the caller grant (#320)
 	if err := policy.VerifyAdditive([]byte(operatorPolicy), []byte(after), want); err != nil {
 		t.Fatal(err)
+	}
+	// The caller grant is in the diff, said in plain words, and not left
+	// in a snippet to paste.
+	for _, w := range []string{`+   {"dst":["tag:tw-wl-support"],"ip":["tcp:80"],"src":["autogroup:member"]},`,
+		"lets every user in your tailnet call support", "every user in your tailnet may call support; run tw deploy"} {
+		if !strings.Contains(out, w) {
+			t.Fatalf("--apply --yes output lacks %q:\n%s", w, out)
+		}
+	}
+	if strings.Contains(out, "who may call it") || strings.Contains(out, "make sure a grant like this exists") {
+		t.Fatalf("--apply --yes still asks for the caller grant to be pasted:\n%s", out)
 	}
 	// Again: nothing missing, nothing written.
 	time.Sleep(5 * time.Millisecond) // PolicyMaxAge

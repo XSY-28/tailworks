@@ -223,10 +223,12 @@ checks this first and prints the lines to add:
 you, along with the `tailnet.connects` grants, for `tailnet.service` the
 `autoApprovers.services` entry that lets the workload's own tags host its
 Service (only that `svc:` name, only those tags), and, for `public` routes,
-`tag:tw-public` and its funnel `nodeAttrs`. It prints the lines first and
+`tag:tw-public` and its funnel `nodeAttrs`. For a new app it also writes
+the caller grant ([below](#the-caller-grant)). It prints the lines first and
 asks, or takes `--yes` when there's no terminal. mgmt then reads the policy
 with its ETag, merges in only the missing lines (comments kept, nothing
-changed or removed, nothing outside `tag:tw*`), validates the result and
+changed or removed, nothing outside `tag:tw*` but the caller grant's
+source), validates the result and
 writes it with `If-Match`. If someone saved the policy in the meantime, it
 retries once, then stops with
 [`policy_conflict`](errors.md#policy_conflict). The write is audited
@@ -242,9 +244,46 @@ this: the tag may belong to another team's app, so you define it yourself.
 
 Some lines are never written: a grant to `*` or `autogroup:*`, a grant to a
 tag outside `tag:tw*` that your policy doesn't define (such as `tag:db`
-before you add it to `tagOwners`, which the control plane would reject), and the grant
-that lets people call the app. `tw policy`
+before you add it to `tagOwners`, which the control plane would reject), and a
+grant for callers of a Service's `svc:` name. `tw policy`
 lists them for you to add yourself.
+
+#### The caller grant
+
+Nothing on the tailnet reaches a new app until a grant allows it. So that
+the first `curl` works, `tw policy --apply` and `tw deploy --apply-policy`
+add one with a new app's tag:
+
+```jsonc
+{"src": ["autogroup:member"], "dst": ["tag:tw-wl-support"], "ip": ["tcp:80"]}
+```
+
+It lets **every user of the tailnet** (not tagged devices) call the app on
+port 80. It is in the lines tailworks shows before it asks, with a
+sentence saying so. tailworks writes it only when all of these hold:
+
+- the same write adds the app's workload tags to `tagOwners`, so the app
+  is new to your policy. For a tag the policy already defines it writes
+  nothing: not for a second app that reuses the tag, and not again after
+  you removed or narrowed the grant;
+- the tags are tailworks app tags (`tag:tw-…`, never `tag:tw`,
+  `tag:tw-mgmt`, `tag:tw-host` or `tag:tw-public`);
+- no grant or ACL of yours from a user, group, autogroup, `*` or a tag
+  outside `tag:tw*` already reaches the tag or every node (`"dst": ["*"]`,
+  as in Tailscale's default policy);
+- the control plane is Tailscale (Headscale's policy has no
+  `autogroup:member` source here).
+
+The source and port are fixed in tailworks. Nothing in `tailworks.jsonc`
+can change them, and a `tailnet.connects` entry can't produce a grant from
+anyone but the app's own tags.
+
+To choose the callers yourself, say no at the question and add your own
+grant to the app's tag (a user, a group, another tag) before you deploy, or
+deploy without `--apply-policy`. When tailworks doesn't write the grant and
+nobody can call the app, `tw policy --apply` says so and prints the line.
+For a Service, callers of the `svc:` name need their own grant; tailworks
+doesn't write that one.
 
 If you'd rather not edit the policy for every app, reuse a small set of tags
 that an admin owns once, e.g. `tag:tw-app` for workloads and

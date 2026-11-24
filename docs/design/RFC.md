@@ -1130,4 +1130,4 @@ docs/  e2e/
 - Operator pre-auth keys; no posture; no Services (MagicDNS names only).
 - String-only `nodeAttrs`; caps in grants only; no flow logs.
 - Kill Tiers 1 and 2.
-- `tw up --control=headscale --policy-apply` writes a policy that Headscale's parser accepts; `make e2e-headscale` checks it against a pinned release.
+- `tw up --control=headscale --apply-policy` writes a policy that Headscale's parser accepts; `make e2e-headscale` checks it against a pinned release.

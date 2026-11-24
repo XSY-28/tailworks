@@ -30,7 +30,7 @@ func oauthConsoleSteps() []string {
 		"1. Policy (admin console › Access controls): tag:tw must own tag:tw-mgmt and tag:tw-host (snippet below)",
 		"2. Admin console › Settings › Trust credentials › Credential › OAuth (" + consoleOAuthURL + ")",
 		"3. Scopes: Auth Keys › Write (required). When it asks for a tag, pick tag:tw",
-		"   recommended: Devices › Core › Write (tag tag:tw), Policy File › Read, Services › Write",
+		"   recommended: Devices › Core › Write (tag tag:tw), Policy File › Write (tw up --apply-policy then writes the snippet below, after tag:tw; Read: paste it), Services › Write",
 		"4. tw up, and paste the Client Secret when asked (saved to ~/.config/tailworks/oauth.env, 0600)",
 	}
 }

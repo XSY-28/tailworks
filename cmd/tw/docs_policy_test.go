@@ -14,9 +14,11 @@ import (
 // The policy snippets in README.md and docs/INSTALL.md are what admins copy
 // into their tailnet policy, so they must say exactly what tw up checks:
 // operatorSnippet. They drifted once (tag:tw-issuer in the OAuth one).
+// The README also has the one line to paste before tw up --apply-policy
+// writes the rest (issue #320): tag:tw alone, as operatorSnippet has it.
 func TestDocPolicySnippetsMatchCode(t *testing.T) {
 	block := regexp.MustCompile("(?s)```jsonc\n(.*?)```")
-	n := 0
+	n, first := 0, 0
 	for _, f := range []string{"../../README.md", "../../docs/INSTALL.md"} {
 		b, err := os.ReadFile(f)
 		if err != nil {
@@ -42,6 +44,10 @@ func TestDocPolicySnippetsMatchCode(t *testing.T) {
 				t.Fatal(err)
 			}
 			want, which := operatorSnippet(), "operatorSnippet"
+			if len(got.TagOwners) == 1 && len(got.Grants) == 0 && reflect.DeepEqual(got.TagOwners["tag:tw"], want.TagOwners["tag:tw"]) {
+				n, first = n-1, first+1
+				continue
+			}
 			if len(got.NodeAttrs) > 0 {
 				t.Errorf("%s: snippet has nodeAttrs %v; the operator snippet has none (mgmt never uses Funnel)", f, got.NodeAttrs)
 			}
@@ -56,7 +62,7 @@ func TestDocPolicySnippetsMatchCode(t *testing.T) {
 			}
 		}
 	}
-	if n != 2 {
-		t.Errorf("found %d policy snippets in README.md + INSTALL.md, want 2 (update this test if you add one)", n)
+	if n != 2 || first != 1 {
+		t.Errorf("found %d policy snippets and %d tag:tw-only ones in README.md + INSTALL.md, want 2 and 1 (update this test if you add one)", n, first)
 	}
 }

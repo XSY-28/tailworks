@@ -45,7 +45,7 @@ With an OAuth client scoped to the team's own owner tag:
 
 ```sh
 tw tenant add example.ts.net --oauth-client-file payments-oauth.env \
-  --owner-tag tag:tw-t-payments --name-prefix pay --policy-apply
+  --owner-tag tag:tw-t-payments --name-prefix pay --apply-policy   # shows the lines and asks; --yes skips the question
 ```
 
 - `--owner-tag` must differ from every other tenant's on the tailnet, and

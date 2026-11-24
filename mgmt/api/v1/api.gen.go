@@ -3305,6 +3305,9 @@ type PolicyApply struct {
 	// Added The additions as a HuJSON snippet (with `dryRun`, what would be added). Empty when nothing is missing that tailworks writes.
 	Added *string `json:"added,omitempty"`
 
+	// CallerGrant The grant in `added` that lets every user of the tailnet call the app (`autogroup:member` to the workload's own tags, `tcp:80`), as JSON. Absent when `added` has none.
+	CallerGrant *string `json:"callerGrant,omitempty"`
+
 	// Changed The policy was written.
 	Changed bool `json:"changed"`
 	DryRun  bool `json:"dryRun"`

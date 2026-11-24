@@ -657,12 +657,19 @@ of its tags, a grant per `tailnet.connects`, for `tailnet.service`
 the `autoApprovers.services` entry of its own `svc:` name for the
 workload node's own tags (issue #295), and for public routes
 `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
-tenant's tailnet policy:
+tenant's tailnet policy. For an app that is new to the policy it
+also adds the caller grant (issue #320): `autogroup:member` to the
+workload node's own tags on `tcp:80`, so every user of the tailnet
+can call the app. mgmt builds that grant itself and adds it only
+when the same write adds every one of those tags to `tagOwners`,
+each is a tailworks app tag (`tag:tw-*`, not a reserved one), the
+control plane is Tailscale, and no grant or ACL from outside
+`tag:tw*` already reaches the tag or `*`. `callerGrant` carries it:
 
 1. read the policy with its ETag;
 2. merge additively (comments kept; no existing entry is changed,
    reordered or removed), refusing anything outside `tag:tw*`
-   (RT-06, `internal/policy.Check`);
+   but the caller grant's source (RT-06, `internal/policy.Check`);
 3. validate it with the control plane;
 4. write it with `If-Match`. If the policy changed in between
    (`412`), steps 1–4 run once more; a second conflict is
@@ -4417,6 +4424,7 @@ Why a deployment is on its host (smart placement, ADR-033).
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `added` | string | no | The additions as a HuJSON snippet (with `dryRun`, what would be added). Empty when nothing is missing that tailworks writes. |
+| `callerGrant` | string | no | The grant in `added` that lets every user of the tailnet call the app (`autogroup:member` to the workload's own tags, `tcp:80`), as JSON. Absent when `added` has none. |
 | `changed` | boolean | yes | The policy was written. |
 | `dryRun` | boolean | yes |  |
 | `manual` | array of string | no | What the bundle still needs that tailworks doesn't write; add it in the admin console. |
