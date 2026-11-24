@@ -166,6 +166,10 @@ scripts/release-notes.sh v0.1.0 v0.2.0
    (`scripts/ci-suite.sh`). Before tagging, rehearse on master; it runs
    everything and drafts nothing:
    `gh workflow run release.yml -f tag=master -f rehearsal=true`.
+   After fixing one job, rerun just that job: add
+   `-f only=tailnet,mac-tailnet` (job names, comma-separated, no spaces;
+   setup and the builds the jobs need always run). A real release always
+   runs everything, and `only` without `rehearsal` is refused.
 6. **Review the draft.**
    - Check that the notes read well, and that the Breaking and Upgrade
      actions sections are complete.
