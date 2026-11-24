@@ -12,6 +12,7 @@ Coding agents: start with the skills. `tw agent setup` installs them for Claude 
 - [Using tailworks with a coding agent](https://github.com/rosskukulinski/tailworks/blob/master/docs/agents.md): skills, `tw agent setup`, safety rules
 - [Agent skills](https://github.com/rosskukulinski/tailworks/blob/master/agent/skills/tw/SKILL.md): the core skill; the others are next to it in agent/skills/
 - [Concepts](https://github.com/rosskukulinski/tailworks/blob/master/docs/concepts.md): the words tailworks uses (tenant, workload, object, tiers, facet mode, pool nodes, warm keys)
+- [Alternatives to tailworks](https://github.com/rosskukulinski/tailworks/blob/master/docs/alternatives.md): what tailworks adds to stock workerd, a dated comparison with celld, workerd on its own, OpenOrange, Rivet, Cloudflare Mesh and tsnet, and when not to use it
 - [Installing tailworks](https://github.com/rosskukulinski/tailworks/blob/master/docs/INSTALL.md): macOS and Linux, OAuth client, `tw link`, hosts, troubleshooting
 - [My first deploy doesn't answer](https://github.com/rosskukulinski/tailworks/blob/master/docs/troubleshooting.md): the caller grant, `identity_pending`, tagOwners after a rename, `peer_not_visible`, a `failed` deployment
 - [Where the install is tested](https://github.com/rosskukulinski/tailworks/blob/master/docs/install-testing.md): the Linux support matrix and measured timings
