@@ -159,7 +159,7 @@ func (c Config) removedMode() bool { return !c.oauth() && !c.headscale() }
 func (c Config) errRemovedMode(dir string) error {
 	return fail("mint_mode_removed", dir+" is in mint mode "+c.modeName()+", which tailworks no longer supports",
 		"Tailscale tailnets now mint with an OAuth client only; switching keeps the tenant, its deployments and mgmt's node").
-		withFix("create an OAuth client (admin console › Settings › OAuth clients: Auth Keys write, tag tag:tw; see docs/INSTALL.md), save it 0600, then:",
+		withFix("create an OAuth client (admin console › Settings › Trust credentials: Auth Keys write, tag tag:tw; see docs/INSTALL.md), save it 0600, then:",
 			"tw up --oauth-client-file <file>")
 }
 
