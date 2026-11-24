@@ -120,12 +120,16 @@ Commands run on 2026-11-24, from this worktree unless noted.
 | `make cli-docs` | `docs/cli.md` regenerated; `TestCLIReferenceUpToDate` passes |
 | `sh ~/.claude/scratch/mbp-test.sh test` (`make test` on mbp, `-race`) | exit 0: 127 Go packages ok, none failed (cmd/tw 252 s); `npm test` and the CLI package tests pass |
 
-Not run: `make e2e-headscale` (the alias keeps `--policy-apply`, which
-that suite passes; it needs Docker and wasn't run here), `make e2e-oauth`
-and the other real-tailnet suites (this branch touched no real tailnet),
-`make e2e-tw-upgrade` (`tw upgrade` restarts with `tw up --yes`; `--yes`
-without `--apply-policy` is still accepted and ignored, which
-`TestCLIOAuth` and the cliflow tests exercise on every `tw up`).
+| `make e2e-headscale` (real Headscale v0.29.7 in Docker) | PASS, 55.6 s: `TestTwUp` passes `--policy-apply`, so the earlier spelling still writes the policy |
+| after merging `origin/master` (10efb468): `make lint`; `go test ./cmd/tw/... ./docs/... -count=1` | exit 0; ok |
+
+The `mbp-test.sh` run was before that merge, which brought in only docs,
+status files and `e2e/public` test changes.
+
+Not run: `make e2e-oauth` and the other real-tailnet suites (this branch
+touched no real tailnet), and `make e2e-tw-upgrade` (`tw upgrade` restarts
+with `tw up --yes`; `--yes` without `--apply-policy` is still accepted and
+ignored, as every `tw up` in the hermetic CLI tests passes it).
 
 New tests:
 
