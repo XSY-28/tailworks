@@ -30,7 +30,7 @@ create its nodes. `tw deploy` checks this and prints the lines to add.
 A rule in the tailnet policy that lets a source (users, groups, tags) reach
 a destination (tags) on some ports. Grants decide who can call a workload
 and what a workload can call. Nothing reaches a new workload until a grant
-allows it: see the [quick start](../README.md#quick-start-deploy-your-first-durable-object)
+allows it: see the [quick start](../README.md#quick-start)
 and [first-deploy troubleshooting](troubleshooting.md).
 
 ### Caller

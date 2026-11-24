@@ -538,6 +538,7 @@ func cmdDeploy(args []string) error {
 			fmt.Printf("✓ service    %s · http://%s/  (stable across redeploys and host moves; callers need a grant to %s)\n", sv.Name, sv.MagicDNS, sv.Name)
 		}
 		printPublic(v.Public)
+		printDeployNext(a.Name, "http://"+v.Endpoint.MagicDNS+"/") // deploy_next.go
 	}
 	if p := v.Public; *waitPublic > 0 && p != nil && p.Allowed && p.Exposed {
 		last := ""

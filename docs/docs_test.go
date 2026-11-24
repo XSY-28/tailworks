@@ -22,7 +22,7 @@ func TestShowAndSearch(t *testing.T) {
 	if len(hits) == 0 || hits[0].Ref() != "errors.md#acl_denied" {
 		t.Fatalf("Search(acl_denied) best hit: %+v", hits)
 	}
-	if s, ok := Show("../README.md#quick-start-deploy-your-first-durable-object"); !ok || !strings.Contains(s, "tw deploy") {
+	if s, ok := Show("../README.md#quick-start"); !ok || !strings.Contains(s, "tw deploy") {
 		t.Fatalf("Show(../README.md#quick-start…) = %q, %v", s, ok)
 	}
 	if _, ok := Show("../go.mod"); ok {

@@ -9,7 +9,7 @@ issue or pull request.
 
 ## Set up
 
-You need Go ≥ 1.27 and Node.js ≥ 20 ([README › Prerequisites](README.md#prerequisites)),
+You need Go ≥ 1.27 and Node.js ≥ 20 ([prerequisites](docs/INSTALL.md#prerequisites)),
 on macOS or Linux.
 
 ```sh
