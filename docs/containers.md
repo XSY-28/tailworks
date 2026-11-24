@@ -127,9 +127,12 @@ a per-container proxy on the host:
   [tailworks-jsonc.md](tailworks-jsonc.md#tailnetegressinternet)), never a private, tailnet,
   metadata or host address (even through a DNS name that resolves to one).
   Each new destination is audited as `egress` with `actingFor: "sandbox-of
-  <object>"`, and refusals as `deny`. There is no tenant exit node yet, so
-  the traffic leaves from the host's own network
-  (`tw-hostd -container-internet=direct`, the default; `off` refuses it).
+  <object>"`, and refusals as `deny`. The traffic leaves from the host's
+  own network (`tw-hostd -container-internet=direct`, the default), or
+  through the host's tailnet exit node (`exit-node`, with
+  `-worker-internet=exit-node=<node>`;
+  [tailworks-jsonc.md](tailworks-jsonc.md#tailnetegressvia)); `off`
+  refuses it.
 - **Inbound** is only the parent's `getTcpPort(p).fetch()`.
 
 ### Lifetime
@@ -168,8 +171,8 @@ a per-container proxy on the host:
 - A container with its own tailnet node (`sandbox.tailnet.tags`), and
   standalone containers not attached to an object.
 - Image signing (cosign) and registry garbage collection.
-- A tenant exit node or gateway for `enableInternet` (the host's network is
-  used).
+- A tenant-owned gateway for `enableInternet` (the host's network, or the
+  host's exit node, is used).
 - Nested virtualization and GPUs (non-goals).
 - Workers bindings the Sandbox SDK templates may also use (KV, R2, Workers AI)
   remain unsupported on tailworks as before (docs/COMPAT.md).
@@ -322,10 +325,9 @@ gateway; that is the only DNS server it has.
   range, NAT64/6to4/Teredo, the synthetic pool, the host's own addresses).
   Every first flow per destination is audited `egress` with `actingFor:
   "sandbox-of <object>"`; refusals are audited `deny` (the first 32 per run)
-  and listed in `tw-hostd`'s `ContainerStatus.Refused`. Tailworks has no tenant
-  exit-node or gateway path yet (RFC §4.8), so the path is the host's own
-  network (`tw-hostd -container-internet=direct`, the default) or none
-  (`off`).
+  and listed in `tw-hostd`'s `ContainerStatus.Refused`. The path is the
+  host's own network (`tw-hostd -container-internet=direct`, the default),
+  the host's tailnet exit node (`exit-node`) or none (`off`).
 - **Preview URLs** (`exposePort`, `proxyToSandbox`) need public ingress
   (ADR-029): on a container class `exposePort()` throws `not_supported`,
   and a Sandbox SDK preview-proxy request (`x-sandbox-preview-proxy`) gets

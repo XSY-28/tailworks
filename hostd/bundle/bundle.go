@@ -46,6 +46,9 @@ type App struct {
 	SpawnMaxLive  int
 	SpawnMaxDepth int
 	Internet      InternetEgress // tailnet.egress.internet: Workers' and containers' internet egress (internet.go)
+	// EgressVia is tailnet.egress.via: "" or ViaExitNode (the workload needs
+	// a host whose internet path is an exit node; internet.go).
+	EgressVia string
 	// Tier is the requested isolation tier (tailworks.jsonc "tier"): "" (host
 	// default), "process" or "microvm".
 	Tier string
@@ -194,6 +197,7 @@ type twConfig struct {
 		} `json:"spawn"`
 		Egress struct {
 			Internet InternetEgress `json:"internet"`
+			Via      string         `json:"via"`
 		} `json:"egress"`
 	} `json:"tailnet"`
 }
@@ -253,6 +257,7 @@ func Parse(files map[string][]byte) (*App, error) {
 		WorkloadTags: t.Tailnet.Tags, Modules: map[string][]byte{},
 		SpawnMaxLive: t.Tailnet.Spawn.MaxLive, SpawnMaxDepth: t.Tailnet.Spawn.MaxDepth,
 		Internet: t.Tailnet.Egress.Internet, Tier: t.Tier, Public: t.Public,
+		EgressVia: t.Tailnet.Egress.Via,
 	}
 	if err := a.Public.Validate(); err != nil {
 		return nil, fmt.Errorf("bundle: tailworks.jsonc %w", err)
@@ -265,6 +270,11 @@ func Parse(files map[string][]byte) (*App, error) {
 	case "", TierProcess, TierMicroVM:
 	default:
 		return nil, fmt.Errorf("bundle: tailworks.jsonc tier %q: want \"process\" or \"microvm\"", a.Tier)
+	}
+	switch a.EgressVia {
+	case "", ViaExitNode:
+	default:
+		return nil, fmt.Errorf("bundle: tailworks.jsonc tailnet.egress.via %q: want %q", a.EgressVia, ViaExitNode)
 	}
 	if t.Name != "" {
 		a.Name = t.Name

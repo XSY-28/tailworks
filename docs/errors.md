@@ -127,6 +127,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### exists
 409 · mgmt, cli. **When:** create of an ID that already exists (`tw host add <id>` for a known host). **Fix:** `tw host rm <id> --drain`, then add again; or pick another ID.
 
+### exit_node_unavailable
+503 · netd. **When:** a Worker, Node app or container called an internet destination on a host whose internet path is a tailnet exit node (`tw up --worker-internet=exit-node=<node>`, or `tw-hostd -worker-internet=exit-node=<node>`), and the exit node can't be used right now: it isn't in the host node's netmap, it isn't offered to the host as an exit node (no approved exit routes, or no `autogroup:internet` grant for `tag:tw-host`), it is offline, the dial through it failed, or it refuses to answer DNS for the host's node. The detail says which. tailworks never falls back to the host's own network. **Fix:** `tw doctor` on the host. Advertise and approve exit routes on the exit node; grant `tag:tw-host` → `autogroup:internet` in the tailnet policy; for an exit node that refuses DNS for tagged peers, add `dns=<resolver ip>` to the setting (`exit-node=<node>,dns=1.1.1.1`) so names resolve at that resolver through the exit node ([tailworks-jsonc.md](tailworks-jsonc.md#tailnetegressvia)). Egress that is turned off by config is [`internet_egress_unavailable`](#internet_egress_unavailable) instead.
+
 ### feature_unavailable
 409 · mgmt, cli. **When:** the deployment needs a host feature (`kv`, `r2`, `d1`, `telemetry`, …) that no eligible host advertises, or the workload's current host runs a tailworks too old to offer it. Hosts report their features when they register ([upgrading.md](upgrading.md)). **Fix:** upgrade the hosts (`tw upgrade --plan` lists them), or redeploy with `--replace` to move off the old host.
 

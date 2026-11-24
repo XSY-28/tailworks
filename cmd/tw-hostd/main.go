@@ -122,8 +122,8 @@ func run() error {
 		ctrVCPU    = flag.Float64("container-vcpu", 0, "containers: max total vCPU on this host (0 = unlimited)")
 		selfUpg    = flag.Bool("self-upgrade", false, "let tw-mgmt's upgrade runs install a new release here and restart this host (exits with status 75 after installing; run under a service manager that restarts it, e.g. systemd Restart=always)")
 		instPrefix = flag.String("install-prefix", "", "with -self-upgrade: the install.sh prefix to upgrade (default: the prefix this tw-hostd runs from, if it has share/tailworks and VERSION)")
-		ctrInet    = flag.String("container-internet", "direct", "containers: how start({enableInternet}) reaches a workload's egress.internet hosts: direct (this host's network, public addresses only) or off")
-		wkInet     = flag.String("worker-internet", "direct", "Workers: how fetch() reaches internet hosts (subject to each workload's tailnet.egress.internet): direct (this host's network, public addresses only) or off")
+		ctrInet    = flag.String("container-internet", "direct", "containers: how start({enableInternet}) reaches a workload's egress.internet hosts: "+hostdrun.InternetModeHelp)
+		wkInet     = flag.String("worker-internet", "direct", "Workers: how fetch() reaches internet hosts (subject to each workload's tailnet.egress.internet): "+hostdrun.InternetModeHelp)
 	)
 	// Process-tier heap caps (hostd/limits.go).
 	wdHeap := flag.Int("workerd-heap-mib", hostd.DefaultWorkerdHeapMiB, "process tier: cap each V8 isolate's heap in a workerd (the Worker, each Durable Object class) at this many MiB; past it V8 aborts that workload's workerd and it restarts (-1 = no cap)")

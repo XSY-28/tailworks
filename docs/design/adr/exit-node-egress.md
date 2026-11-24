@@ -1,8 +1,8 @@
 # ADR-exit-node-egress: A host can send all internet egress through a tailnet exit node; `tailnet.egress.via: "exit-node"` lets a workload require it
 
 **Date:** 2026-11-23
-**Status:** Proposed (drafted on branch `deranged-dog`; gets its number
-when it merges, AGENTS.md rule 5). Extends ADR-049 (Workers' internet
+**Status:** Proposed (drafted and built on branch `deranged-dog`; gets
+its number when it merges, AGENTS.md rule 5). Extends ADR-049 (Workers' internet
 egress from the host's network) and ADR-032 D4 (containers'
 `enableInternet`). Revisits the alternative ADR-049 rejected, "an exit node
 per workload", with a different carrier: the host's own node.
@@ -171,17 +171,29 @@ per workload", with a different carrier: the host's own node.
      sees the name, which closes the leak ADR-049 decision 4 accepted,
      for hosts on this path. Tailnet-shaped names still resolve from the
      object's netmap only, before any of this.
-   - If the exit node does not offer DNS (an old tailscaled, or a
-     Headscale exit node without it), hostd reports it at start and in
-     `tw status`, and names fail closed with `exit_node_unavailable`; IP
-     literals still work. Falling back to the host resolver would leak
-     the names the operator chose this path to hide. A host option to
-     allow that fallback can be added if real deployments need it.
+   - **Not every exit node answers a tagged peer.** In the pinned
+     tailscale.com, an exit node's peer API answers DNS for a tagged
+     client only through an extension hook that stock exit nodes don't
+     register (`ipn/ipnlocal/peerapi.go` `isPeerAPIDNSAllowed`), and the
+     host node is tagged. So the setting takes a resolver:
+     `exit-node=<node>,dns=<ip[:port]>` sends plain DNS over TCP to that
+     resolver *through the exit node* (port 53 by default). The host's
+     resolver still never sees the name; the named resolver does, from
+     the exit node's address. Without `dns=`, a refusal from the exit
+     node fails closed with `exit_node_unavailable` whose detail says to
+     add `dns=`; IP literals are never resolved and keep working. Falling
+     back to the host resolver would leak the names the operator chose
+     this path to hide, so there is no such fallback.
    - An exit node that is offline blackholes WireGuard traffic rather
      than refusing it. `Dial` keeps the direct path's 10 s timeout and
-     reports `exit_node_unavailable` with the exit node's name and its
-     last-seen `Online` state, instead of a bare dial failure. The host
-     node's netmap is the source of that state; netd does not probe.
+     reports `exit_node_unavailable` with the exit node's name, instead
+     of a bare dial failure. The host node's status is the source of
+     truth: hostd polls it every 2 s, and `Dial` and `Resolve` act on a
+     snapshot at most 1 s old (refreshing first when it is older), so a
+     change in the netmap is seen within a second and the fail-open
+     window of `tsnet.Server.Dial` (which would use the host's network
+     once no exit node owns the default route) is that one second at
+     most. netd does not probe.
 
 5. **Feature, versions and placement.** `internal/features` gains
    `InternetExitNode = "internet-exit-node"`. `features.Host()` is already
@@ -279,9 +291,10 @@ direct path, recorded in `status/<branch>.md`.
    Proposed: no; it is a property of where internet traffic leaves the
    host, which is per host, so per workload is already finer than the
    mechanism.
-2. Is fail-closed on exit-node DNS absence (point 4) too strict for
-   Headscale users? The alternative is a host option
-   `exit-node-dns=host` that documents the leak.
+2. Settled while building: exit nodes refuse peer-API DNS for tagged
+   clients in the pinned tailscale.com, so `dns=<resolver>` (point 4) is
+   the answer for them and for Headscale; there is no host-resolver
+   fallback.
 3. Whether `tw up` should offer to pick an exit node when the netmap
    shows exactly one. Proposed: no; a one-line hint in `tw doctor` is
    enough.

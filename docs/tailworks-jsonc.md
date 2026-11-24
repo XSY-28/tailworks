@@ -69,6 +69,7 @@ schema. `tw init` writes this line for you:
 | `connects` | `["tag:…" or name]` | what the workload calls. `tw deploy` preflights these grants, and smart placement measures paths to them |
 | `service` | `true` or `"svc:<name>"` | a Tailscale Service: a stable name and VIP in front of the workload ([services.md](services.md)) |
 | `egress.internet` | `true`, `false` or `[host, "*.suffix", IP, CIDR]` | internet egress for Worker code and containers; [below](#tailnetegressinternet) |
+| `egress.via` | `"exit-node"` | require a host whose internet egress leaves through a tailnet exit node; [below](#tailnetegressvia) |
 | `spawn.maxLive` | integer | the most live sub-agents (`ctx.tailnet.spawn`) |
 | `spawn.maxDepth` | integer | the deepest spawn chain |
 | `objects` | map of class → [object](#tailnetobjectsclass) | the Durable Object classes that get a tailnet node per instance |
@@ -110,6 +111,52 @@ started with `enableInternet: true` may reach
 - A change takes effect when the deployment that makes it becomes active.
 - `true` and `false` need hosts that offer the `worker-internet` feature
   ([upgrading.md](upgrading.md)); `[]` works on older hosts too.
+- A host can send all of its internet egress through a tailnet exit node
+  instead of its own network ([`egress.via`](#tailnetegressvia)).
+
+### `tailnet.egress.via`
+
+Where the workload's internet egress may leave from. `"exit-node"` requires
+a host whose internet path is a tailnet exit node, so the destination sees
+the exit node's address, not the host's, and the host's resolver never
+sees the names. Absent (the default): whatever the host offers.
+
+```jsonc
+{
+  "tailnet": {
+    "tags": ["tag:tw-wl-billing"],
+    "egress": { "internet": ["api.stripe.com"], "via": "exit-node" }
+  }
+}
+```
+
+- `via` says *how*; `internet` says *whether and where to*. Tailnet egress
+  is not affected: it always leaves from the workload's or object's own
+  node.
+- It is enforced at placement. A host advertises the `internet-exit-node`
+  feature only when its operator started it with
+  `tw up --worker-internet=exit-node=<node>` (or `tw-hostd
+  -worker-internet=exit-node=<node>`, with `-container-internet=exit-node`).
+  A deploy with `via` is placed only on such hosts, and otherwise fails
+  with `feature_unavailable`. A host on this path sends **every**
+  workload's internet traffic through its exit node, `via` or not; `via`
+  is how a workload refuses to run anywhere else.
+- `<node>` is the exit node's MagicDNS name, host name, tailnet IP or node
+  ID. The host's own node (`tag:tw-host`) uses it, so the tailnet policy
+  must grant `tag:tw-host` → `autogroup:internet`, and the exit node must
+  advertise exit routes that the tailnet admin approved. tailworks never
+  writes either.
+- Names resolve through the exit node, never through the host's resolver:
+  by default at the exit node itself (its peer API, as Tailscale clients
+  do). Some exit nodes don't answer DNS for tagged peers; then add a
+  resolver, `exit-node=<node>,dns=1.1.1.1`, and names resolve there,
+  through the exit node. The SSRF guard still checks every answer and
+  dials the checked address.
+- When the exit node is missing, not offered, offline or refuses DNS, the
+  host refuses internet egress with `exit_node_unavailable`, never falls
+  back to its own network; `tw status` and `tw doctor` say why.
+- `tw dev` has no exit node: it runs the workload on your machine's
+  network and prints a note.
 
 ### `tailnet.objects.<Class>`
 

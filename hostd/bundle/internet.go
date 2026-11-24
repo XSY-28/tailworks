@@ -6,6 +6,14 @@ import (
 	"errors"
 )
 
+// ViaExitNode is tailworks.jsonc tailnet.egress.via "exit-node"
+// (ADR-exit-node-egress): the workload's internet egress must leave
+// through a tailnet exit node, so it is placed only on hosts whose
+// internet path is one (features.InternetExitNode). Absent: whatever the
+// host offers. It says how; tailnet.egress.internet says whether and
+// where to.
+const ViaExitNode = "exit-node"
+
 // InternetEgress is tailworks.jsonc tailnet.egress.internet
 // (ADR-049): one setting for Workers and containers.
 //

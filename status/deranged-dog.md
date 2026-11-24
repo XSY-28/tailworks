@@ -1,50 +1,97 @@
-Last update: 2026-11-23 PT. Drafted `ADR-exit-node-egress` (Proposed).
+Last update: 2026-11-23 23:30 PT. ADR-exit-node-egress drafted and built; tests below.
 
 # deranged-dog: internet egress through a tailnet exit node
 
-## What's here
+## What's built
 
-- `docs/design/adr/exit-node-egress.md`: Proposed ADR. A host's internet
-  path gains `exit-node=<node>` (`tw up --worker-internet=...`,
-  `tw-hostd -worker-internet=...`, `-container-internet=exit-node`),
-  carried by the host's own tsnet node (`tw-host-<id>`, `tag:tw-host`)
-  with `ExitNodeID` set through `EditPrefs`. A workload can require it
-  with `tailnet.egress.via: "exit-node"`, enforced at placement by a new
-  host feature `internet-exit-node`. The SSRF guard stays in netd (it
-  still resolves, checks every answer and dials the IP literal); names
-  resolve through the exit node's peer-API DNS, never the host resolver.
-  New error code `exit_node_unavailable`. No code yet.
+- `docs/design/adr/exit-node-egress.md`: Proposed ADR (numbered on merge,
+  AGENTS.md rule 5). Open question 2 (exit-node DNS) was settled while
+  building, see "Findings".
+- **Host path** (`internal/hostdrun/internetpath.go`): `-worker-internet`
+  and `-container-internet` accept `exit-node=<node>[,dns=<ip[:port]>]`
+  beside `direct` and `off`. One host, one internet path: with exit-node
+  the other flag must be `exit-node` (bare, or the same node) or `off`.
+  Needs the host's own tsnet node (not `-local-dev`).
+- **The path itself** (`hostd/exitnode.go`, `ExitNodeInternet`): finds the
+  exit node in the host node's status (ID, MagicDNS name, host name or
+  IP), selects it with `EditPrefs ExitNodeID` when it isn't, and serves
+  `ContainerInternet.Dial`/`Resolve` for Workers (netd) and containers
+  (sbxnet) alike. `Dial` goes through `tsnet.Server.Dial` to the IP netd
+  checked. `Resolve` is DoH to the exit node's peer API over the tunnel,
+  or DNS over TCP to the `dns=` resolver through the exit node. Both
+  refuse with `exit_node_unavailable` (new netd code, 503) when the exit
+  node is missing, not offered, offline or refuses DNS; the state is
+  polled every 2 s and refreshed before use when older than 1 s. Never
+  falls back to the host's network.
+- **Workload requirement**: `tailnet.egress.via: "exit-node"`
+  (`hostd/bundle`), mapped to the new host feature `internet-exit-node`
+  (`internal/features`), which hostd advertises only when its path is an
+  exit node (`hostd/versions.go`). Placement already gates on features.
+- **CLI**: `tw up --worker-internet=exit-node=<node>` saved in tw.json and
+  passed in both layouts (containers follow); `tw status` and `tw doctor`
+  show the path and the exit node's problem (`StatusView.WorkerInternetProblem`);
+  `tw dev` prints a note for a `via` workload. `docs/cli.md` regenerated.
+- **Docs**: errors.md (`exit_node_unavailable`), tailworks-jsonc.md
+  (`egress.via` row and section), security-model.md (Egress, trust table),
+  containers.md, recipes.md, upgrading.md. `changes/deranged-dog.md`
+  (feature-string).
+- Audit note for internet flows now names the path: "internet via exit
+  node <node> (<addr>)".
 
-## Findings that shaped it
+## Findings
 
 - tsnet documents exit nodes (`tsnet.go` "Using an exit node"):
   `Server.Dial` of a public IP goes through `PeerForIP`, which falls
   through to the route table where the selected exit node owns the
-  default routes (`ipn/ipnlocal/resolve.go`), so the dial is netstack over
-  WireGuard. Verified in the pinned tailscale.com module.
-- tsnet's `Dial(name)` resolves with its own resolver hook, which bypasses
-  tsdial's exit-node DoH path; hence netd resolves itself against the exit
-  node's peer API and dials the IP.
-- `hostd.features()` is already config-dependent (`FeatureSelfUpgrade`),
-  so a config-dependent `internet-exit-node` feature fits the existing
-  placement gate (ADR-041 §7).
-- ADR-049's objections to "an exit node per workload" (object identity,
-  per-tenant grants, guard moving off the host) don't apply when the
-  carrier is the host node.
+  default routes, so the dial is netstack over WireGuard. But when no exit
+  node owns the default route, the same `Dial` uses the host's network
+  (`tsdial.dialOneUser` → `SystemDial`/`net.Dialer`). Hence the pre-dial
+  state check and the 1 s snapshot bound; that window is documented in the
+  ADR.
+- In the pinned tailscale.com, an exit node's peer API answers DNS for a
+  **tagged** peer only through an extension hook that stock exit nodes
+  don't register (`ipn/ipnlocal/peerapi.go` `isPeerAPIDNSAllowed`:
+  `IsSelfUntagged`, else `HookReplyToDNSQueries`, registered only by
+  `feature/conn25`). The host node is tagged, so DoH to the exit node
+  will often get 403. That is why `dns=<resolver>` exists: plain DNS over
+  TCP to a resolver *through* the exit node. No host-resolver fallback.
+- tsnet's `Dial(name)` resolves with its own resolver hook, bypassing
+  tsdial's exit-node DoH path; so the path resolves itself and dials IPs.
+- `hostd.features()` was already config-dependent (`FeatureSelfUpgrade`),
+  so a config-dependent feature fits the existing placement gate.
 
 ## Commands run
 
-- `go test ./docs/`: ok (the slug file is logged, not failed, outside CI).
-- `CI=true go test ./docs/ -run TestADRIndex`: FAIL, as designed: the
-  slug file must be numbered by the PR that merges it (AGENTS.md rule 5).
-  Not a problem for review on the branch; the PR must number it before
-  CI goes green.
+- `go build ./...`: ok.
+- `go test ./hostd -run 'TestExitNodeInternet|TestMatchExitNode|TestParseExitNodeSpec'`: ok.
+  The hermetic test fakes the host node's status, `EditPrefs` and dialer;
+  a DoH stub and a TCP-53 stub answer from a table; every dial is recorded
+  and any address other than the peer API, the resolver and the one public
+  destination fails the test. Covers: select on first use, DoH over the
+  tailnet dialer, dial through it, offline / not offered / gone from the
+  netmap refused with no dial, reselect after deselection, DoH 403 fails
+  closed with the `dns=` hint, `dns=` path, `Internet()` mode/via/problem,
+  `features()` with and without the path.
+- `go test ./internal/hostdrun ./internal/features ./hostd/bundle ./docs ./mgmt -run 'Feature|Placement'`: ok.
+- `go test ./cmd/tw -run 'WorkerInternet|Doctor|TestCLIReferenceUpToDate|CLIJSON|AgentEval'`: ok after `make cli-docs`.
+- `go test ./hostd -run 'Internet|Status|Feature|SelfUpgrade|ExitNode'`: ok.
+- `CI=true go test ./docs/ -run TestADRIndex`: FAIL, as designed: the slug
+  file must be numbered by the PR that merges it (AGENTS.md rule 5).
+- `make lint`, `make test` (on the mbp runner), `go test ./netd -run Internet`
+  (needs workerd): see the bottom of this file.
 
-## Next
+## Not run
 
-- Review the ADR; settle the three open questions.
-- Number it on merge (`git grep ADR-exit-node-egress`), rename the file,
-  add the README row.
-- Build: `hostd/exitnode.go`, `internal/features`, `bundle` `via`,
-  `cmd/tw/up_workerinternet.go` values, `docs/errors.md`,
-  `docs/tailworks-jsonc.md`, `docs/security-model.md`.
+- Anything against a real tailnet with a real exit node (`e2e-real`): no
+  exit node available here. The ADR's end-to-end check (source address =
+  exit node's, p50/p95 vs direct) is still to do on a real tailnet.
+- Headscale with an exit node (`e2e-headscale` has none).
+
+## Gaps / next
+
+- `tw status --json` doesn't carry `WorkerInternetProblem` yet (it would
+  change `schema/cli.schema.json`); the text output and `tw doctor` do.
+- A per-tenant resolver choice (`InternetConfig.Resolve`, ADR-049 §4) and
+  a per-object exit node (object identity at the exit node) stay unbuilt.
+- Number the ADR on merge (`git grep ADR-exit-node-egress`), rename the
+  file, add the README row.

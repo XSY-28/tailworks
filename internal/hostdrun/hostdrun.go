@@ -125,7 +125,8 @@ type Options struct {
 	// ContainerImageCacheMaxMiB caps the cache (0 = none); ContainerIdle,
 	// ContainerMaxLife, ContainerGrace are hostd.Config's (0 = default);
 	// ContainerMax, ContainerMemMiB, ContainerVCPU the host's capacity (0 =
-	// unlimited); ContainerInternet "direct" (default) or "off".
+	// unlimited); ContainerInternet "direct" (default), "exit-node[=<node>]"
+	// or "off" (internetpath.go).
 	NoContainers              bool
 	ContainerImageCache       string
 	ContainerImageDir         string
@@ -143,7 +144,9 @@ type Options struct {
 
 	// WorkerInternet is "direct" (default: Workers' fetch() reaches public
 	// internet hosts from this host's network, subject to each workload's
-	// tailnet.egress.internet) or "off" (ADR-049).
+	// tailnet.egress.internet), "exit-node=<node>" (through that tailnet
+	// exit node via this host's own node; internetpath.go) or "off"
+	// (ADR-049, ADR-exit-node-egress).
 	WorkerInternet string
 
 	// R2 holds R2 bucket bytes (hostd.Config.R2; nil: files under
@@ -243,6 +246,8 @@ type Runtime struct {
 	Workerd   string
 	mgmtAddr  string
 	log       *slog.Logger
+	// exit is the host's exit-node internet path, when it has one.
+	exit *hostd.ExitNodeInternet
 }
 
 // New resolves the transport (joins the host's node when needed, waits for
@@ -402,19 +407,8 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 			log.Info("containers available", "image_cache", st.Dir, "image_dir", o.ContainerImageDir, "idle", o.ContainerIdle, "max_life", o.ContainerMaxLife, "internet", o.ContainerInternet)
 		}
 	}
-	switch o.ContainerInternet {
-	case "direct":
-		hcfg.ContainerInternet = hostd.DirectInternet()
-	case "off":
-	default:
-		return nil, fmt.Errorf("-container-internet %q: want direct or off", o.ContainerInternet)
-	}
-	switch o.WorkerInternet {
-	case "direct":
-		hcfg.WorkerInternet = hostd.DirectInternet()
-	case "off":
-	default:
-		return nil, fmt.Errorf("-worker-internet %q: want direct or off", o.WorkerInternet)
+	if hcfg.WorkerInternet, hcfg.ContainerInternet, rt.exit, err = internetPaths(ctx, o.WorkerInternet, o.ContainerInternet, rt.TS, log); err != nil {
+		return nil, err
 	}
 	if pushLn != nil {
 		lc, err := rt.TS.LocalClient()
@@ -454,6 +448,9 @@ func (rt *Runtime) Close() error {
 	var err error
 	if rt.Host != nil {
 		err = rt.Host.Close()
+	}
+	if rt.exit != nil {
+		rt.exit.Close()
 	}
 	if rt.TS != nil {
 		tsnetlc.Close(rt.TS)

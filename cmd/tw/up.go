@@ -1456,7 +1456,7 @@ func cmdStatus(args []string) error {
 			where = "local-dev"
 		}
 		fmt.Printf("%s host        %s (%s) · heartbeat %.1fs ago · objects %v\n", mark(r.Host), s.Cfg.HostID, where, float64(r.HostAgeMS)/1000, r.Objects)
-		printWorkerInternet(s.Cfg.workerInternet(), hv.WorkerInternet) // up_workerinternet.go
+		printWorkerInternet(s.Cfg.workerInternet(), hv.WorkerInternet, hv.WorkerInternetProblem) // up_workerinternet.go
 		if len(r.Tenants) > 1 {
 			for _, t := range r.Tenants {
 				fmt.Printf("  tenant      %s (%s) · mint queue %d · %.0f registrations/min · %s · objects %v\n", t.Tailnet, t.TenantID, t.MintQueue, t.Rate, warmKeysLabel(t.WarmKeys), t.Objects)

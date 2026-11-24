@@ -23,7 +23,9 @@ each has a README.md. Limits that apply to all of these are in
 `fetch("https://api.example.com/...")` just works. The request leaves from
 the host's own network, not from a tailnet node, so the API sees the
 host's source address (a different one on each host), never a tailnet
-identity. Private, link-local (cloud metadata), loopback, tailnet and host
+identity. A host can instead send all of it through a tailnet exit node
+([tailworks-jsonc.md](tailworks-jsonc.md#tailnetegressvia)), which gives
+one fixed source address per exit node. Private, link-local (cloud metadata), loopback, tailnet and host
 addresses are always refused, including through a DNS name that resolves
 to one ([security-model.md](security-model.md#egress)).
 

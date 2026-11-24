@@ -27,11 +27,27 @@ func TestUpWorkerInternet(t *testing.T) {
 	}
 
 	var c Config
-	for _, bad := range []string{"", "on", "exit-node"} {
-		if err := saveWorkerInternet(&c, bad); err == nil || !strings.Contains(err.Error(), "want direct or off") {
+	for _, bad := range []string{"", "on", "exit-node", "exit-node="} {
+		if err := saveWorkerInternet(&c, bad); err == nil || !strings.Contains(err.Error(), "want direct") {
 			t.Errorf("--worker-internet %q: %v", bad, err)
 		}
 	}
+	if err := saveWorkerInternet(&c, "exit-node=x,dns=nope"); err == nil || !strings.Contains(err.Error(), "want an IP") {
+		t.Errorf("--worker-internet exit-node=x,dns=nope: %v", err)
+	}
+	// An exit node (ADR-exit-node-egress) keeps the node's case, and is the
+	// containers' path too, in both layouts.
+	if err := saveWorkerInternet(&c, "Exit-Node=nABC,dns=1.1.1.1"); err != nil || c.WorkerInternet != "exit-node=nABC,dns=1.1.1.1" {
+		t.Fatalf("exit-node saved: %q %v", c.WorkerInternet, err)
+	}
+	if a := c.workerInternetHostdArgs(); !slices.Equal(a, []string{"-worker-internet", "exit-node=nABC,dns=1.1.1.1", "-container-internet", "exit-node"}) {
+		t.Fatalf("exit-node hostd args: %v", a)
+	}
+	c.workerInternetSingle(&ho)
+	if ho.WorkerInternet != "exit-node=nABC,dns=1.1.1.1" || ho.ContainerInternet != "exit-node" {
+		t.Fatalf("exit-node single process: %q %q", ho.WorkerInternet, ho.ContainerInternet)
+	}
+	ho = hostdrun.Options{}
 	if err := saveWorkerInternet(&c, "OFF"); err != nil || c.WorkerInternet != "off" {
 		t.Fatalf("saved: %q %v", c.WorkerInternet, err)
 	}
@@ -61,15 +77,20 @@ func TestUpWorkerInternet(t *testing.T) {
 
 func TestWorkerInternetDetail(t *testing.T) {
 	for _, c := range []struct {
-		saved, running, prefix string
-		restart                bool
+		saved, running, problem, prefix string
+		restart                         bool
 	}{
-		{"direct", "", "direct (Workers' fetch() reaches public", false},
-		{"off", "off", "off (Workers' fetch() to internet hosts is refused", false},
+		{"direct", "", "", "direct (Workers' fetch() reaches public", false},
+		{"off", "off", "", "off (Workers' fetch() to internet hosts is refused", false},
 		// The host still runs what it started with: say so.
-		{"off", "direct", "direct (", true},
+		{"off", "direct", "", "direct (", true},
+		{"exit-node=exit-fra,dns=1.1.1.1", "exit-node=exit-fra,dns=1.1.1.1", "", "exit-node=exit-fra,dns=1.1.1.1 (Workers' and containers' internet traffic leaves through tailnet exit node exit-fra via", false},
+		{"exit-node=exit-fra", "exit-node=exit-fra", "exit-fra is offline", "exit-node=exit-fra (", false},
 	} {
-		d := workerInternetDetail(c.saved, c.running)
+		d := workerInternetDetail(c.saved, c.running, c.problem)
+		if c.problem != "" && !strings.Contains(d, "unavailable: "+c.problem) {
+			t.Errorf("%s: %q lacks the problem", c.saved, d)
+		}
 		if !strings.HasPrefix(d, c.prefix) {
 			t.Errorf("%s/%s: %q, want prefix %q", c.saved, c.running, d, c.prefix)
 		}
@@ -78,7 +99,7 @@ func TestWorkerInternetDetail(t *testing.T) {
 		}
 	}
 	// tw doctor's one-line summary shows the mode.
-	if f := metaOf("worker_internet").fact(workerInternetDetail("off", "")); f != "off" {
+	if f := metaOf("worker_internet").fact(workerInternetDetail("off", "", "")); f != "off" {
 		t.Errorf("doctor fact = %q, want off", f)
 	}
 }
@@ -91,6 +112,10 @@ func TestDoctorWorkerInternet(t *testing.T) {
 	s.Cfg.WorkerInternet = ""
 	if st, d, _ := doctorWorkerInternet(s); st != "ok" || !strings.HasPrefix(d, "direct (") {
 		t.Fatalf("default: %s %q", st, d)
+	}
+	s.Cfg.WorkerInternet = "exit-node=exit-fra"
+	if st, d, _ := doctorWorkerInternet(s); st != "ok" || !strings.HasPrefix(d, "exit-node=exit-fra (") || !strings.Contains(d, "--worker-internet=direct") {
+		t.Fatalf("exit-node (host not running): %s %q", st, d)
 	}
 	if st, _, _ := doctorWorkerInternet(&state{Dir: t.TempDir()}); st != "skip" {
 		t.Fatalf("not set up: %s", st)
