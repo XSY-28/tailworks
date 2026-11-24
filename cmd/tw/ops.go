@@ -195,8 +195,10 @@ func cmdLs(args []string) error {
 		}
 	}
 	sort.Slice(shown, func(i, j int) bool { return shown[i].CreatedAt < shown[j].CreatedAt })
-	emit(f, map[string]any{"tenant": tn.Tailnet, "tenantID": tn.TenantID, "deployments": deps, "objects": shown}, func() {
+	nodes := s.nodeBudgetOf(ctx, tn, nil, false) // nodebudget.go: every live node, whatever --limit
+	emit(f, map[string]any{"tenant": tn.Tailnet, "tenantID": tn.TenantID, "deployments": deps, "objects": shown, "nodes": nodes}, func() {
 		fmt.Printf("TENANT %s (%s)\n", tn.Tailnet, tn.TenantID)
+		printLsNodes(nodes) // nodebudget.go
 		fmt.Println("DEPLOYMENTS")
 		for _, d := range deps {
 			by := ""

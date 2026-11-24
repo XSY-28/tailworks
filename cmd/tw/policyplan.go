@@ -39,6 +39,10 @@ type policyResult struct {
 
 	// Applied: --apply's result (policyapply.go).
 	Applied *mgmt.PolicyApplyResult `json:"applied,omitempty"`
+
+	// Nodes: the tailnet nodes the app costs and the tenant's live count
+	// (nodebudget.go).
+	Nodes *nodeBudget `json:"nodes,omitempty"`
 }
 
 func cmdPolicy(args []string) error {
@@ -95,6 +99,7 @@ func cmdPolicy(args []string) error {
 	res.OK = res.Checked && res.Preflight.OK
 	res.ServiceCallerGrant = serviceCallerGrant(res.Preflight.Service)
 	res.Snippet = policySnippet(res.Preflight, res.CallerGrant, res.ServiceCallerGrant)
+	res.Nodes = s.nodeBudgetOf(ctx, tn, a.Cfg, false) // nodebudget.go
 	if *apply {
 		if err := policyApplyStep(ctx, s, f, a, tn, tb, *yes, &res); err != nil {
 			return err
@@ -188,6 +193,7 @@ func printPolicyPlan(a *app, res policyResult) {
 			printPolicyChecks(a, pf)
 		}
 	}
+	printNodeBudget("  nodes      ", "! nodes      ", res.Tenant, res.Nodes) // nodebudget.go
 	if res.Snippet == "" {
 		return
 	}
