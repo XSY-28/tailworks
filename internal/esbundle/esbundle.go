@@ -18,6 +18,8 @@ import (
 	"sync"
 
 	"github.com/evanw/esbuild/pkg/api"
+
+	"github.com/rosskukulinski/tailworks/internal/emailstub"
 )
 
 // Version is the esbuild version linked in (matches the npm pin).
@@ -66,6 +68,10 @@ type Options struct {
 	// stack mapping needs only the positions).
 	SourceMap      bool
 	SourcesContent bool
+
+	// NodeCompat: the app has nodejs_compat (NodeCompat(flags)), so a
+	// require() of a Node builtin imports it (requirebuiltins.go).
+	NodeCompat bool
 }
 
 // Result is what BuildApp wrote.
@@ -112,7 +118,7 @@ func BuildApp(o Options) (*Result, error) {
 			return api.OnResolveResult{Path: "email", Namespace: "tw-stub"}, nil
 		})
 		b.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: "tw-stub"}, func(a api.OnLoadArgs) (api.OnLoadResult, error) {
-			s := "export class EmailMessage { constructor() { throw new Error('cloudflare:email is not supported on tailworks'); } }"
+			s := emailstub.ClassJS
 			return api.OnLoadResult{Contents: &s, Loader: api.LoaderJS}, nil
 		})
 		b.OnResolve(api.OnResolveOptions{Filter: `^[a-z_][a-z0-9_/]*$`}, func(a api.OnResolveArgs) (api.OnResolveResult, error) {
@@ -144,7 +150,7 @@ func BuildApp(o Options) (*Result, error) {
 		NodePaths:         o.NodePaths,
 		LegalComments:     api.LegalCommentsNone,
 		LogLevel:          api.LogLevelSilent,
-		Plugins:           []api.Plugin{tw, rules},
+		Plugins:           []api.Plugin{requireBuiltinsPlugin(dir, o.NodeCompat), tw, rules},
 		Define:            o.Define,
 		Alias:             o.Alias,
 		KeepNames:         o.KeepNames,
