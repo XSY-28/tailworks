@@ -41,4 +41,7 @@ ledger row `H-dev-inspector`.
   targets listed).
 - `go test ./cmd/tw -run 'TestDevParity$' -count=1` (real workerd, after
   `make deps`): pass; `/json/list` has `/tenant`, no `/platform`.
-- `make lint`, `make test`: see the PR.
+- `make lint`: pass (local).
+- `make test`: pass (on the mbp runner via `mbp-test.sh test`; no FAIL lines).
+- Not run: the extra suites in AGENTS.md's table don't cover `tw dev`'s
+  inspector; `e2e-compat` and friends don't touch this proxy.
