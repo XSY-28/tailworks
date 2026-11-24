@@ -761,7 +761,9 @@ still `t.Skip`s.
   (`placement_service.go:71`); public gate defaults to deny
   (`public.go:67, 209`); Service takeover refused on exact comment match,
   validated names, case-insensitive MagicDNS collision check
-  (`services.go:113, 133`); tailworks never writes `autoApprovers.services`;
+  (`services.go:113, 133`); tailworks writes `autoApprovers.services` only via
+  `tw policy --apply`, for the workload's own `svc:` name and deployed
+  `tag:tw*` tags (`policy.Check`, `mgmt/policyapply.go` serviceApprover; issue #295);
   `funnel` nodeAttr refused for anything but `tag:tw-public`/
   `tag:tw-issuer` (`internal/policy/policy.go:219-249`); warm/host keys
   single-use, preauthorized, bounded expiry, secrets only in custody
