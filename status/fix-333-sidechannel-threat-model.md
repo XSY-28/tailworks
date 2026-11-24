@@ -46,7 +46,7 @@ issue's measurement on 1.20261118.1.
 | `go test -count=1 ./hostd/gen/` | ok (8.5 s) |
 | `make test-docs` | ok |
 | `make lint` | ok (gofmt, vet, staticcheck, vulncheck, api-check, compat-check, changes-check, check-secrets) |
-| `sh ~/.claude/scratch/mbp-test.sh test` (`make test` on mbp) | PENDING |
+| `make test` (locally, after merging `origin/master` at 69c15e4a) | ok (exit 0; 58 packages ok, no FAIL). The mbp offload (`sh ~/.claude/scratch/mbp-test.sh test`) queued behind two other agents' slots, so it was stopped once the local run passed |
 
 Not run: nothing in the table in AGENTS.md applies (no store, placement,
 templates, wrangler, upgrade or install changes).
