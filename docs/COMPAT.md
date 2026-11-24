@@ -224,10 +224,10 @@ only a name and a tag. Anything more is in the last column.
 
 Upstream: [cloudflare/agents](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples) `examples/` at commit `95dacf84dcdf`. Versions: `agents` 0.34.0 (the examples depend on `"agents": "*"`, a workspace link; the suite installs the published version the repo carries at that commit, with `npm install`), `@modelcontextprotocol/server` 2.4.0 and `@modelcontextprotocol/sdk` 1.32.2 (pinned by the examples themselves). No other versions were run, so none is known not to work.
 
-- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-24 on darwin/arm64, tailworks `5021fbb5d978`.
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-24 on darwin/arm64, tailworks `ed4d2831e6f5`.
 - Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-24 on darwin/arm64, tailworks `0bc7003f79dd`.
 
-69 examples: **10 pass, 0 pass with a change, 4 fail, 55 not run.** (The repo has 56 example directories. One of them, `next/`, holds 14 examples of its own, counted here one by one, with `next/harnesses` as one.) A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
+69 examples: **17 pass, 0 pass with a change, 6 fail, 46 not run.** (The repo has 56 example directories. One of them, `next/`, holds 14 examples of its own, counted here one by one, with `next/harnesses` as one.) A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
 
 | Example | What it is | `tw dev` | Deployed | Result | The change, or why it fails |
 |---|---|---|---|---|---|
@@ -245,12 +245,21 @@ Upstream: [cloudflare/agents](https://github.com/cloudflare/agents/tree/95dacf84
 | [`webmcp-react`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/webmcp-react) | WebMCP starter: a React SPA (tools run in the browser), Worker only as the 404 fallback | pass | pass | **pass** | — |
 | [`workflows`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/workflows) | AgentWorkflow started by an agent: steps, progress reports to the agent and its clients, restart, list. (Its approval step sits behind the example's intentional random failures and isn't reached) | pass | pass | **pass** | — |
 | [`playground`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/playground) | The Agents playground: 30 agent classes in one Worker (state, callable, streaming, schedule, SQL, routing, multi-agent, MCP, workflows; AI, email, voice and codemode demos too) | fail | fail | **fail** | It starts, and 8 of the 9 demo families the probe covers pass; the multi-agent demo's `SupervisorAgent.createChild` (an agent calling another agent's method over Durable Object RPC after `getAgentByName`) fails with `Could not serialize object of type "RpcPromise"`. A smaller app bundled by the built-in bundler with the same two classes and calls passes |
+| [`next/lifecycle`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/next/lifecycle) | A plain `DurableObject` with `Lifecycle` and a job-queue capability: a self-rescheduling durable job, cancel, `ctx.abort()` restart | fail | not run | **fail** | The job ticks, and its `/restart` route calls `ctx.abort()`; after that the object is never recreated, and every request to it fails with the abort reason (`demo restart`). Stock `wrangler dev` gives it a new instance and the job keeps ticking ([#395](https://github.com/rosskukulinski/tailworks/issues/395)) |
+| [`next/mcp-client`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/next/mcp-client) | `MCPClientManager` as a lifecycle capability on a plain `DurableObject`: register, connect, catalog, remove (+ React UI) | pass | not run | **pass** | — |
+| [`next/queue`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/next/queue) | `Queue` as a lifecycle capability: durable background items run from the alarm loop | pass | not run | **pass** | — |
+| [`next/routing`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/next/routing) | `RoutedAgents` on a plain `DurableObject` hub: one Agent per chat, forwarded requests and WebSockets, pushed metadata, search, delete (+ React UI) | fail | not run | **fail** | The hub's `createChat()` (`RoutedAgents.get(id)`, then `init()` on the chat's stub over Durable Object RPC) fails with `Could not serialize object of type "RpcPromise"`, as the playground's multi-agent demo does; the same build passes under stock `wrangler dev` ([#391](https://github.com/rosskukulinski/tailworks/issues/391)) |
+| [`next/schedules`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/next/schedules) | `Scheduler` as a lifecycle capability: a one-shot reminder delivered from the alarm, a cron schedule, cancel | pass | not run | **pass** | — |
+| [`next/sessions`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/next/sessions) | `Sessions` on a plain `DurableObject`: a message tree, streamed (NDJSON) history, branches, a compaction overlay | pass | not run | **pass** | — |
+| [`next/streams`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/next/streams) | `Streams` with `Tasks`: a durable task appends chunks to a durable stream, read over SSE, resumed from a cursor | pass | not run | **pass** | — |
+| [`next/tasks`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/next/tasks) | `Tasks`: a durable replayable run with steps and a durable sleep, idempotency keys, run lookup | pass | not run | **pass** | — |
+| [`next/websockets`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/next/websockets) | The `WebSockets` capability on a plain `DurableObject`: the Agent protocol (`useAgent`), room frames, `rpc` callables incl. a streamed one, tags, HTTP broadcast (+ React UI) | pass | not run | **pass** | — |
 
 Not run:
 
 | Why | Examples |
 |---|---|
-| needs Workers AI (`env.AI`, an `ai` binding in its wrangler config), which tailworks doesn't provide | `a2a`, `agents-as-tools`, `auth-agent`, `chat-sdk-messenger`, `codemode-browser`, `context-overflow-recovery`, `deploy-churn`, `dynamic-tools`, `mcp-rpc-transport`, `multi-ai-chat`, `resumable-stream-chat`, `structured-input`, `think-chat-sdk`, `think-submissions`, `think-workflows`, `vue-chat`, `web-fetch-lab`, `web-research` |
+| needs Workers AI (`env.AI`, an `ai` binding in its wrangler config), which tailworks doesn't provide. A scripted `env.AI` isn't possible without changing each example: tailworks ignores the `ai` binding (`env.AI` is undefined), so there is no binding to point at a stub, and one would have to be wired into each example: its config, or a wrapper around each of its agent classes (they read `this.env.AI` inside their Durable Objects) | `a2a`, `agents-as-tools`, `auth-agent`, `chat-sdk-messenger`, `codemode-browser`, `context-overflow-recovery`, `deploy-churn`, `dynamic-tools`, `mcp-rpc-transport`, `multi-ai-chat`, `resumable-stream-chat`, `structured-input`, `think-chat-sdk`, `think-submissions`, `think-workflows`, `vue-chat`, `web-fetch-lab`, `web-research` |
 | needs Workers AI, and a voice or telephony provider's API key | `elevenlabs-starter`, `plivo-voice-agent`, `telnyx-voice-agent`, `voice-agent`, `voice-input` |
 | needs Workers AI and Browser Rendering (`browser` binding) | `ai-chat`, `browser-live-view`, `browser-quick-actions`, `codemode-connectors` |
 | needs Workers AI and the Worker Loader (`worker_loaders` binding) | `codemode`, `computer-skills`, `r2-skills`, `worker-bundler-playground`, `workspace-chat` |
@@ -259,8 +268,7 @@ Not run:
 | needs Email Routing (`send_email` binding, the `email()` handler) | `email-agent` |
 | needs an OpenAI API key (the agent's moves come from `@ai-sdk/openai`) | `tictactoe` |
 | needs a funded test wallet key and the public x402.org facilitator | `x402`, `x402-mcp` |
-| not reached in this pass. These declare no Cloudflare-only binding (plain `DurableObject` + `Lifecycle` capabilities), so they are the next ones to add | `next/lifecycle`, `next/mcp-client`, `next/queue`, `next/routing`, `next/schedules`, `next/sessions`, `next/streams`, `next/tasks`, `next/websockets` |
-| not reached in this pass; needs Workers AI, the Worker Loader, a container or a model provider key | `next/channels`, `next/dynamic-agents`, `next/harnesses/*`, `next/models`, `next/tools/browser` |
+| needs Workers AI, the Worker Loader, a container or a model provider key | `next/channels`, `next/dynamic-agents`, `next/harnesses/*`, `next/models`, `next/tools/browser` |
 
 <!-- upstream-examples:agents-sdk:end -->
 
@@ -400,25 +408,27 @@ streaming and agent loop running on tailworks, not a model.
 
 Upstream: [vercel/ai](https://github.com/vercel/ai/tree/8956ca55ed9c31b4b7680621a10ad0269f9629b1/examples) `examples/` at commit `8956ca55ed9c`. Versions: `ai` 7.0.181 and `@ai-sdk/openai` 4.0.122 (the examples depend on `workspace:*`; the suite installs the published versions the repo carries at that commit). No other versions were run.
 
-- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-24 on darwin/arm64, tailworks `5021fbb5d978`.
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-24 on darwin/arm64, tailworks `ed4d2831e6f5`.
 - Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-24 on darwin/arm64, tailworks `0bc7003f79dd`.
 
-25 examples: **0 pass, 3 pass with a change, 0 fail, 22 not run.** A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
+26 examples: **0 pass, 4 pass with a change, 3 fail, 19 not run.** (`mcp` is one directory of MCP server and client script pairs; two of its servers run here, one row each, so it is counted twice.) A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
 
 | Example | What it is | `tw dev` | Deployed | Result | The change, or why it fails |
 |---|---|---|---|---|---|
 | [`hono`](https://github.com/vercel/ai/tree/8956ca55ed9c31b4b7680621a10ad0269f9629b1/examples/hono) | Hono server: `streamText`, text and UI message streams, a `ToolLoopAgent` behind `createAgentUIStreamResponse` | pass | pass | **pass with change** | (1) The example is a Node server with no Workers config: a wrangler.jsonc and a Worker entry are added, and `@hono/node-server` is aliased to a shim whose `serve()` hands Hono's `app.fetch` to that entry instead of listening on port 8080; `src/` is unchanged. (2) No OpenAI key: the entry answers the example's OpenAI Responses API calls with a scripted stream, so no model is called. |
 | [`node-http-server`](https://github.com/vercel/ai/tree/8956ca55ed9c31b4b7680621a10ad0269f9629b1/examples/node-http-server) | `node:http` server: `streamText` piped with `pipeUIMessageStreamToResponse` | pass | pass | **pass with change** | (1) The example is a Node server with no Workers config: a wrangler.jsonc and a 4-line Worker entry (`httpServerHandler({ port: 8080 })` from `cloudflare:node`) are added; `src/` is unchanged. (2) No OpenAI key: the entry answers the example's OpenAI Responses API calls with a scripted stream, so no model is called. |
 | [`express`](https://github.com/vercel/ai/tree/8956ca55ed9c31b4b7680621a10ad0269f9629b1/examples/express) | Express 5 server: `streamText`, and a `ToolLoopAgent` piped with `pipeAgentUIStreamToResponse` | pass | pass | **pass with change** | (1) The example is a Node server with no Workers config: a wrangler.jsonc and a 4-line Worker entry (`httpServerHandler({ port: 8080 })` from `cloudflare:node`) are added; `src/` is unchanged. (2) No OpenAI key: the entry answers the example's OpenAI Responses API calls with a scripted stream, so no model is called. |
+| [`fastify`](https://github.com/vercel/ai/tree/8956ca55ed9c31b4b7680621a10ad0269f9629b1/examples/fastify) | Fastify 5 server: `streamText` as a UI message stream, and `createUIMessageStream` with custom data | fail | not run | **fail** | Not a tailworks gap: Fastify doesn't run as a Worker. It starts, but `fastify.listen()` never reaches the node:http bridge (`Http server with port 8080 not found`), and stock `wrangler dev` doesn't start it at all (its bundle of Fastify's pino logger throws `Cannot destructure property 'serializersSym' of 'pino.symbols'`) |
+| [`nest`](https://github.com/vercel/ai/tree/8956ca55ed9c31b4b7680621a10ad0269f9629b1/examples/nest) | Nest server (Express platform): `streamText` piped with `pipeUIMessageStreamToResponse`, and custom data | fail | not run | **fail** | Not a tailworks gap: Nest `require()`s its optional packages (`@nestjs/microservices`, `@nestjs/websockets`, `class-validator`, `class-transformer`) in code a bundler can't leave out, so the Worker doesn't bundle: `Could not resolve "@nestjs/microservices"`. Stock `wrangler dev` fails the same way |
+| [`mcp`](https://github.com/vercel/ai/tree/8956ca55ed9c31b4b7680621a10ad0269f9629b1/examples/mcp) | `mcp`'s `http` server: an Express MCP server on the Streamable HTTP transport (MCP SDK v1, stateless), the one its `client:http` calls | pass | not run | **pass with change** | The example is a Node server with no Workers config: a wrangler.jsonc and a 4-line Worker entry (`httpServerHandler({ port: 3000 })` from `cloudflare:node`) are added; `src/` is unchanged |
+| [`mcp`](https://github.com/vercel/ai/tree/8956ca55ed9c31b4b7680621a10ad0269f9629b1/examples/mcp) | `mcp`'s `sse` server: an Express MCP server on the legacy SSE transport (`GET /sse`, `POST /messages`), the one its `client:sse` calls | fail | not run | **fail** | Not a tailworks gap: the server keeps the `GET /sse` response in a module variable and writes each answer to it while handling a later `POST /messages`, and a Worker can't write to one request's response from another (stock `wrangler dev` cancels the request the same way: the stream gets the endpoint event, the `POST` gets 202, no answer arrives). Its `http` server, the Streamable HTTP transport, passes |
 
 Not run:
 
 | Why | Examples |
 |---|---|
 | a Next.js, Nuxt, SvelteKit or Angular app that calls a model provider with an API key. tailworks' Worker tier runs Workers projects, not these frameworks' builds, and none of them has a Workers target | `ai-e2e-next`, `angular`, `harness-e2e-next`, `next`, `next-agent`, `next-fastapi`, `next-google-vertex`, `next-langchain`, `next-openai-kasada-bot-protection`, `next-openai-pages`, `next-openai-telemetry`, `next-openai-telemetry-sentry`, `next-openai-upstash-rate-limits`, `next-workflow`, `nuxt-openai`, `sveltekit-openai`, `xai-tts-demo` |
-| a Node server on a framework with its own HTTP layer (Fastify, Nest); not tried | `fastify`, `nest` |
 | scripts and a terminal UI, not servers; they call model providers with API keys | `ai-functions`, `harness-e2e-tui` |
-| Node MCP servers and clients run as script pairs (`tsx server.ts`, `tsx client.ts`), several over stdio; not tried | `mcp` |
 
 <!-- upstream-examples:vercel-ai:end -->
 
@@ -432,7 +442,7 @@ The three examples in [vercel/mcp-handler](https://github.com/vercel/mcp-handler
 
 Upstream: [vercel/mcp-handler](https://github.com/vercel/mcp-handler/tree/5518e8af4386a92756d189169a97601a4a7162ee/examples) `examples/` at commit `5518e8af4386`. Versions: `mcp-handler` 2.4.0 (the repo's version at that commit), `@modelcontextprotocol/server` 2.4.0, `zod` 4.6.7. No other versions were run.
 
-- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-24 on darwin/arm64, tailworks `5021fbb5d978`.
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-24 on darwin/arm64, tailworks `ed4d2831e6f5`.
 - Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-24 on darwin/arm64, tailworks `0bc7003f79dd`.
 
 3 examples: **0 pass, 3 pass with a change, 0 fail, 0 not run.** A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.

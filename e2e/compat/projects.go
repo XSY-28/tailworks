@@ -48,7 +48,7 @@ const redirectWorkaround = "deploys the Vite plugin's output directory with --wr
 
 // Projects is the suite. Order is the run order (cheap ones first).
 func Projects() []*Project {
-	return append(cloudflareProjects(), upstreamProjects()...)
+	return append(append(cloudflareProjects(), upstreamProjects()...), upstreamMoreProjects()...)
 }
 
 // cloudflareProjects are the example projects of issue #305; upstream.go

@@ -383,6 +383,9 @@ func countNote(section string) string {
 	if section == SectionAgents {
 		return " (The repo has 56 example directories. One of them, `next/`, holds 14 examples of its own, counted here one by one, with `next/harnesses` as one.)"
 	}
+	if section == SectionVercel {
+		return " (`mcp` is one directory of MCP server and client script pairs; two of its servers run here, one row each, so it is counted twice.)"
+	}
 	return ""
 }
 
