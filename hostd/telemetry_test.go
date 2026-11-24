@@ -55,7 +55,7 @@ func startCollector(t *testing.T, s *suite) *collector {
 			return
 		}
 		from := ""
-		if who, err := n.LC.WhoIs(r.Context(), r.RemoteAddr); err == nil {
+		if who, err := n.LC.WhoIs(r.Context(), r.RemoteAddr); err == nil && who.Node != nil {
 			from = who.Node.Name
 		}
 		c.mu.Lock()
