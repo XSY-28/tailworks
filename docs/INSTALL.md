@@ -110,7 +110,7 @@ connection, which is exactly the identity mgmt wants to see.
 
 The tarball is self-contained (~87 MB compressed, ~300 MB installed): the Go binaries `tw`, `tw-mgmt`,
 `tw-hostd`, `tw-netd` (static, `CGO_ENABLED=0`; esbuild is built into
-`tw`, so deploys need no Node.js), the pinned `workerd` (1.20261118.1, from
+`tw`, so deploys need no Node.js), the pinned `workerd` (1.20261121.1, from
 npm `@cloudflare/workerd-darwin-arm64`), the app templates and the
 `node_modules` they need (vendored, so `tw init` and `tw deploy` work
 offline).
