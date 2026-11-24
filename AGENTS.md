@@ -88,10 +88,12 @@ position.
 ## Definition of done (before you open or merge a PR)
 
 CI (`.github/workflows/ci.yml`) runs `make lint test` on every PR, and
-master accepts a PR only when its `ci-ok` check passes on a branch that is
-up to date with master. When another PR lands first, merge `origin/master`
-again and let CI rerun. That rerun is what catches two PRs that pass alone
-and break master together (as #54, #55 and #57 did).
+master accepts a PR once its `ci-ok` check passes. The branch doesn't have
+to be up to date with master, so when another PR lands first you don't need
+to merge `origin/master` again and rerun CI, unless the two PRs touch the
+same code. The CI run on each push to master is what catches two PRs that
+pass alone and break master together (as #54, #55 and #57 did). If master
+goes red, fixing it comes before landing anything else.
 
 1. **Merge `origin/master`, then `make lint test`** locally (rule 6). Don't
    push to find out whether CI passes.
