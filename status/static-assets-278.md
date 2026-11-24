@@ -44,9 +44,28 @@ until it is numbered).
   with a Worker"), `docs/limits.md`, `docs/cli.md` (`make cli-docs`),
   `changes/static-assets-278.md`.
 
-## Tests
+## Tests (2026-11-23, after merging origin/master at f6987ce0)
 
-See the bottom of this file for the commands run and their results.
+- `make lint`: ok. `make test`: ok.
+- New: `hostd/gen:TestAssetsAutoTrailingSlash`, `TestAssets404PageWorkerFirst`,
+  `TestAssetsSPAWorkerFirstAll`, `TestAssetsSPANavigation` (real workerd:
+  path matching, all four `html_handling` modes, `not_found_handling`,
+  `run_worker_first` patterns and `true`, `env.ASSETS`, ETag/304, HEAD,
+  POST to the Worker, class and object default exports; mutation-checked by
+  breaking 307/304 in the router), `TestGenerateAssetsFiles` (incl. the
+  microVM guest's relative disk path); `hostd/bundle:TestParseAssets`,
+  `TestParseNoAssetsKeepsModules`, `TestParseAssetsInvalid`;
+  `cmd/tw:TestAddAssets`, `TestAddAssetsErrors`, `TestSnapshotAssetsDir`,
+  `TestTemplateTests/static-site` (the template's `npm test` against real
+  `tw dev`: a person gets `/team/`, a tagged node gets 403);
+  `internal/features:TestRequiredAssets`.
+- `make e2e-upgrade` (self) and `TW_UPGRADE_FROM=v0.4.0 make e2e-upgrade`:
+  pass. The test now deploys an assets app: refused on the v0.4.0 host
+  ("lacks feature assets"), served after the host upgrade.
+- `sh scripts/templates-typecheck.sh static-site`: ok (npm install, tsc,
+  `tw types --check`).
+- `tw dev --once` on the template: 200 with index.html.
+- Not run: microVM tier (`e2e-vm`, needs Linux KVM), `e2e-vz`.
 
 ## Gaps / next steps
 
