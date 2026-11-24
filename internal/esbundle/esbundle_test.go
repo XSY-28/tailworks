@@ -44,14 +44,15 @@ func TestMatchesBuildMJS(t *testing.T) {
 				t.Fatal(err)
 			}
 			var w struct {
-				Main string `json:"main"`
+				Main  string   `json:"main"`
+				Flags []string `json:"compatibility_flags"`
 			}
 			if err := bundle.UnmarshalJSONC(wb, &w); err != nil {
 				t.Fatal(err)
 			}
 			out := t.TempDir()
 			goOut := filepath.Join(out, "go.js")
-			n, err := Build(Options{Dir: dir, Main: w.Main, Outfile: goOut})
+			n, err := Build(Options{Dir: dir, Main: w.Main, Outfile: goOut, NodeCompat: NodeCompat(w.Flags)})
 			if err != nil {
 				t.Fatal(err)
 			}

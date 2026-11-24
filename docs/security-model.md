@@ -65,6 +65,41 @@ vulnerability, see [SECURITY.md](../SECURITY.md).
 The process tier is not a VM boundary. Don't run code you don't trust on
 it.
 
+### Side channels inside a workload
+
+On the process tier, one workload is one workerd process. Its Worker,
+every one of its objects (each a V8 isolate of its own) and tailworks'
+platform wrapper, which holds the per-instance key that signs egress
+attribution and callers, all share that process. V8 isolates keep
+JavaScript apart; they are not a boundary against CPU side channels such
+as Spectre. Cloudflare's production runtime adds mitigations that
+open-source workerd does not have: it freezes `Date.now()` while code runs
+and offers no shared memory. In the workerd tailworks ships, `Date.now()`
+and `performance.now()` advance in 1 ms steps during a CPU loop and
+`SharedArrayBuffer` exists (there is no second thread). Cloudflare's own
+researchers leaked a secret across isolates at up to 12 bit/s even with
+those mitigations in place.
+
+So tailworks' guarantees between the objects of one workload (per-object
+egress attribution, `getCaller()` in a sibling object, a sub-agent's `lim`)
+hold against JavaScript, not against an object that mounts a
+speculative-execution attack on its own process. An object that got the
+key could, inside its own workload only, send egress attributed to a
+sibling object, make `getCaller()` in a sibling name a caller of its
+choosing, and reach the facet Host's platform-only entry points. It gets
+nothing of another workload or tenant and none of hostd's node keys: those
+are in other processes. (What stands between processes of different
+workloads on one host is the host's and the kernel's job; see [When a host
+is shared between tenants](#when-a-host-is-shared-between-tenants).) The
+rule: **objects that must not trust each other
+belong in separate workloads**, which are separate processes; one workload
+is one trust domain. The microVM tier is the same per workload (the guest
+holds the key). tailworks does not restart workloads on a schedule to
+rotate the key: a restart drops Durable Objects' in-memory state and every
+WebSocket, and would stop only a slow leak. The clocks tenant code sees are
+pinned by a test against the pinned workerd, so a workerd update that
+changes them is noticed (ledger `C-clocks`, `H-sidechannel-inproc`).
+
 ### What the process-tier sandbox confines
 
 | | macOS (Seatbelt) | Linux, Landlock ABI ≥ 4 (kernel 6.7+) | Linux, Landlock ABI 1–3 |
@@ -302,6 +337,15 @@ The red team's open items are tracked in
   Worker, so code that rewrites that isolate's JavaScript built-ins can
   defeat any check made there. Facet objects (the default) each get
   their own isolate.
+- **Isolates are not a side-channel boundary inside a workload.** The
+  objects of one workload and the platform wrapper that holds its key
+  share one process, and the workerd tailworks ships does not freeze
+  clocks. An object that mounted a speculative-execution attack on its
+  own process could forge egress attribution and callers among its
+  siblings, never beyond its workload. Put objects that must not trust
+  each other in separate workloads ([Side channels inside a
+  workload](#side-channels-inside-a-workload); ledger
+  `H-sidechannel-inproc`, disclosed).
 - **A named entrypoint is not a boundary inside a tenant.** A
   [service binding](wrangler.md#service-bindings) call to a named
   entrypoint or an RPC method is authorized by the tailnet grant and by

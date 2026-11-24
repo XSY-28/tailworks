@@ -176,13 +176,13 @@ Install the tools with `brew install asciinema agg ffmpeg`.
 ### The recording in this repo
 
 `demo.cast` and `demo.gif` were recorded on 2026-11-24 on a Tailscale
-tailnet (a tailnet used only for testing), with the commands in steps 2
-and 4 (`asciinema rec` also had `--headless -f asciicast-v2`). tailworks
-ran from a checkout with its own state directory and a new OAuth client
-with Policy File › Write; the calling device was a Tailscale client in a
-container named `laptop`, which is why the calls read
-`docker exec laptop curl`. `tw kill` reports no posture tier because that
-tailnet's plan has no custom posture attributes.
+tailnet, with the commands in steps 2 and 4 (`asciinema rec` also had
+`--headless -f asciicast-v2`, and `DEMO_CALLER_SRC=group:admin` kept the
+caller grant to that tailnet's admins). tailworks ran from a checkout with
+its own state directory and a new OAuth client with Policy File › Write;
+the calls are plain `curl` on the same machine, which is a device of that
+tailnet. `tw kill` reports no posture tier because that tailnet's plan has
+no custom posture attributes.
 
 These strings in the cast were replaced before the GIF was made: the
 tailnet name (now `example.ts.net`), the caller's login (`you@example.com`),
