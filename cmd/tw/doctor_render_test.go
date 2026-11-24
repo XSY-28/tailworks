@@ -57,6 +57,7 @@ func TestDoctorChecksHaveGroups(t *testing.T) {
 	// none falls into "Other" with its raw name.
 	for _, n := range []string{"api_key", "binaries", "bundler", "cgroups_v2", "data_disk", "firecracker", "glibc", "host_sockets",
 		"https_certs", "kernel", "kvm", "landlock", "microvm_tier", "mint_mode", "node_egress", "public_ingress", "sandbox",
+		"side_channels",
 		"state_dir_writable", "store_sizes", "system_tailscaled_not_used", "systemd", "transport", "tw_home_writable",
 		"user_namespaces", "worker_internet", "workerd", "funnel_attr:x", "public_probe:x"} {
 		if g := metaOf(n).group; g == "Other" {

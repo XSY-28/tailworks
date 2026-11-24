@@ -862,6 +862,9 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	if err := m.checkReplicaName(ctx, r); err != nil { // workload_replicas.go (#348)
 		return resp, err
 	}
+	if err := m.checkCompatFlags(ctx, r); err != nil { // compatflags.go (#337)
+		return resp, err
+	}
 	classes := slices.Clone(r.Namespaces)
 	maxLive, maxDepth := DefaultMaxLive, DefaultMaxDepth
 	var svcCfg *TwConfig
@@ -1021,6 +1024,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			return resp, err
 		}
 	}
+	m.releaseUndeployedNames(ctx, t.ID, r.Workload) // redeploy.go (#364)
 	d := Deployment{ID: newID("dp_"), TenantID: t.ID, Workload: r.Workload, HostID: host, Namespaces: classes,
 		MaxLive: maxLive, MaxDepth: maxDepth, Epoch: lease.Epoch, Bundle: r.Bundle, DeployedBy: r.By, CreatedAt: m.now().UnixMilli(), Fence: fence,
 		Containers: ctrs, Public: pub, Placement: &dec}
@@ -1513,6 +1517,9 @@ func (m *Mgmt) CreateObject(ctx context.Context, r CreateObjectRequest) (CreateO
 		in := ""
 		if workload != "" {
 			in = " of workload " + workload
+		}
+		if r.Namespace == PoolNamespace { // name the class the pool node is for (#359)
+			return resp, errf(404, "unknown_namespace", "no deployment%s of tenant %s declares namespace %q (for a %s node)", in, t.ID, classNS, PoolNamespace)
 		}
 		return resp, errf(404, "unknown_namespace", "no deployment%s of tenant %s declares namespace %q", in, t.ID, r.Namespace)
 	}

@@ -964,6 +964,7 @@ Ubuntu would make bash skip `~/.profile`.
 | `cgroups_v2` | unified hierarchy (and what's delegated to your user manager) | warn |
 | `systemd` | your systemd user manager answers; reports linger and `tw.service` | warn: no systemd / no user session |
 | `microvm_tier` | KVM + firecracker + cgroups v2 + guest image + privileges | skip: "microVM tier unavailable: …", with every reason |
+| `side_channels` | every `/sys/devices/system/cpu/vulnerabilities/*` entry is mitigated or not affected, SMT off, KSM off, no `mitigations=off` | warn, naming each problem and when it matters (a shared host, a Node-tier workload, the microVM tier; [security-model.md](security-model.md#side-channels)); on macOS: skip, the posture can't be read |
 | `system_tailscaled_not_used` | no tailworks process holds tailscaled's socket or state | **fail** |
 
 ### Run tailworks as a systemd user service
@@ -1074,6 +1075,15 @@ arch on either. A guest of the wrong arch is refused (`tw doctor`:
   ([details](install-testing.md#the-microvm-tier)).
 - `cryptsetup`, `losetup`, `mkfs.ext4`, `ip` (Ubuntu/Debian cloud images
   have them; else `apt-get install cryptsetup-bin util-linux e2fsprogs iproute2`).
+- For tenants that don't trust each other, a host set up as Firecracker's
+  [production host setup](https://github.com/firecracker-microvm/firecracker/blob/main/docs/prod-host-setup.md)
+  describes: the kernel's side-channel **mitigations on** (no
+  `mitigations=off`; nothing `Vulnerable` in
+  `/sys/devices/system/cpu/vulnerabilities/`, current microcode), **SMT
+  off** (`nosmt`), and **KSM off** (`/sys/kernel/mm/ksm/run` = 0). A guest
+  runs native code, so these are what separates its tenant from the
+  others on the same cores. `tw doctor` reports them (`side_channels`);
+  see [security-model.md](security-model.md#side-channels).
 
 ### One-time setup (the only sudo)
 

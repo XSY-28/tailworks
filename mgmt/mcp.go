@@ -399,7 +399,7 @@ func toolError(err error) map[string]any {
 	if !ok {
 		e = errf(500, "internal", "%v", err)
 	}
-	body := map[string]any{"code": e.Code, "message": e.Message, "doc_url": "https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#" + e.Code}
+	body := map[string]any{"code": e.Code, "message": e.Message, "doc_url": DocBase + e.Code}
 	hint := "see the doc_url"
 	if e.Snippet != "" {
 		body["snippet"] = e.Snippet

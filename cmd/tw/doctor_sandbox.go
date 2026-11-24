@@ -70,7 +70,9 @@ func doctorSandbox(s *state) (string, string, string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if out, err := exec.CommandContext(ctx, "/usr/bin/sandbox-exec", "-f", prof, wd, "--version").CombinedOutput(); err != nil {
+	start := exec.CommandContext(ctx, "/usr/bin/sandbox-exec", "-f", prof, wd, "--version")
+	start.Env = hostd.WorkerdEnv() // what hostd gives a workerd, not tw's environment (#336)
+	if out, err := start.CombinedOutput(); err != nil {
 		return "fail", "workerd (" + wd + ") does not start under a tailworks Seatbelt profile on " + osv + ": " + err.Error() + " " + firstLine(string(out)),
 			"report this; meanwhile tw-hostd -sandbox none runs tenants unconfined"
 	}
@@ -174,7 +176,9 @@ func doctorLandlock(s *state) (string, string, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	cmd := procsb.Command(self, prof, wd, "--version")
-	if out, err := exec.CommandContext(ctx, cmd.Path, cmd.Args[1:]...).CombinedOutput(); err != nil {
+	start := exec.CommandContext(ctx, cmd.Path, cmd.Args[1:]...)
+	start.Env = hostd.WorkerdEnv() // what hostd gives a workerd, not tw's environment (#336)
+	if out, err := start.CombinedOutput(); err != nil {
 		return "fail", fmt.Sprintf("workerd (%s) does not start under a tailworks Landlock profile on %s (ABI %d): %v %s", wd, osv, abi, err, firstLine(string(out))),
 			"report this; meanwhile tw-hostd -sandbox none runs tenants unconfined"
 	}

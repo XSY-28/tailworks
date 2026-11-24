@@ -152,6 +152,12 @@ func launcherMain(args []string) int {
 		if err := p.Apply(); err != nil {
 			return fail("%v", err)
 		}
+		// The child gets the environment this launcher was started with and
+		// nothing else: Command starts the launcher with an empty one and
+		// its caller adds what the workload needs (#336). The launcher
+		// itself sets no variable, so there is nothing of its own to drop,
+		// and it can't hold an allow list of its own: a Node app's list
+		// (TW_CALLER_KEY, the proxy variables, node.env) is the caller's.
 		err = syscall.Exec(bin, args[3:], os.Environ())
 		return fail("exec %s: %v", bin, err)
 	case "--probe":

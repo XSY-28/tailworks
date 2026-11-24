@@ -317,9 +317,11 @@ gateway; that is the only DNS server it has.
   the interception. `interceptAllOutboundHttp` is HTTP only; TLS to a host
   with no HTTPS intercept is never terminated.
 - **`enableInternet: true`** reaches only hosts on the workload's
-  `tailnet.egress.internet` allowlist (names, `*.suffix`, IPs or CIDRs;
-  `true` allows any public host),
-  spliced as raw TCP (TLS stays end to end). The name is resolved on the
+  `tailnet.egress.internet` allowlist (names, `*.suffix`, IPs or CIDRs,
+  each with an optional `:port`; `true` allows any public host), spliced
+  as raw TCP (TLS stays end to end). TCP port 25 is refused unless an
+  entry names it (`"smtp.example.com:25"`), and an entry that names a port
+  covers that port only ([tailworks-jsonc.md](tailworks-jsonc.md#tailnetegressinternet)). The name is resolved on the
   host and refused if **any** address is forbidden (ADR-019: loopback,
   private and link-local/metadata ranges, `100.64/10` and the tailnet IPv6
   range, NAT64/6to4/Teredo, the synthetic pool, the host's own addresses).

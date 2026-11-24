@@ -68,7 +68,7 @@ schema. `tw init` writes this line for you:
 | `tags` | `["tag:…"]` | **Required.** Tags of the workload's own node. Your policy must let `tag:tw` own them; `tw policy` (and `tw deploy`'s preflight) prints the snippet if it doesn't, and `tw policy --apply` writes it ([below](#tags-and-tw-init)) |
 | `connects` | `["tag:…" or name]` | what the workload calls. `tw deploy` preflights these grants, and smart placement measures paths to them. Add the TCP port a socket dials (`"tag:db:5432"`) and the preflight checks the grant for that port instead of `tcp:80` |
 | `service` | `true` or `"svc:<name>"` | a Tailscale Service: a stable name and VIP in front of the workload ([services.md](services.md)) |
-| `egress.internet` | `true`, `false` or `[host, "*.suffix", IP, CIDR]` | internet egress for Worker code and containers; [below](#tailnetegressinternet) |
+| `egress.internet` | `true`, `false` or `[host, "*.suffix", IP, CIDR]`, each with an optional `:port` | internet egress for Worker code and containers; [below](#tailnetegressinternet) |
 | `egress.via` | `"exit-node"` | require a host whose internet egress leaves through a tailnet exit node; [below](#tailnetegressvia) |
 | `spawn.maxLive` | integer | the most live sub-agents (`ctx.tailnet.spawn`) |
 | `spawn.maxDepth` | integer | the deepest spawn chain |
@@ -108,9 +108,20 @@ started with `enableInternet: true` may reach
 - A list entry is an exact host name, `*.suffix` (any name under it),
   `*` (any name), an IP or a CIDR. An IP literal in a URL matches only IP
   and CIDR entries.
+- An entry may name a TCP port: `"smtp.example.com:25"`, `"*:25"`,
+  `"203.0.113.0/24:25"`, `"[2001:db8::1]:25"`. An entry with a port allows
+  that port only (add a second entry without one for the host's other
+  ports); an entry without a port allows every port except 25.
+- **TCP port 25 is refused by default** (`internet_port_refused`), with or
+  without a list, because internet flows leave from the host's own address
+  and mail relayed from a workload would come from you. Only an entry that
+  names the port allows it (`"smtp.example.com:25"`). Submission ports 465
+  and 587 are not affected ([security-model.md](security-model.md#egress)).
 - A change takes effect when the deployment that makes it becomes active.
-- `true` and `false` need hosts that offer the `worker-internet` feature
-  ([upgrading.md](upgrading.md)); `[]` works on older hosts too.
+- `true` and `false` need hosts that offer the `worker-internet` feature,
+  and an entry that names a port needs `internet-ports`
+  ([upgrading.md](upgrading.md)); `[]` and plain entries work on older
+  hosts too.
 - A host can send all of its internet egress through a tailnet exit node
   instead of its own network ([`egress.via`](#tailnetegressvia)).
 

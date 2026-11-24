@@ -573,7 +573,7 @@ func cmdDeploy(args []string) error {
 			break
 		}
 		if v.Endpoint.Status == "failed" || v.Endpoint.Status == "killed" {
-			return fail("bootstrap_failed", "the workload node for "+a.Name+" is "+v.Endpoint.Status).withFix("tw logs --component hostd")
+			return workloadNodeFailed(a.Name, v.Endpoint.Status) // workloadnode.go
 		}
 		if time.Since(ds) > *wait {
 			return fail("identity_pending", fmt.Sprintf("%s not ready after %v (status %s, node %s)", a.Name, *wait, v.Status, v.Endpoint.Status)).withFix("tw status", "tw logs "+a.Name)

@@ -16,14 +16,13 @@ import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 import CFG from "tw-config.json";
 import MODULES from "tw-modules.js";
 import { deliverQueue } from "tw-queue.js";
-import { bindingCallee, setObjectEgress } from "tw-svc.js";
+import { DOC, bindingCallee, setObjectEgress } from "tw-svc.js";
 
 const FACET_MODULES = MODULES;
 
 const json = (status, body, extra = {}) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store", ...extra } });
 
-const DOC = "https://github.com/rosskukulinski/tailworks/blob/main/docs/errors.md#";
 const STATUS = {
   killed: 410, no_identity: 401, bad_request: 400, unknown_object: 404, identity_pending: 503, hostd_unavailable: 503,
   public_create_denied: 403, public_request: 403, not_public: 404, create_not_admitted: 403,
@@ -802,13 +801,23 @@ export class TailnetApi extends WorkerEntrypoint {
     if (op === "admit") {
       // Create admission: may the caller reach, and so create, class/name?
       // hostd decides from who asks: an attested object (as), a tailnet
-      // request (its ticket), or a public request (public.create, ADR-029
+      // request (its ticket), a Workflow (workflow: classes with no node,
+      // and existing objects), or a public request (public.create, ADR-029
       // D5). Nothing is created here.
       if (typeof args.class !== "string" || !CFG.classes[args.class] || typeof args.name !== "string" || !args.name) {
         return { ok: false, error: errBody("create_not_admitted", "admit: unknown class or empty name") };
       }
       try {
-        return { ok: true, value: await hostd(this.env, "admit", { class: args.class, name: args.name, ticket: typeof args.ticket === "string" ? args.ticket : undefined, as }) };
+        return {
+          ok: true,
+          value: await hostd(this.env, "admit", {
+            class: args.class,
+            name: args.name,
+            ticket: typeof args.ticket === "string" ? args.ticket : undefined,
+            workflow: args.workflow === true,
+            as,
+          }),
+        };
       } catch (e) {
         return { ok: false, error: e.body ?? errBody("hostd_unavailable", String(e)) };
       }

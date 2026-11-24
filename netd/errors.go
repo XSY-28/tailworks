@@ -70,6 +70,8 @@ func (e *Error) Status() int {
 		return http.StatusForbidden
 	case CodeInternetEgressUnavailable:
 		return http.StatusForbidden
+	case CodeInternetPortRefused:
+		return http.StatusForbidden
 	case CodeBadRequest:
 		return http.StatusBadRequest
 	case CodeKilled, CodeObjectKilled:

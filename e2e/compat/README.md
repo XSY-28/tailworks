@@ -137,11 +137,15 @@ Responses API calls with a scripted stream. That is listed as a change.
    `cross-domain` and `mcp-elicitation` pass
    `import { env } from "cloudflare:workers"` to the Agents SDK and get
    `create_not_admitted`.
-3. **Open ([#356](https://github.com/rosskukulinski/tailworks/issues/356)): the built-in bundler and CommonJS `require()` of a Node builtin.**
-   A Worker with `dotenv` in it bundles and then can't start. The three AI
-   SDK examples bundle with `--wrangler`.
-4. **Open ([#359](https://github.com/rosskukulinski/tailworks/issues/359)): an `AgentWorkflow` started with `runWorkflow` stays queued on a deployed host.**
-   The `workflows` example passes under `tw dev` and not deployed.
+3. **Fixed ([#356](https://github.com/rosskukulinski/tailworks/issues/356)): the built-in bundler and CommonJS `require()` of a Node builtin.**
+   A Worker with `dotenv` in it bundled and then couldn't start. With
+   `nodejs_compat` the built-in bundler now turns such a `require()` into
+   an import, as wrangler does, and the three AI SDK examples use it
+   instead of `--wrangler`.
+4. **Fixed ([#359](https://github.com/rosskukulinski/tailworks/issues/359)): an `AgentWorkflow` started with `runWorkflow` stayed queued on a deployed host.**
+   The Agent's class wasn't in `tailnet.objects`, so mgmt refused its node,
+   and the Workflow was refused the Agent. The `workflows` example now
+   passes deployed too.
 5. **Open ([#360](https://github.com/rosskukulinski/tailworks/issues/360)): no HTTPS origin on the tailnet.**
    workers-oauth-provider refuses an `http://` resource URL, so
    `mcp-worker-authenticated` passes under `tw dev` (loopback) and can't be
