@@ -1,3 +1,18 @@
+Last update: 2026-11-24 10:00 PT. test-pg fixed: `scripts/test-pg.sh` runs with `-parallel 1`.
+
+## test-pg (2026-11-24)
+
+The PR's `test-pg` job (nightly.yml, on PRs that touch mgmt/) failed:
+under `make test-pg` every mgmt test shares one Postgres database and resets
+its public schema, so parallel tests dropped each other's tables (`relation
+"tenants" does not exist`, `shared_owner_tag`). `scripts/test-pg.sh` now
+passes `-parallel 1` to both of its `go test` runs, so that suite is serial
+as before. The SQLite `make test` keeps the parallelism. `make test-pg`
+locally (OrbStack Postgres 17): pass, 97 s. A per-test Postgres schema would
+let this suite run in parallel too; not done here.
+
+Earlier entry:
+
 Last update: 2026-11-24 09:00 PT. First CI run (#367) passed: `test` job 10.0 min (recent median 11.2), CPU-bound on 4 vCPUs.
 
 ## CI result (2026-11-24, run 45440262910)
