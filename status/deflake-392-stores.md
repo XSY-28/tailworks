@@ -121,3 +121,9 @@ loops alongside a hostd `-race` binary at `GOMAXPROCS=4`, on an 18-core Mac
 | `GOMAXPROCS=2` mgmt binary `-run TestQueues -count=30`, alongside the hostd load | ok |
 | `make lint` | ok |
 | `make changes-check` | ok (no upgrade-relevant paths; no fragment, tests only) |
+| Merged `origin/master` (dab6ceb2, clean), then `make lint` | ok |
+| After the merge: `make test` on mbp (`sh ~/.claude/scratch/mbp-test.sh test`) | ok (exit 0; hostd 238 s, mgmt 137 s, cmd/tw 123 s) |
+| After the merge: `make e2e-queues` | ok |
+
+Not run: `make test-pg` (no store or migration change; the mgmt test uses
+`SetClock`, as `TestV1ContainerReservations` already does under test-pg).
