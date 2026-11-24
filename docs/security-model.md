@@ -177,9 +177,23 @@ limit is `429 rate_limited` ([limits.md](limits.md#management-api)).
   tenant asked). Tenants on one host share that resolver's cache. A
   workload that must not leak its lookups turns internet egress off and
   uses a gateway on the tailnet ([recipes.md](recipes.md#call-an-internet-api)).
+- **Through an exit node.** A host started with
+  `--worker-internet=exit-node=<node>` sends every workload's internet
+  flow through that tailnet exit node, via the host's own node
+  (`tag:tw-host`), so the destination sees the exit node's address and the
+  host's resolver never sees the names (they resolve at the exit node, or
+  at a `dns=` resolver through it). The guard above is unchanged: netd
+  still resolves, checks every answer and dials the checked address; the
+  exit node forwards packets and resolves nothing. When the exit node is
+  unusable the host refuses with `exit_node_unavailable` rather than use
+  its own network. A workload can require this with
+  `tailnet.egress.via: "exit-node"`
+  ([tailworks-jsonc.md](tailworks-jsonc.md#tailnetegressvia)). The exit
+  node's operator sees every flow's destination and bytes (TLS stays end to
+  end from netd), attributed to the host, never to a tenant or object.
 - **Audit.** The first internet flow per object and destination is an
-  `egress` audit record naming the address dialled; refusals are `deny`
-  records.
+  `egress` audit record naming the path and the address dialled; refusals
+  are `deny` records.
 - **What this means for your data.** A Worker that can read something on
   the tailnet can now send it to the internet. Give a workload that holds
   sensitive tailnet data `"internet": false` unless it needs the internet.
@@ -201,6 +215,7 @@ limit is `429 rate_limited` ([limits.md](limits.md#management-api)).
 | Agents ↔ mgmt (`/mcp`) | mgmt | the same WhoIs gate as `/v1`; read tools need `…/cap/mcp` or the admin cap, and deploy, kill and undeploy need a grant that names them ([agents.md](agents.md)) |
 | tailworks ↔ Tailscale control | the tailnet admin | one revocable mint credential; tags you own in `tagOwners` |
 | Release ↔ host | the release signing keys pinned in each binary and script | `get.sh`, `install.sh`, `tw upgrade` and hostd's opt-in self-upgrade verify the release's signed `SHA256SUMS`; tw-mgmt can order an upgrade but can't sign one ([upgrading.md](upgrading.md)) |
+| Exit node ↔ host | the exit node's operator (only with `--worker-internet=exit-node=…`) | sees each internet flow's destination and bytes, attributed to the host's node, never to a tenant or object; TLS is end to end from netd ([tailworks-jsonc.md](tailworks-jsonc.md#tailnetegressvia)) |
 | Internet ↔ workload | nobody | tailnet-only by default; public routes are opt-in paths over Funnel on `tag:tw-public`, and `getCaller` throws on a public request ([public-ingress.md](public-ingress.md)) |
 
 ## Secrets and state

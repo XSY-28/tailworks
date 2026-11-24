@@ -85,6 +85,7 @@ func cmdDev(args []string) error {
 		return err
 	}
 	a.printWarnings(os.Stderr)
+	printDevEgressVia(a.TwRaw, os.Stderr)                  // dev_egressvia.go
 	if err := checkDevPort(*port, os.Stderr); err != nil { // devlog.go
 		return err
 	}
