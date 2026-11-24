@@ -57,6 +57,19 @@ func (e errNoWrangler) Error() string { return "no wrangler config in " + e.dir 
 // for an environment "<base>-<env>" unless the env sets its own name.
 func (a *app) loadWrangler(twName string) (string, error) {
 	file, shadowed := findWranglerConfig(a.Dir)
+	redirect, auxNotes, err := redirectedWranglerConfig(a.Dir) // viteredirect.go
+	if err != nil {
+		return "", err
+	}
+	if redirect != "" {
+		if a.Opts.Env != "" {
+			return "", fail("bad_request", fmt.Sprintf("--env %s: %s is the config `vite build` already wrote for one environment (%s)", a.Opts.Env, redirect, viteDeployConfig)).
+				withFix("CLOUDFLARE_ENV="+a.Opts.Env+" npm run build, then tw deploy without --env", "or delete "+viteDeployConfig+" to use the project's own wrangler config")
+		}
+		file, shadowed = redirect, nil
+		a.Warnings = append(a.Warnings, fmt.Sprintf("using %s, the config `vite build` wrote (%s), as wrangler deploy does", file, viteDeployConfig))
+		a.Warnings = append(a.Warnings, auxNotes...)
+	}
 	if file == "" {
 		return "", errNoWrangler{a.Dir}
 	}
@@ -68,13 +81,14 @@ func (a *app) loadWrangler(twName string) (string, error) {
 	if err != nil {
 		return "", fail("bad_request", file+": "+err.Error())
 	}
+	rebaseWranglerPaths(cfg, filepath.Dir(file)) // viteredirect.go: "." unless redirected
 	w, explicit, notes, err := applyWranglerEnv(cfg, a.Opts.Env, file)
 	if err != nil {
 		return "", err
 	}
 	a.Wrangler = w
 	a.Warnings = append(a.Warnings, notes...)
-	a.Warnings = append(a.Warnings, wranglerWarnings(file, w, a.Opts.builder())...)
+	a.Warnings = append(a.Warnings, wranglerWarnings(file, w, a.builder())...)
 	if err := a.detectPages(); err != nil { // pages.go
 		return "", err
 	}

@@ -307,9 +307,12 @@ func (a *app) build(vars map[string]string) ([]byte, int, error) {
 		_, err = a.pagesEntry(out) // pages.go: refuses --wrangler
 		return nil, 0, err
 	}
-	if a.Opts.builder() == "wrangler" {
+	switch a.builder() {
+	case "wrangler":
 		files, main, types, js, err = a.buildWrangler(out)
-	} else {
+	case builderPrebuilt:
+		files, main, types, js, err = a.buildPrebuilt() // nobundle.go
+	default:
 		files, types, js, err = a.buildEsbuild(out, nodePaths(ct))
 	}
 	if err != nil {
@@ -488,7 +491,7 @@ func cmdDeploy(args []string) error {
 		if a.Runtime == bundle.RuntimeNode {
 			main = "dist/server.mjs (runtime node)"
 		}
-		fmt.Printf("✓ build      %s %.1f KB (%s) · bundle %.1f KB\n", main, float64(jsBytes)/1024, a.Opts.builder(), float64(len(tb))/1024)
+		fmt.Printf("✓ build      %s %.1f KB (%s) · bundle %.1f KB\n", main, float64(jsBytes)/1024, a.builder(), float64(len(tb))/1024)
 	}
 	// Containers (ADR-032 D3): build the Dockerfile images here and push them
 	// to tailworks' registry; mgmt pins every image to a digest at deploy.
