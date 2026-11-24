@@ -66,6 +66,13 @@ Last update: 2026-11-23 PT. Issue #293: service bindings (`services`, WorkerEntr
 - After merging master again: `make lint`, `go test ./netd/ ./mgmt/`,
   `go test ./hostd/ -run 'TestServiceBindings|TestLockTemplate'` and
   `go test ./cmd/tw -run 'TestCLIReferenceUpToDate|TestTypes'` — ok.
+- First CI run (PR #316): `e2e/local:TestNetdBinary` still asserted the
+  old sibling refusal (now asserts the hop), and
+  `hostd:TestLockTemplate/KillLockObjectStopsIt` hit the #287 flake, fixed
+  on master by #300. After merging master again (ADR renumbered to 053;
+  052 is tcp-egress): `make e2e-local`, `make lint`, `go test ./netd/
+  ./mgmt/`, `go test ./hostd/ -run 'TestServiceBindings|TestLockTemplate'`
+  — ok.
 - `go test ./mgmt/ -run TestServiceBindingTarget` — ok (lease fence,
   undeclared binding, target never deployed, pending entry node, the
   answer, another tenant's same-named workload is not a target).
