@@ -61,6 +61,7 @@ func writeAPIError(w http.ResponseWriter, e *apiError) {
 func (h *Host) ingressHandler(t *tenant) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.Header.Get(netd.HeaderObject)
+		stripRoutingHeaders(r.Header) // routingheaders.go (#303)
 		h.mu.Lock()
 		o := h.byNetd[id]
 		var wl *workload
