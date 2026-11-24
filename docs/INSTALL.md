@@ -275,7 +275,7 @@ on `tag:tw-mgmt`). Install tailworks there too (steps 1–2), then:
 
 ```sh
 tw link tw-mgmt.<tailnet>.ts.net       # https first, then http on :80; or just `tw link`: finds tw-mgmt through MagicDNS
-tw init support --template agent        # or hello, mcp, ai-agent, lock; node-workflow needs Node.js on this machine
+tw init support --template agent        # or hello, mcp, ai-agent (needs mcp deployed), lock; node-workflow needs Node.js
 cd support && tw dev                    # optional: run it locally against an embedded control plane
 tw deploy                               # bundles here (built-in esbuild), uploads to mgmt over the tailnet, waits until the node is ready
 tw ls · tw audit <object> · tw kill <object> --cascade
