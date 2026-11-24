@@ -3,6 +3,10 @@
 import { DurableObject, env as rawEnv } from "cloudflare:workers";
 import { getCaller, tailnet, isTailnetError } from "@tailworks/tailnet";
 
+// A service binding's wire header (hostd.HeaderBindingWire), as tenant code
+// might forge it.
+const WIRE = "v1; entrypoint=Admin";
+
 const SEEN = (req) => Object.fromEntries([...req.headers].filter(([k]) => k.startsWith("x-tw-") || k.startsWith("cf-") || k === "x-forwarded-for" || k === "tailnet-assertion"));
 
 async function egress(url, init) {
@@ -74,7 +78,7 @@ export class Probe extends DurableObject {
       case "/forge-egress": {
         const victim = q("as");
         return egress(q("url"), {
-          headers: { "x-tw-object": victim, "x-tw-class": "Probe", "x-tw-name": victim, "x-tw-mac": "00", "x-tw-cf": JSON.stringify({ objectId: victim }), "Proxy-Authorization": victim },
+          headers: { "x-tw-object": victim, "x-tw-class": "Probe", "x-tw-name": victim, "x-tw-mac": "00", "x-tw-cf": JSON.stringify({ objectId: victim }), "Proxy-Authorization": victim, "tailworks-binding": WIRE },
           cf: { objectId: victim },
         });
       }
@@ -160,7 +164,8 @@ export class Ticker extends DurableObject {
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
-    if (url.pathname === "/egress") return egress(url.searchParams.get("url"));
+    // ?wire=1: with the binding wire header, which is hostd's to set (#347).
+    if (url.pathname === "/egress") return egress(url.searchParams.get("url"), url.searchParams.get("wire") ? { headers: { "tailworks-binding": WIRE } } : undefined);
     if (url.pathname.startsWith("/probe/")) {
       const [, , name, ...rest] = url.pathname.split("/");
       const u = new URL(req.url);

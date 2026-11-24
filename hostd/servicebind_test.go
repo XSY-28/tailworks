@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rosskukulinski/tailworks/hostd"
 	"github.com/rosskukulinski/tailworks/hostd/fakemgmt"
 	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
 	"github.com/rosskukulinski/tailworks/netd/nettest"
@@ -59,7 +60,9 @@ func testServiceBindings(t *testing.T, backend string) {
 		return h
 	}
 
-	run := func(t *testing.T, where string) {
+	// run is the battery against the target, wherever it runs. tgtHost is
+	// the target's entry node now (its name can change when it moves).
+	run := func(t *testing.T, where, tgtHost string) {
 		t.Run("Fetch", func(t *testing.T) {
 			m := eventually(t, "/fetch", func(code int, m map[string]any) bool { return code == 200 })
 			if m["entry"] != "default" || m["path"] != "/hello?q=1" {
@@ -140,10 +143,65 @@ func testServiceBindings(t *testing.T, backend string) {
 				t.Fatalf("%s: the facet object's calls should leave as its node %s: %v", where, o.Hostname, m)
 			}
 		})
+		// #347 (ledger H-binding-wire): the header a binding call carries
+		// between hosts is hostd's to set. Tenant code that puts it on a plain
+		// fetch() (no services binding involved) gets an ordinary request to
+		// the target's default fetch(), from the Worker and from a facet
+		// object alike. Before the fix each probe ran the Admin entrypoint, or
+		// the add() RPC method.
+		wireStripped := func(t *testing.T, path, wantCaller string) {
+			t.Helper()
+			probes := []string{"entrypoint", "rpc", "mixedCase", "viaRequest"}
+			m := eventually(t, path+"?host="+tgtHost, func(code int, m map[string]any) bool {
+				for _, p := range probes {
+					if get(m, p, "status") != float64(200) {
+						return false
+					}
+				}
+				return code == 200
+			})
+			for _, p := range probes {
+				if get(m, p, "body", "entry") != "default" || get(m, p, "body", "path") != "/wire" {
+					t.Errorf("%s: %s: a plain fetch() with a tenant-set %s header was not an ordinary request: %v", where, p, hostd.HeaderBindingWire, m[p])
+				}
+				if get(m, p, "body", "sawBindingHeader") != nil {
+					t.Errorf("%s: %s: the target's code saw the tenant's wire header: %v", where, p, m[p])
+				}
+				if callerIs(m, p, "body", "caller", "hostname") != wantCaller {
+					t.Errorf("%s: %s: caller %v, want %s", where, p, get(m, p, "body", "caller"), wantCaller)
+				}
+			}
+			if get(m, "rpc", "body", "method") != "POST" {
+				t.Errorf("%s: the POST probe should reach fetch() as a POST: %v", where, m["rpc"])
+			}
+		}
+		t.Run("TenantWireHeaderStripped", func(t *testing.T) {
+			wireStripped(t, "/wire", cl.Hostname)
+		})
+		t.Run("TenantWireHeaderStrippedFromFacetObject", func(t *testing.T) {
+			o := e.WaitObject("svccaller", "Agent", "a1", 30*time.Second)
+			wireStripped(t, "/object-wire", o.Hostname)
+		})
+		// The limit of that fix, pinned so the docs stay true (ADR-053 §8,
+		// docs/security-model.md Known gaps): the callee authorizes a binding
+		// call by the caller's node (a tailworks node of this tenant that the
+		// tailnet policy lets in), and cannot tell which code on that node
+		// wrote the header. Tenant code that speaks HTTP itself on a raw
+		// socket to the target (connect(), ADR-052) writes bytes hostd never
+		// parses, so its header still counts. If this starts failing, the
+		// wire header has become authenticated: update those docs.
+		t.Run("RawSocketStillCarriesWireHeader", func(t *testing.T) {
+			m := eventually(t, "/raw-wire?host="+tgtHost, func(code int, m map[string]any) bool {
+				return code == 200 && m["ok"] == true && get(m, "value", "status") == float64(200)
+			})
+			if get(m, "value", "body", "entry") != "Admin" || callerIs(m, "value", "body", "caller", "hostname") != cl.Hostname {
+				t.Fatalf("%s: a raw socket from a node of the tenant, carrying the wire header: %v (want the Admin entrypoint, called by %s)", where, m, cl.Hostname)
+			}
+		})
 	}
 
 	t.Run("SameHost", func(t *testing.T) {
-		run(t, "same host")
+		run(t, "same host", tgt.Hostname)
 		t.Run("PlainTailnetFetch", func(t *testing.T) {
 			// No binding: a same-host tailnet fetch() between workloads works
 			// too (netd's in-process hop, ADR-019 rule 2 unchanged).
@@ -186,6 +244,6 @@ func testServiceBindings(t *testing.T, backend string) {
 		if tgt2.Hostname == tgt.Hostname {
 			t.Logf("target kept its hostname %s on h2", tgt.Hostname)
 		}
-		run(t, "other host")
+		run(t, "other host", tgt2.Hostname)
 	})
 }

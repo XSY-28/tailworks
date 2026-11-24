@@ -55,6 +55,13 @@ bench:
 .PHONY: test
 test: deps test-go test-js
 
+## test-docs: the Go tests that read Markdown (embedded docs, doc references, the CLI
+## reference, ADR index, agent skills, CHANGELOG, policy snippets). CI runs it instead of test for a docs-only PR.
+.PHONY: test-docs
+test-docs:
+	$(GO) test -count=1 . ./docs/... ./agent/... ./internal/catalog/... ./internal/compatdoc/...
+	$(GO) test -count=1 -run 'CLIReference|DesignDocs|DocsNameRealCommands|DocRefCheck|DocPolicySnippets|Skill' ./cmd/tw/
+
 .PHONY: test-go
 # GO_TEST_SKIP: a go test -skip regexp (CI quarantines known failures with it; see ci.yml).
 # Read from the environment as-is, so a regexp's "$" survives make.
@@ -571,6 +578,13 @@ install-test:
 .PHONY: npm-cli-test
 npm-cli-test:
 	sh scripts/npm_cli_test.sh
+
+## lint-docs: the lint gates that can fail on a Markdown-only change (generated docs current,
+## README/COMPAT rows, release-note fragments, secrets). CI runs it instead of lint when
+## scripts/docs-only.sh says the PR is prose only.
+.PHONY: lint-docs
+lint-docs: api-check compat-check changes-check
+	@sh scripts/check-secrets.sh
 
 .PHONY: lint
 lint: api-check compat-check changes-check

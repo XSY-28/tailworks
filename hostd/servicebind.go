@@ -31,11 +31,21 @@ import (
 // tenant (its node certificate verified against the tenant's key), only on
 // a workload's entry node, and never on a public request; it always strips
 // it, and passes {entrypoint, rpc} to the platform in cf.tw.binding.
+//
+// What authorizes the call is that check plus the tailnet grant
+// (ADR-053 §8), not the binding's declaration: the callee cannot tell
+// which code on the calling node wrote the header. hostd removes a
+// HeaderBindingWire that tenant code set from every HTTP egress request
+// (takeBinding, nodeEgress; #347), so a fetch() can't forge a binding
+// call. Tenant code that writes HTTP itself on a raw socket to the target
+// (connect(), ADR-052; a Node app's CONNECT tunnel) still can: within a
+// tenant, a named entrypoint is not a boundary between workloads that the
+// tailnet policy lets reach each other (docs/security-model.md, Known gaps).
 
 // HeaderBindingWire carries a binding call's entrypoint and RPC method
 // over the tailnet: "v1; entrypoint=<name>; rpc=<method>" (each part
 // optional after v1). It is not an identity header (netd forwards it); the
-// callee's hostd decides whether it counts.
+// callee's hostd decides whether it counts (bindingIngress).
 const HeaderBindingWire = "Tailworks-Binding"
 
 func init() {
@@ -49,9 +59,12 @@ type bindingCall struct {
 	binding, rpc string
 }
 
-// takeBinding removes the platform's binding headers from r (nil when
-// there are none).
+// takeBinding removes the platform's binding headers from an egress
+// request r (nil when there are none). It also removes a HeaderBindingWire
+// the tenant's code set (#347): on HTTP egress only routeBinding writes
+// that header, for a call the platform marked.
 func takeBinding(r *http.Request) *bindingCall {
+	r.Header.Del(HeaderBindingWire)
 	b, m := r.Header.Get(gen.HeaderBinding), r.Header.Get(gen.HeaderRPC)
 	r.Header.Del(gen.HeaderBinding)
 	r.Header.Del(gen.HeaderRPC)
@@ -144,7 +157,7 @@ func (h *Host) routeBinding(w http.ResponseWriter, r *http.Request, inst *instan
 	u.Scheme, u.Host = "http", host
 	r.URL, r.Host = &u, host
 	r.RequestURI = ""
-	r.Header.Del(HeaderBindingWire) // only hostd says what a binding call is
+	r.Header.Del(HeaderBindingWire) // takeBinding removed the tenant's; this header is hostd's alone
 	if b.Entrypoint != "" || bc.rpc != "" {
 		v := "v1"
 		if b.Entrypoint != "" {

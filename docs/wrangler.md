@@ -491,6 +491,15 @@ const n = await env.ADMIN.countUsers();       // RPC to the Admin entrypoint
   and objects of the same tenant ([`binding_forbidden`](errors.md#binding_forbidden)
   otherwise). The target's default `fetch()` is an ordinary tailnet
   endpoint.
+- **The grant is the authorization, not the binding.** On Cloudflare a
+  Worker reaches another Worker's entrypoint only through a binding its
+  own config declares. On tailworks the target checks who called (a node
+  of the tenant that the tailnet policy lets in), not that the caller
+  declared the binding. A plain `fetch()` can't ask for an entrypoint
+  (tailworks removes the header that does), but code that opens a raw
+  socket to the target can. In an entrypoint or RPC method that must not
+  be open to every workload of the tenant, check `getCaller()`
+  ([security model](security-model.md#known-gaps)).
 - **RPC values are copied**, as JSON over the tailnet: everything
   structured clone handles (objects, arrays, `Date`, `Map`, `Set`,
   `RegExp`, `BigInt`, typed arrays, `ArrayBuffer`, errors, `undefined`,
