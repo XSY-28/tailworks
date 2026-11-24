@@ -35,7 +35,7 @@ Last update: 2026-11-23 21:30 PT. #295 item 4: DO RPC, alarms and cron runs are 
 
 ## Tests run
 
-- `make lint`: passes (local).
+- `make lint`: passes (local), again after merging `origin/master` (d9519164), with `go test ./hostd/ -run 'TestTelemetry$|TestEntrySpans|Cron'`.
 - `make changes-check`: ok (no upgrade-relevant paths). A `feature`
   fragment was added anyway, `changes/fix-295-tracing.md`.
 - `node --test test/*.test.js` in `js/packages/tailnet`: 49 pass,
@@ -44,7 +44,7 @@ Last update: 2026-11-23 21:30 PT. #295 item 4: DO RPC, alarms and cron runs are 
   including the new `TestTelemetry/EntryTraces/{ObjRPC,ObjAlarm,PlainRPC,PlainAlarm,CronRun}`.
 - `go test ./hostd/ -run TestEntrySpansJoinRecords`: passes.
 - `go test ./hostd/ ./hostd/gen/ -run 'Cron|Scheduled|Entry|Kill|RPC'`: passes.
-- mbp: `make test e2e-observability templates-typecheck test-sdk`: see below.
+- mbp runner: `make test e2e-observability templates-typecheck test-sdk`: all pass (exit 0; `TestObservabilityHermetic`, `TestCloudflareAgents`, `TestAgentTemplate`, `TestVercelAI` included).
 
 ## Findings
 
