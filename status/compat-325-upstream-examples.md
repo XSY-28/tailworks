@@ -124,7 +124,9 @@ after merging `origin/master` (`b5b6d2f5`).
   `PASS:16 XFAIL:3 FAIL:1` again, with a different failure, a race in the
   dev runner: `ai-express`'s `tw dev` found its port taken (`address
   already in use`), because the runner picks a free port before starting.
-  It now retries with another port. LINUXRERUN
+  It now retries with another port. The third run
+  (`fa411f91904c`) passed: `PASS:17 XFAIL:3` on linux/amd64, with the
+  tables in the job summary and the results file uploaded.
 - `make lint`: ok (includes `compat-check`, `compat-upstream-check`,
   `go test ./e2e/compat/`, staticcheck). `make lint-docs test-docs`: ok.
 - `make changes-check`: ok (no upgrade-relevant paths).
