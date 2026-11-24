@@ -37,10 +37,10 @@ when it merges). Builds on ADR-050 (static assets).
 - **Docs:** `docs/wrangler.md#pages`, `docs/COMPAT.md` (`pages` row and a
   wrangler-config row), README compat row and a pointer, `changes/tough-hamster.md`.
 
-## Tests (2026-11-23, at master 85c4d89b)
+## Tests (2026-11-23, after merging origin/master at e4d4422e)
 
-- `make lint`: ok.
-- `make test`: ok (exit 0, includes -race Go and the JS suites).
+- `make lint`: ok (re-run after the merge).
+- `make test`: ok (exit 0, -race Go and the JS suites; re-run after the merge).
 - New: `internal/pages:TestDiscover`, `TestDiscoverErrors`, `TestPatterns`,
   `TestParseRoutesJSON`, `TestEnvNames`, `TestFunctionsEntry`;
   `hostd/gen:TestPagesFunctionsRouting`, `TestPagesFunctionsMiddleware`,
