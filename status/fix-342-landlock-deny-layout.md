@@ -1,8 +1,8 @@
-Last update: 2026-11-24 PT. Fix for issue #342 (private advisory GHSA-gfvj-mr9h-8f3m): the Linux process-tier sandbox could not keep tenant code out of tailworks state or credentials placed under a sandbox-readable OS tree; tailworks now refuses the layout, and `tw doctor` checks the real paths.
+Last update: 2026-11-24 PT. Fix for issue #342: the Linux process-tier sandbox could not keep tenant code out of tailworks state or credentials placed under a sandbox-readable OS tree; tailworks now refuses the layout, and `tw doctor` checks the real paths.
 
 # fix-342-landlock-deny-layout
 
-Issue: [#342](https://github.com/rosskukulinski/tailworks/issues/342). Ledger row `H-342-landlock-deny` in `security/LEDGER.md`. Advisory options 1 (refuse the layout) and 3 (doctor checks the real thing) are implemented; option 2 is a follow-up (below).
+Issue: [#342](https://github.com/rosskukulinski/tailworks/issues/342). Ledger row `H-342-landlock-deny` in `security/LEDGER.md`. Options 1 (refuse the layout) and 3 from the issue (doctor checks the real thing) are implemented; option 2 is a follow-up (below).
 
 ## What's built
 
@@ -63,12 +63,11 @@ Not run: `e2e-real`, `e2e-public`, `e2e-compat` and the other credentialed or VM
 
 ## Decisions
 
-- The home dir is part of the refusal (hostd, tw up, launcher), not only the state dir, run dir and credential files the advisory names: hostd's deny list promises it, and a service account with its home under `/opt` and the default state dir fails on the state dir anyway. The fix text says how to move it (`usermod -d`, or `HOME`).
+- The home dir is part of the refusal (hostd, tw up, launcher), not only the state dir, run dir and credential files the issue names: hostd's deny list promises it, and a service account with its home under `/opt` and the default state dir fails on the state dir anyway. The fix text says how to move it (`usermod -d`, or `HOME`).
 - The launcher check (`Profile.Apply`) is defence in depth behind hostd's: it covers a tenant whose credential file is moved under `/etc` after hostd learnt the tenant (hostd's `sandboxDeny` re-reads every tenant's paths from mgmt at each launch), at the cost of a workload failing to start with exit 126 and the typed message on stderr instead of a typed deployment error.
 - No change to the `/etc` and `/opt` allow list in this PR.
 
 ## Follow-ups
 
-- Advisory option 2: narrow the `/etc` and `/opt` trees in `systemRO` to what workerd and node actually open (CA certificates, `ld.so.cache`, `localtime` and the zoneinfo database, `nsswitch.conf`, `hosts`, `resolv.conf`, `passwd`/`group`), measured the way the macOS profile was for H26. Everything else under `/etc` and `/opt` the tailworks user can read is still readable by tenant code (documented in docs/security-model.md).
+- Option 2 from the issue: narrow the `/etc` and `/opt` trees in `systemRO` to what workerd and node actually open (CA certificates, `ld.so.cache`, `localtime` and the zoneinfo database, `nsswitch.conf`, `hosts`, `resolv.conf`, `passwd`/`group`), measured the way the macOS profile was for H26. Everything else under `/etc` and `/opt` the tailworks user can read is still readable by tenant code (documented in docs/security-model.md).
 - Option 4: a separate uid for workloads, so file modes help too.
-- Publish the advisory with the release that carries this fix (SECURITY.md); the ledger row already links it.
