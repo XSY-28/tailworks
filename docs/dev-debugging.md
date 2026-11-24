@@ -60,9 +60,11 @@ port to the new workerd, so you don't need to reconfigure the debugger. With
 the flag on, the bundle also carries its source map inline, with the
 sources, so the debugger shows `src/…` files.
 
-There are a few targets. Pick **`workerd: worker tenant`**: that is your
-app. `platform` and `deny` are tailworks' own isolates. Breakpoints and `debugger;`
-statements stop in a request handler, so make a request after you attach.
+The only target is **`workerd: worker tenant`**: that is your app.
+tailworks' own isolates (`platform`, `deny`, and the Workflows engine and
+assets workers when the app has them) are not listed, and the proxy refuses
+their paths. Breakpoints and `debugger;` statements stop in a request
+handler, so make a request after you attach.
 
 ### Chrome DevTools
 
@@ -97,15 +99,55 @@ start **Attach to tw dev**:
 }
 ```
 
-This is the configuration Cloudflare documents for `wrangler dev`. When VS
-Code offers several targets, choose `workerd: worker tenant`.
+This is the configuration Cloudflare documents for `wrangler dev`.
 
 With `--json`, the `inspector` event gives the address
 (`{"event":"inspector","addr":"127.0.0.1:9229","ws":"ws://127.0.0.1:9229"}`).
 
-The inspector gives full control of the isolate, so it listens on loopback
-only. tw-hostd's `WorkerdInspector` option takes effect only in tw dev's
-process-tier mode, never on a host that serves tenants.
+### Who may connect
+
+The inspector gives full control of the app's isolate: it can run code
+there, read `.dev.vars` secrets and the source, call the bindings and send
+requests through dev egress. tw-hostd's `WorkerdInspector` option takes
+effect only in tw dev's process-tier mode, never on a host that serves
+tenants. Under tw dev, the proxy on `--inspector-port` accepts only these:
+
+- **Host** `127.0.0.1:<port>`, `localhost:<port>` or `[::1]:<port>`.
+  Anything else gets `421 Misdirected Request`, so a web page on a DNS name
+  rebound to `127.0.0.1` can't read `/json`.
+- **Origin**, when the client sends one: a debugger's (`devtools://`,
+  `chrome-devtools://`, `vscode-webview://`, `vscode-file://`) or the
+  proxy's own loopback origin (`http://127.0.0.1:<port>`). Anything else
+  gets `403 Forbidden`. A web page's WebSocket always carries the page's
+  origin, so a page open in your browser can't attach. Chrome's
+  `chrome://inspect` and VS Code's debugger send no Origin, or a debugger
+  one.
+- **Targets**: `/json`, `/json/list` and the other `/json/…` discovery paths, and
+  the `tenant` target's WebSocket (`/tenant`). Any other path gets `403`.
+
+A debugger client that runs as a web page on another origin (a hosted
+DevTools front end, for example) is refused too.
+
+The proxy listens on `127.0.0.1` only, and every local process may connect
+to it. That is the same trust as `wrangler dev`: other programs running as
+you on this machine are trusted.
+
+### What remains: workerd's own inspector port
+
+The proxy forwards to workerd's own inspector, which listens on a different
+free `127.0.0.1` port each time the app is reloaded. That listener checks
+neither Host nor Origin, and it lists and opens every isolate, `platform`
+included. A web page that scans loopback ports, finds it and opens
+`ws://127.0.0.1:<that port>/tenant` (or `/platform`) still attaches. This
+is a limit of workerd's inspector, not something tw dev can configure:
+`--inspector-addr` takes only an address, and with a unix socket address the
+pinned workerd lists no targets. The exposure lasts only while
+`tw dev --inspector-port` runs (without the flag workerd starts no
+inspector), and it stops at that dev workload: `tw dev` runs on an embedded
+control plane, with no tailnet identity or credentials. Some browsers now ask before a public
+page may reach loopback addresses, but don't rely on it. Run
+`--inspector-port` only while you debug, and avoid browsing untrusted pages
+while it runs.
 
 ## Look at the data: the dev console
 

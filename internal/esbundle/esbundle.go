@@ -18,6 +18,8 @@ import (
 	"sync"
 
 	"github.com/evanw/esbuild/pkg/api"
+
+	"github.com/rosskukulinski/tailworks/internal/emailstub"
 )
 
 // Version is the esbuild version linked in (matches the npm pin).
@@ -116,7 +118,7 @@ func BuildApp(o Options) (*Result, error) {
 			return api.OnResolveResult{Path: "email", Namespace: "tw-stub"}, nil
 		})
 		b.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: "tw-stub"}, func(a api.OnLoadArgs) (api.OnLoadResult, error) {
-			s := "export class EmailMessage { constructor() { throw new Error('cloudflare:email is not supported on tailworks'); } }"
+			s := emailstub.ClassJS
 			return api.OnLoadResult{Contents: &s, Loader: api.LoaderJS}, nil
 		})
 		b.OnResolve(api.OnResolveOptions{Filter: `^[a-z_][a-z0-9_/]*$`}, func(a api.OnResolveArgs) (api.OnResolveResult, error) {

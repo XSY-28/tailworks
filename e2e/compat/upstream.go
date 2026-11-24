@@ -206,8 +206,8 @@ func upstreamProjects() []*Project {
 			p.AddDeps = map[string]string{"@ai-sdk/react": "^4.0.0"}
 			p.Workarounds = []string{agentsPin + `; likewise "@cloudflare/ai-chat" 0.12.3 and "@cloudflare/codemode" 0.5.6; @ai-sdk/react (a peer the monorepo root provides) added at the root's ^4.0.0`}
 			p.Build = viteBuild
-			p.Expect = Expect{Kind: ExpectRefused, Compat: "email", Error: "cloudflare:email",
-				Why: "the Worker imports `cloudflare:email` for its email demos; in a Vite-built Worker that import stops workerd from starting ([#354](https://github.com/rosskukulinski/tailworks/issues/354)), so no demo runs"}
+			p.Expect = Expect{Kind: ExpectProbeFail, Compat: "do-rpc",
+				Why: "it starts, and 8 of the 9 demo families the probe covers pass; the multi-agent demo's `SupervisorAgent.createChild` (an agent calling another agent's method over Durable Object RPC after `getAgentByName`) fails with `Could not serialize object of type \"RpcPromise\"`. A smaller app bundled by the built-in bundler with the same two classes and calls passes"}
 			p.Probe = probePlayground
 		}),
 

@@ -12,6 +12,7 @@
 //	__tw_main.js    tenant service main module: wraps default export + plain DO classes
 //	__tw_rt.js      ctx.tailnet runtime (built from @tailworks/tailnet src/runtime.ts)
 //	deny.js          globalOutbound of the platform worker (refuses everything)
+//	tw-email.js      cloudflare-internal:email stub extension (email.go)
 //	t/<path>         the tenant bundle's modules
 //	ingress.sock     workerd listens (cfBlobHeader x-tw-cf); only hostd connects
 //	egress-obj.sock  hostd listens: facet egress (platform Egress, MAC'd)
@@ -32,6 +33,7 @@ import (
 	"strings"
 
 	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/internal/emailstub"
 )
 
 //go:embed js/platform.js
@@ -258,6 +260,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	for i, n := range shimNames {
 		fmt.Fprintf(&tm, "  %s: { js: shim%d },\n", jsq(n), i)
 	}
+	tm.WriteString(emailFacetModule()) // email.go
 	tm.WriteString("  \"__tw_facet.js\": { js: facetMain },\n  \"__tw_rt.js\": { js: rt },\n};\n")
 
 	// tw-config.json
@@ -336,6 +339,9 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 			return nil, err
 		}
 	}
+	if err := write(emailFile, []byte(emailstub.InternalModuleJS)); err != nil { // email.go
+		return nil, err
+	}
 
 	if err := writeAssets(app, write); err != nil { // assets.go
 		return nil, err
@@ -367,7 +373,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	fmt.Fprintf(&c, "    (name = \"egress-wl\", external = (address = %s, http = (%s))),\n", cq(addrWL), sep("style = proxy"))
 	fmt.Fprintf(&c, "    (name = \"hostd\", external = (address = %s, http = (%s))),\n", cq(addrAPI), sep(""))
 	fmt.Fprintf(&c, "    (name = \"do-storage\", disk = (path = %s, writable = true)),\n  ],\n", cq(doPath))
-	fmt.Fprintf(&c, "  sockets = [ (name = \"ingress\", address = %s, service = \"platform\", http = (cfBlobHeader = \"x-tw-cf\")) ],\n%s);\n\n", cq(addrIngress), v8Flags(o))
+	fmt.Fprintf(&c, "  sockets = [ (name = \"ingress\", address = %s, service = \"platform\", http = (cfBlobHeader = \"x-tw-cf\")) ],\n%s%s);\n\n", cq(addrIngress), emailExtension(), v8Flags(o))
 
 	uk := func(cls string) string { return cq("tw-" + o.Workload + "-" + cls) }
 
