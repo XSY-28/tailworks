@@ -19,3 +19,13 @@ Why not skip CI outright: many `.md` files are embedded in `tw` (`docs/`,
 `README.md`, `CHANGELOG.md`, `SECURITY.md`, agent skills) or checked by tests
 (doc references, ADR index, CLI reference), and `docs/cli.md` and
 `docs/contracts/mgmt-api.md` are generated.
+
+## Tests
+
+- `make lint-docs test-docs`: pass (~10 s locally, warm cache).
+- `go test -v -run '...' ./cmd/tw/` with the test-docs pattern: 8 tests ran
+  and passed (the pattern matches real tests).
+- `make lint test`: pass.
+- No extra suites apply (no mgmt, e2e or runtime changes).
+- Not checked locally: the docs-only CI path itself. This PR isn't
+  docs-only, so it takes the full path; the first `.md`-only PR exercises it.
