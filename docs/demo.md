@@ -6,10 +6,9 @@ to call a tool, one grant is narrowed and the same call is denied, the grant
 is put back, and the agent is killed and leaves the tailnet. This page says
 how to run it, how to record it, and where the recordings go.
 
-The current recording is [`assets/demo/demo.gif`](assets/demo/demo.gif),
-made as described under [Record it](#record-it). It is from the throwaway
-Headscale tailnet, so the README doesn't show it yet: the README recording
-should come from a Tailscale tailnet.
+The recording at the top of the [README](../README.md) is
+[`assets/demo/demo.gif`](assets/demo/demo.gif), made on a Tailscale tailnet
+as described under [Record it](#record-it).
 
 ## What it shows
 
@@ -174,19 +173,18 @@ Install the tools with `brew install asciinema agg ffmpeg`.
 
 ### The recording in this repo
 
-`demo.cast` and `demo.gif` were recorded on the throwaway tailnet
-(`scripts/demo-headscale.sh up`, Headscale v0.29.7), with the commands in
-steps 2 and 4 (`asciinema rec` also had `--headless -f asciicast-v2`). That
-is why step 1 says `mint mode headscale`, the caller is
-`docker exec laptop curl`, and `tw kill` reports no posture tier. Two
-strings in the cast were replaced afterwards: the host name in the audit
-line (`demo@host`) and the recorded command in the header. To replace the
-recording with one from a Tailscale tailnet, follow the steps above and
-commit the two files, then add it to the README directly under the
-one-line description:
+`demo.cast` and `demo.gif` were recorded on 2026-11-24 on a Tailscale
+tailnet (a tailnet used only for testing), with the commands in steps 2
+and 4 (`asciinema rec` also had `--headless -f asciicast-v2`). tailworks
+ran from a checkout with its own state directory and a new OAuth client
+with Policy File › Write; the calling device was a Tailscale client in a
+container named `laptop`, which is why the calls read
+`docker exec laptop curl`. `tw kill` reports no posture tier because that
+tailnet's plan has no custom posture attributes.
 
-```md
-[![The launch demo in a terminal](docs/assets/demo/demo.gif)](docs/demo.md)
-```
+These strings in the cast were replaced before the GIF was made: the
+tailnet name (now `example.ts.net`), the caller's login (`you@example.com`),
+the host name in the audit line (`demo@host`), and a user ID and a key ID
+(`uDEMOuser11CNTRL`, `kDEMOkey011CNTRL`). Nothing else was edited.
 
 The screenshots and the MP4 are not in the repo yet.
