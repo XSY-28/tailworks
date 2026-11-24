@@ -1,6 +1,6 @@
 Last update: 2026-11-23 PT. Issue #293: service bindings (`services`, WorkerEntrypoint RPC) and same-host workload-to-workload calls.
 
-# Service bindings and the same-host hop (#293, ADR-052)
+# Service bindings and the same-host hop (#293, ADR-053)
 
 ## What's built
 

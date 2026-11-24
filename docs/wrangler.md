@@ -32,6 +32,9 @@ commands that call Cloudflare's API. See [below](#wrangler-commands-that-call-cl
   `tailnet.egress.internet: false` in tailworks.jsonc turns internet
   egress off, and a list limits it
   ([recipes.md](recipes.md#call-an-internet-api)).
+- **No geolocation in `request.cf`.** `country`, `colo`, `latitude` and
+  the other geo fields are `undefined`; feature-detect them
+  ([below](#requestcf)).
 - **Each Durable Object is a tailnet node** with its own name, tags and
   grants. Its storage lives on one host's disk, with no replication.
 - **Same CLI shapes, different binary.** `tw dev`, `tw deploy`,
@@ -61,6 +64,34 @@ parents, because `tailworks.jsonc` sits there too.
 
 Whatever the format, the bundle carries the resolved config as JSON
 (`wrangler.jsonc`), so the host never sees TOML or environments.
+
+### <a id="vite"></a>Projects built with the Cloudflare Vite plugin
+
+`vite build` with `@cloudflare/vite-plugin` (React Router, the React and
+Workflows starters, Agents SDK examples) writes the Worker it built, with a
+wrangler config of its own, to the build output (`dist/<worker>/` or
+`build/server/`). It points `.wrangler/deploy/config.json` at that config.
+Like `wrangler deploy`, `tw deploy`, `tw dev`, `tw policy` and `tw types`
+follow the pointer when the project has one, and print one line saying so:
+
+```
+› using build/server/wrangler.json, the config `vite build` wrote (.wrangler/deploy/config.json), as wrangler deploy does
+```
+
+So `npm run build && tw deploy` deploys what the build produced, with the
+assets directory the build chose. `tailworks.jsonc` still comes from the
+project directory. Paths in the generated config (`main`, `assets`,
+`migrations_dir`, container Dockerfiles) are relative to that config, as in
+wrangler. The generated config already holds one environment, so `--env`
+is refused: build with `CLOUDFLARE_ENV=<name> npm run build` instead.
+Auxiliary Workers in the pointer are not deployed, with a line each. Delete
+`.wrangler/deploy/config.json` to go back to the project's own config, and
+rebuild after changing your sources: tailworks doesn't check that the build
+is up to date.
+
+The generated config has `"no_bundle": true` and an ES-module rule for
+`**/*.js` and `**/*.mjs`. The built-in path then packs the pre-built modules
+as they are, without running esbuild ([below](#no-bundle)).
 
 ## Environments (`--env`)
 
@@ -138,6 +169,16 @@ maps. Each other module gets its type from your `rules` and wrangler's
 default rules, matched on its file name, and otherwise from its extension.
 Tailworks doesn't check that the directory is up to date with your sources.
 
+<a id="no-bundle"></a>A config with `"no_bundle": true` and `rules` of type
+ESModule whose globs are only `**/*.js` and `**/*.mjs` (what the
+[Vite plugin](#vite) writes) describes modules that are already built. The
+built-in path packs them as they are instead of bundling: `main`, plus
+every file under `base_dir` (default: `main`'s directory) that a rule types,
+at its path there, unless `find_additional_modules` is `false`. Other files
+(the build's `wrangler.json`, `.vite/manifest.json`, source maps) are left
+out. The build line names the bundler `prebuilt`. Other `no_bundle` configs
+still need `--wrangler`.
+
 ### What each bundler honours
 
 Measured with `e2e/wrangler/testdata/toml-app` and wrangler 4.60.0
@@ -150,7 +191,8 @@ Measured with `e2e/wrangler/testdata/toml-app` and wrangler 4.60.0
 | `alias` | ✅ | ✅ | |
 | default `rules`: `.txt` / `.html` / `.sql` as Text, `.bin` as Data, `.wasm` / `.wasm?module` as CompiledWasm | ✅ | ✅ | same `<sha1>-<file>` module names |
 | custom `rules` of type Text, Data or CompiledWasm (with `fallthrough`) | ✅ | ✅ | e.g. `**/*.md` as Text. The host types each module from `tw-bundle.json` `modules` |
-| `rules` of type ESModule / CommonJS, `no_bundle`, `find_additional_modules`, `base_dir`, `preserve_file_names` | ❌ warned | ✅ ES modules | tailworks ships ES modules only; a `.cjs` module in wrangler's output is an error |
+| `no_bundle` with ESModule `rules` for only `**/*.js` / `**/*.mjs` (pre-built, e.g. Vite plugin output), with `find_additional_modules`, `base_dir` | ✅ packed as they are ([pre-built](#no-bundle)) | ✅ | |
+| other `rules` of type ESModule / CommonJS, `no_bundle`, `find_additional_modules`, `base_dir`, `preserve_file_names` | ❌ warned | ✅ ES modules | tailworks ships ES modules only; a `.cjs` module in wrangler's output is an error |
 | `build` (custom build command) | ❌ warned | ✅ | |
 | `minify`, `keep_names`, `jsx_factory`, `jsx_fragment`, `tsconfig` | ✅ mapped to esbuild options | ✅ | mapped, but not measured end to end |
 | `nodejs_compat` | ✅ bare built-ins become `node:*`; workerd provides them | ✅ plus wrangler's unenv polyfills | toml-app's entry: 1.0 KB built-in, 21 KB wrangler. Both pass the same checks (`node:buffer`) |
@@ -306,6 +348,40 @@ Differences from Cloudflare:
   (`"egress": "workload"`), not in facet-mode objects.
 - The host must run a tailworks release with the `assets` feature; mgmt
   doesn't place an assets deployment on an older host.
+
+## `request.cf`
+
+On Cloudflare, `request.cf` carries the client's location and the edge
+that served it. tailworks has neither, so **none of the geolocation fields
+are set**: `country`, `colo`, `city`, `region`, `regionCode`, `continent`,
+`postalCode`, `metroCode`, `latitude`, `longitude`, `timezone`,
+`isEUCountry`, `asn` and `asOrganization` are all `undefined`. They are
+absent, not set to `""` or `0`, so a check like `cf?.latitude !== undefined`
+tells you whether you have a location.
+
+- A tailnet caller connects from a `100.x` address, which has no IP
+  geolocation.
+- A public (Funnel) request has a real client IP
+  (`getRequester(req).ip`, `CF-Connecting-IP`), but tailworks doesn't
+  look it up in a GeoIP database.
+
+What tailworks does put in `request.cf`:
+
+| Key | What it is |
+|---|---|
+| `tailscale` | who sent the request: `caller` (the verified tailnet caller, with its `seal`) or, for a public request, `requester` (`{kind: "public", ip, ...}`). Read it with `getCaller(req)` / `getRequester(req)`, not directly |
+| `objectId` | the tailworks object (node) the request arrived on |
+| `traceId` | tailworks' audit trace ID for this hop |
+| `tw` | platform routing (which workload or object, the create ticket). Internal; don't depend on its shape |
+
+`request.cf` survives a service binding and a Durable Object stub's
+`fetch()`, so an object sees the same keys as the Worker.
+
+Ported code that reads a location has to feature-detect it and fall back:
+ask the client (the browser's Geolocation API, a form field), or look the
+public IP up yourself. For example, a Durable Object's `onConnect` that
+needs a position should handle `ctx.request.cf?.latitude === undefined`
+rather than drop the connection.
 
 <a id="pages"></a>
 ## Cloudflare Pages projects (`functions/`, `_worker.js`)

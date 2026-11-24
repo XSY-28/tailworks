@@ -487,6 +487,9 @@ type instance struct {
 	reqs     atomic.Int64
 	stopping atomic.Bool
 
+	// flows: open connect() sockets (connect.go).
+	flows tcpFlows
+
 	mu       sync.Mutex
 	cmd      *exec.Cmd
 	vm       sandbox.VM // microVM tier: the running sandbox
@@ -815,6 +818,12 @@ func (h *Host) noSandboxReason() string {
 // (gen.LocalTokenHeader, injected by workerd's config), and strips it.
 func localToken(token string, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodConnect {
+			// workerd injects no headers on CONNECT: the tunnel's
+			// preamble carries the token (connect.go).
+			h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), localTokenKey{}, token)))
+			return
+		}
 		got := r.Header.Get(gen.LocalTokenHeader)
 		r.Header.Del(gen.LocalTokenHeader)
 		if subtle.ConstantTimeCompare([]byte(got), []byte(token)) != 1 {
@@ -1037,6 +1046,7 @@ func (inst *instance) stop() {
 	for _, s := range inst.servers {
 		s.Close()
 	}
+	inst.flows.closeAll()
 	if inst.ingressLn != nil {
 		inst.ingressLn.Close()
 	}

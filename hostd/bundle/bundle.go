@@ -95,7 +95,7 @@ type App struct {
 	Assets *Assets
 
 	// Services are wrangler.jsonc "services" (services.go,
-	// ADR-052), in wrangler order.
+	// ADR-053), in wrangler order.
 	Services []svcbind.Binding
 
 	// SourceMaps are the bundler's source maps (<module>.map, e.g.

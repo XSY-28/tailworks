@@ -61,6 +61,7 @@ func writeAPIError(w http.ResponseWriter, e *apiError) {
 func (h *Host) ingressHandler(t *tenant) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.Header.Get(netd.HeaderObject)
+		stripRoutingHeaders(r.Header) // routingheaders.go (#303)
 		h.mu.Lock()
 		o := h.byNetd[id]
 		var wl *workload
@@ -148,6 +149,10 @@ func (s *statusRecorder) Unwrap() http.ResponseWriter { return s.ResponseWriter 
 // and hand the request to netd, which dials from the object's own node.
 func (h *Host) egressObjHandler(inst *instance) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodConnect {
+			h.serveConnect(w, r, inst, h.connectAsFacet(inst)) // connect.go
+			return
+		}
 		cls, name, ok := gen.VerifyEgressOnce(inst.res.MACKey, r.Header, r.Method, r.RequestURI, time.Now(), &inst.nonces)
 		bc := takeBinding(r) // servicebind.go
 		if !ok {
@@ -186,6 +191,10 @@ func (h *Host) egressObjHandler(inst *instance) http.Handler {
 // plain-DO objects): it leaves as the workload node.
 func (h *Host) egressWLHandler(inst *instance) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodConnect {
+			h.serveConnect(w, r, inst, h.connectAsWorkload(inst)) // connect.go
+			return
+		}
 		gen.StripPlatformHeaders(r.Header)
 		bc := takeBinding(r) // servicebind.go
 		inst.w.mu.Lock()

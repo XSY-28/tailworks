@@ -1580,7 +1580,7 @@ certificate and mints again under the same hostname. Replaces
 `GetServiceBindingTarget` · role **host** · audited: no
 
 hostd calls this when a workload uses a service binding
-(`env.<binding>.fetch()` or an RPC call; ADR-052). The
+(`env.<binding>.fetch()` or an RPC call; ADR-053). The
 caller must hold the workload's lease at `epoch` (`409
 lease_lost`), and the workload's latest deployment must declare the
 binding (`404 service_not_found`). The target is the workload
@@ -4926,7 +4926,7 @@ Extends `Page`.
 
 #### `ServiceBindingTarget`
 
-Where a service binding's calls go (ADR-052).
+Where a service binding's calls go (ADR-053).
 
 | Field | Type | Required | Description |
 |---|---|---|---|

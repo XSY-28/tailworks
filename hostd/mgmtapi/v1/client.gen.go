@@ -3979,7 +3979,7 @@ type SelfInfo struct {
 	Transport *Transport `json:"transport,omitempty"`
 }
 
-// ServiceBindingTarget Where a service binding's calls go (ADR-052).
+// ServiceBindingTarget Where a service binding's calls go (ADR-053).
 type ServiceBindingTarget struct {
 	Binding string `json:"binding"`
 
@@ -7541,7 +7541,7 @@ type ClientInterface interface {
 	// GetServiceBindingTarget Resolve a workload's service binding to its target's entry node
 	//
 	// hostd calls this when a workload uses a service binding
-	// (`env.<binding>.fetch()` or an RPC call; ADR-052). The
+	// (`env.<binding>.fetch()` or an RPC call; ADR-053). The
 	// caller must hold the workload's lease at `epoch` (`409
 	// lease_lost`), and the workload's latest deployment must declare the
 	// binding (`404 service_not_found`). The target is the workload
@@ -10871,7 +10871,7 @@ func (c *Client) PutWorkloadSecret(ctx context.Context, id TenantID, workload Wo
 // GetServiceBindingTarget Resolve a workload's service binding to its target's entry node
 //
 // hostd calls this when a workload uses a service binding
-// (`env.<binding>.fetch()` or an RPC call; ADR-052). The
+// (`env.<binding>.fetch()` or an RPC call; ADR-053). The
 // caller must hold the workload's lease at `epoch` (`409
 // lease_lost`), and the workload's latest deployment must declare the
 // binding (`404 service_not_found`). The target is the workload
@@ -19727,7 +19727,7 @@ type ClientWithResponsesInterface interface {
 	// GetServiceBindingTargetWithResponse Resolve a workload's service binding to its target's entry node
 	//
 	// hostd calls this when a workload uses a service binding
-	// (`env.<binding>.fetch()` or an RPC call; ADR-052). The
+	// (`env.<binding>.fetch()` or an RPC call; ADR-053). The
 	// caller must hold the workload's lease at `epoch` (`409
 	// lease_lost`), and the workload's latest deployment must declare the
 	// binding (`404 service_not_found`). The target is the workload
@@ -32788,7 +32788,7 @@ func (c *ClientWithResponses) PutWorkloadSecretWithResponse(ctx context.Context,
 // GetServiceBindingTargetWithResponse Resolve a workload's service binding to its target's entry node
 //
 // hostd calls this when a workload uses a service binding
-// (`env.<binding>.fetch()` or an RPC call; ADR-052). The
+// (`env.<binding>.fetch()` or an RPC call; ADR-053). The
 // caller must hold the workload's lease at `epoch` (`409
 // lease_lost`), and the workload's latest deployment must declare the
 // binding (`404 service_not_found`). The target is the workload

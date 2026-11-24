@@ -337,6 +337,7 @@ func (m *agent) ingressProxy() http.Handler {
 		ErrorLog:      nil,
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
+			netd.KeepBodyEOF(pr) // #138
 			pr.Out.Host = pr.In.Host
 			netd.KeepForwarded(pr)
 		},

@@ -3981,7 +3981,7 @@ type SelfInfo struct {
 	Transport *Transport `json:"transport,omitempty"`
 }
 
-// ServiceBindingTarget Where a service binding's calls go (ADR-052).
+// ServiceBindingTarget Where a service binding's calls go (ADR-053).
 type ServiceBindingTarget struct {
 	Binding string `json:"binding"`
 

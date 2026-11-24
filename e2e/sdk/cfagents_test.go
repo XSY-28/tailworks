@@ -158,7 +158,7 @@ func TestCloudflareAgents(t *testing.T) {
 
 	t.Run("SameHostMCP", func(t *testing.T) {
 		// An object's egress to a node on the same host is delivered by
-		// netd's in-process hop (RFC §4.8, ADR-052), after the
+		// netd's in-process hop (RFC §4.8, ADR-053), after the
 		// same netmap and packet-filter checks; it no longer needs
 		// --allow-sibling-egress. Here the agent targets its own app's /mcp
 		// on host A.

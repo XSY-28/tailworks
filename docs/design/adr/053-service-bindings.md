@@ -1,4 +1,4 @@
-# ADR-052: Service bindings are tailnet calls from the calling node, resolved by mgmt; same-host calls take netd's in-process hop
+# ADR-053: Service bindings are tailnet calls from the calling node, resolved by mgmt; same-host calls take netd's in-process hop
 
 **Date:** 2026-11-23
 **Status:** Accepted (2026-11-23; issue #293, built on branch

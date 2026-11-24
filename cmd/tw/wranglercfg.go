@@ -225,12 +225,12 @@ func wranglerKeyNote(k string, v any, builder string) string {
 		"migrations", "triggers", "containers", "placement", "workflows", "queues", "$schema", "env":
 		return ""
 	case "services":
-		return "" // service bindings (ADR-052): another workload of this tenant
+		return "" // service bindings (ADR-053): another workload of this tenant
 	case "define", "alias", "rules", "minify", "keep_names", "jsx_factory", "jsx_fragment", "tsconfig":
 		return "" // both bundlers honour these
 	case "build", "no_bundle", "find_additional_modules", "base_dir", "preserve_file_names":
-		if builder == "wrangler" {
-			return ""
+		if builder == "wrangler" || (builder == builderPrebuilt && k != "build") {
+			return "" // nobundle.go packs a pre-built no_bundle Worker as wrangler does
 		}
 		return "needs wrangler's bundler; ignored by tailworks' built-in esbuild (use tw deploy --wrangler)"
 	case "upload_source_maps":

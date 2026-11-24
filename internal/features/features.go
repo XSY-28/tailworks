@@ -26,7 +26,7 @@ const (
 	Assets = "assets"
 	// Queues is queue producers and consumers (ADR-039).
 	Queues = "queues"
-	// ServiceBindings is wrangler "services" (ADR-052). An
+	// ServiceBindings is wrangler "services" (ADR-053). An
 	// older hostd leaves env.<binding> undefined.
 	ServiceBindings = "service-bindings"
 	// Telemetry is OTLP export, request records and /metrics (ADR observability).

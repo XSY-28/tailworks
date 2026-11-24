@@ -40,6 +40,7 @@ func (r *Registry) EgressHandler() http.Handler {
 			}
 			stripIdentityHeaders(pr.Out.Header)
 			pr.Out.Header.Del("proxy-connection")
+			KeepBodyEOF(pr) // proxybody.go (#138)
 		},
 		ErrorHandler: func(w http.ResponseWriter, req *http.Request, err error) {
 			if e, ok := AsError(err); ok {
@@ -66,7 +67,8 @@ func (r *Registry) EgressHandler() http.Handler {
 			return
 		}
 		if req.Method == http.MethodConnect {
-			WriteError(w, &Error{Code: CodeBadRequest, Detail: "CONNECT is not supported; use ctx.tailnet.connect()", Object: id, status: http.StatusMethodNotAllowed})
+			// hostd serves workerd's CONNECT tunnels itself (DialEgress).
+			WriteError(w, &Error{Code: CodeBadRequest, Detail: "CONNECT is not supported on the HTTP egress proxy (hostd dials sockets with DialEgress)", Object: id, status: http.StatusMethodNotAllowed})
 			return
 		}
 		if !req.URL.IsAbs() || (req.URL.Scheme != "http" && req.URL.Scheme != "https") {

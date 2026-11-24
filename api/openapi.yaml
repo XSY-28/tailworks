@@ -2035,7 +2035,7 @@ paths:
       summary: Resolve a workload's service binding to its target's entry node
       description: |
         hostd calls this when a workload uses a service binding
-        (`env.<binding>.fetch()` or an RPC call; ADR-052). The
+        (`env.<binding>.fetch()` or an RPC call; ADR-053). The
         caller must hold the workload's lease at `epoch` (`409
         lease_lost`), and the workload's latest deployment must declare the
         binding (`404 service_not_found`). The target is the workload
@@ -6403,7 +6403,7 @@ components:
         signals: { type: array, items: { $ref: "#/components/schemas/TelemetrySignal" } }
     ServiceBindingTarget:
       type: object
-      description: Where a service binding's calls go (ADR-052).
+      description: Where a service binding's calls go (ADR-053).
       required: [binding, service, objectID, hostname, magicDNS, status]
       properties:
         binding: { type: string }

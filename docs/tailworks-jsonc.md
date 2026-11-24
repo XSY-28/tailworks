@@ -66,7 +66,7 @@ schema. `tw init` writes this line for you:
 | key | type | what it does |
 |---|---|---|
 | `tags` | `["tag:…"]` | **Required.** Tags of the workload's own node. Your policy must let `tag:tw` own them; `tw policy` (and `tw deploy`'s preflight) prints the snippet if it doesn't, and `tw policy --apply` writes it ([below](#tags-and-tw-init)) |
-| `connects` | `["tag:…" or name]` | what the workload calls. `tw deploy` preflights these grants, and smart placement measures paths to them |
+| `connects` | `["tag:…" or name]` | what the workload calls. `tw deploy` preflights these grants, and smart placement measures paths to them. Add the TCP port a socket dials (`"tag:db:5432"`) and the preflight checks the grant for that port instead of `tcp:80` |
 | `service` | `true` or `"svc:<name>"` | a Tailscale Service: a stable name and VIP in front of the workload ([services.md](services.md)) |
 | `egress.internet` | `true`, `false` or `[host, "*.suffix", IP, CIDR]` | internet egress for Worker code and containers; [below](#tailnetegressinternet) |
 | `spawn.maxLive` | integer | the most live sub-agents (`ctx.tailnet.spawn`) |

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestServiceBindingTarget: GET .../service-bindings/{binding} (ADR-052)
+// TestServiceBindingTarget: GET .../service-bindings/{binding} (ADR-053)
 // answers the lease holder of the calling workload with the target's entry
 // node, only for a binding its latest deployment declares, and only for a
 // workload of the same tenant.
