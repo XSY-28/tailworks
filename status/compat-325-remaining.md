@@ -54,7 +54,10 @@ New failures:
   `ok github.com/rosskukulinski/tailworks/e2e/compat 55.289s`,
   counts `PASS:25 XFAIL:8`.
 - Earlier subset runs (`TW_COMPAT_ONLY=...`) while writing the probes.
-- `make compat-upstream`, then `make lint`, `make test`: see the PR.
+- `make compat-upstream`: rewrote the tables and `upstream-results.json`.
+- `make lint`: ok (includes `compat-upstream-check`, `changes-check`: no
+  upgrade-relevant paths).
+- `make test` (on the mbp runner via `mbp-test.sh`): exit 0, no failures.
 - Not run: `make e2e-compat` (deployed on tailnet 1: needs credentials not
   available here).
 
