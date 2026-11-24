@@ -855,6 +855,7 @@ func (h *Host) syncAssignments(ctx context.Context) error {
 			h.undeploy(w, "no longer assigned")
 		}
 	}
+	h.forgetUnassignedTombstones(want) // unassignedtombstones.go (#364)
 	return nil
 }
 

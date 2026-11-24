@@ -2,7 +2,8 @@
 # demo_test.sh: run scripts/demo.sh for real against a throwaway Headscale
 # tailnet (scripts/demo-headscale.sh), run by `make demo-test`. It checks
 # the refusals, a first run, a rerun over the running apps, an interrupted
-# run (the grant must come back) and --cleanup. Needs docker; skips without.
+# run (the grant must come back), --cleanup, and a run after --cleanup under
+# the same names. Needs docker; skips without.
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
@@ -67,7 +68,14 @@ echo "demo-test: ok interrupt restores the grant"
 scripts/demo.sh --cleanup --yes >"$log" 2>&1 || fail "--cleanup"
 if grant_tools >/dev/null 2>&1; then fail "--cleanup left the tool grant in the policy"; fi
 [ ! -d "$DEMO_DIR/demo" ] || fail "--cleanup left $DEMO_DIR/demo"
-if scripts/demo.sh --yes --no-pause >"$log" 2>&1; then fail "a run after --cleanup should stop early (the name is killed until a purge)"; fi
-grep -q DEMO_NAME "$log" || fail "the after-cleanup refusal does not name DEMO_NAME"
 echo "demo-test: ok cleanup"
+
+# The same names deploy again after --cleanup (#364: undeploy left the
+# workload node killed until a purge).
+scripts/demo.sh --yes --no-pause >"$log" 2>&1 || fail "a run after --cleanup (same names)"
+for want in '"ok":true' cap_missing '"code":"killed"' 'demo: done'; do
+	grep -q "$want" "$log" || fail "run after --cleanup: no $want in the output"
+done
+scripts/demo.sh --cleanup --yes >"$log" 2>&1 || fail "second --cleanup"
+echo "demo-test: ok run after cleanup"
 echo "demo-test: PASS"

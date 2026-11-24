@@ -27,8 +27,11 @@ the inversion that closes RT3-06 and RT3-07.
 
 A kill ends every admission for the name (#153). hostd drops the name's
 pending admission and its `public.create` record, and `admit` answers
-`410 killed` for the name until it is purged (`tw down --purge`). After
-that, a caller has to admit the name again. A tenant purge drops all of
+`410 killed` for the name until it is purged (`tw down --purge`), or
+until its workload is undeployed and deployed again (#364): mgmt forgets
+the workload's killed objects on that deploy, and the host forgets its
+tombstones once the workload is no longer assigned to it. After that, a
+caller has to admit the name again. A tenant purge drops all of
 the tenant's admissions. The runtime's per-isolate admit cache keeps only
 "this object exists" answers, for 60 seconds, and a plain DO's kill evicts
 its entry.
