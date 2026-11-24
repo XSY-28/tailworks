@@ -43,7 +43,7 @@ func init() {
 // Options for Build.
 type Options struct {
 	Dir       string   // the app directory (absWorkingDir)
-	Main      string   // the entry, relative to Dir (wrangler.jsonc "main")
+	Main      string   // the entry, relative to Dir (wrangler.jsonc "main"), or absolute
 	Outfile   string   // absolute path of the output module
 	NodePaths []string // module fallbacks (tailworks' own node_modules)
 	Minify    bool
@@ -97,6 +97,10 @@ func BuildApp(o Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	entry := o.Main
+	if !filepath.IsAbs(entry) {
+		entry = filepath.Join(dir, entry) // a generated entry (Pages functions) is absolute
+	}
 	res := &Result{Modules: map[string]Module{}}
 	var mu sync.Mutex
 	rules, err := rulesPlugin(EffectiveRules(o.Rules), res.Modules, &mu)
@@ -123,7 +127,7 @@ func BuildApp(o Options) (*Result, error) {
 		})
 	}}
 	r := api.Build(api.BuildOptions{
-		EntryPoints:       []string{filepath.Join(dir, o.Main)},
+		EntryPoints:       []string{entry},
 		Outfile:           o.Outfile,
 		AbsWorkingDir:     dir,
 		Bundle:            true,
