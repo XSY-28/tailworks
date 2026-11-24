@@ -1,6 +1,6 @@
 {
   "name": "tailworks",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "The tailworks CLI (tw): run Cloudflare-style Workers and Durable Objects on your own machines, on your Tailscale tailnet",
   "keywords": [
     "tw",
@@ -21,9 +21,9 @@
     "test": "node --test test/*.test.js"
   },
   "optionalDependencies": {
-    "@tailworks/cli-darwin-arm64": "0.4.0",
-    "@tailworks/cli-linux-amd64": "0.4.0",
-    "@tailworks/cli-linux-arm64": "0.4.0"
+    "@tailworks/cli-darwin-arm64": "0.5.0",
+    "@tailworks/cli-linux-amd64": "0.5.0",
+    "@tailworks/cli-linux-arm64": "0.5.0"
   },
   "engines": {
     "node": ">=18"
