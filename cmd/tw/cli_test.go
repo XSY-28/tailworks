@@ -512,6 +512,16 @@ func TestDoctor(t *testing.T) {
 		t.Fatalf("doctor: workerd_age = %q: %v", st, r.Checks)
 	}
 	delete(got, "workerd_age")
+	// side_channels depends on the host's CPU and kernel: on Linux ok or
+	// warn, never a failure (doctor_sidechannel.go); elsewhere skip.
+	want["side_channels"] = "skip"
+	if runtime.GOOS == "linux" {
+		if st := got["side_channels"]; st != "ok" && st != "warn" {
+			t.Fatalf("doctor: side_channels = %q: %v", st, r.Checks)
+		}
+		delete(got, "side_channels")
+		delete(want, "side_channels")
+	}
 	if runtime.GOOS == "linux" {
 		want["host_sockets"] = "ok"
 		if hs := procsb.ScanHostSockets(); len(hs.Hard) > 0 {

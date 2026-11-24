@@ -15,6 +15,7 @@ import (
 	"slices"
 
 	"github.com/rosskukulinski/tailworks/hostd/bundle"
+	"github.com/rosskukulinski/tailworks/internal/compatflags"
 )
 
 // Feature strings. A platform store kind (hostd/bundle RegisterStoreKind)
@@ -24,11 +25,22 @@ const (
 	// router Worker (ADR-050). An older hostd would load the
 	// bundle's assets/ files as modules, or not serve them.
 	Assets = "assets"
+	// ExperimentalFlags is a host that allows compatibility flags workerd
+	// marks experimental (tw-hostd -allow-experimental-flags, #337). A
+	// bundle that lists one (internal/compatflags) needs it; every other
+	// host refuses the deployment (experimental_flag). It depends on the
+	// host's flags, not its build, so hostd adds it to Host() itself.
+	ExperimentalFlags = "experimental-flags"
 	// InternetExitNode is a host whose internet path is a tailnet exit
 	// node (-worker-internet=exit-node=…, ADR-054). A bundle
 	// with tailnet.egress.via "exit-node" needs it. It depends on the
 	// host's flags, not its build, so hostd adds it to Host() itself.
 	InternetExitNode = "internet-exit-node"
+	// InternetPorts is a tailnet.egress.internet entry that names a port
+	// ("smtp.example.com:25"), the override of the internet port policy
+	// (ADR-052 follow-up, 2026-11-24). An older hostd reads such an entry
+	// as a host name that matches nothing.
+	InternetPorts = "internet-ports"
 	// Queues is queue producers and consumers (ADR-039).
 	Queues = "queues"
 	// ServiceBindings is wrangler "services" (ADR-053). An
@@ -50,6 +62,7 @@ const (
 func Host() []string {
 	out := []string{
 		Assets,
+		InternetPorts,
 		Queues,
 		ServiceBindings,
 		Telemetry,
@@ -79,11 +92,17 @@ func Required(app *bundle.App) []string {
 	if app.Internet.Boolean() {
 		out = append(out, WorkerInternet)
 	}
+	if app.Internet.NamesPort() {
+		out = append(out, InternetPorts)
+	}
 	if len(app.Services) > 0 {
 		out = append(out, ServiceBindings)
 	}
 	if app.EgressVia == bundle.ViaExitNode {
 		out = append(out, InternetExitNode)
+	}
+	if len(compatflags.Filter(app.CompatFlags)) > 0 {
+		out = append(out, ExperimentalFlags)
 	}
 	slices.Sort(out)
 	return slices.Compact(out)

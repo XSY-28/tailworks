@@ -113,6 +113,11 @@ type Options struct {
 	VM                 VMOptions
 	Sandbox            string
 	InsecureSharedHost bool
+
+	// AllowExperimentalFlags is hostd.Config.AllowExperimentalFlags
+	// (tw-hostd -allow-experimental-flags, #337).
+	AllowExperimentalFlags bool
+
 	SandboxDeny        []string
 	NodeBin            string
 	AllowSiblingEgress bool
@@ -375,6 +380,7 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 	hcfg.Telemetry.RecordMaxAge = o.RequestLogMaxAge
 	hcfg.WorkerdHeapMiB = o.WorkerdHeapMiB
 	hcfg.NodeHeapMiB = o.NodeHeapMiB
+	hcfg.AllowExperimentalFlags = o.AllowExperimentalFlags // hostd/gen/compatflags.go (#337)
 	// Containers (ADR-032) run on the microVM backend; without it this host
 	// offers none (start() fails with tier_unavailable, no fallback).
 	if cb, ok := hcfg.VM.(sandbox.ContainerBackend); ok && hcfg.VM != nil && !o.NoContainers {

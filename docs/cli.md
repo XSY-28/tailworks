@@ -20,6 +20,8 @@ tw up: start tailworks on this machine (one process: mgmt + embedded host; --sep
 usage: tw up [--oauth-client-file <file>] [--apply-policy [--yes]] [--service=false]  |  up --control=headscale --control-url <url> --tailnet <base_domain> --api-key-file <file> [--apply-policy [--yes]]
 
 flags:
+  -allow-experimental-flags
+    	let deployments on this host set compatibility flags workerd marks experimental (unsafe_module, rtti_api, precise_timers, …); refused by default (docs/COMPAT.md#experimental-flags)
   -allow-sibling-egress
     	dial other objects on this host over WireGuard (a hairpin) instead of netd's in-process hop (tests)
   -api-key-file string
@@ -252,7 +254,7 @@ flags:
 check this machine can run tw
 
 ```text
-tw doctor: check this machine: workerd runs, bundler offline, ~/.tailworks writable, the mint credential works, process sandbox active, system tailscaled not used; on Linux also glibc, kernel/Landlock ABI, KVM, firecracker, cgroups v2, systemd and the microVM tier
+tw doctor: check this machine: workerd runs, bundler offline, ~/.tailworks writable, the mint credential works, process sandbox active, system tailscaled not used; on Linux also glibc, kernel/Landlock ABI, KVM, firecracker, cgroups v2, systemd, the microVM tier and the CPU side-channel posture (mitigations, SMT, KSM)
 
 usage: tw doctor
 

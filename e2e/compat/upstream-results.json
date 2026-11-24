@@ -1,7 +1,7 @@
 {
   "dev": {
     "date": "2026-11-24",
-    "commit": "f1b842e69f8c6c8bb9b4d216c13f91242f8f24df",
+    "commit": "5021fbb5d978c7b912785e53422e629980dfa81c",
     "platform": "darwin/arm64",
     "results": {
       "ag-cross-domain": {
@@ -105,7 +105,7 @@
   },
   "deployed": {
     "date": "2026-11-24",
-    "commit": "c97a6175a081b534f09df47eb7c2ae77c2a3a39b",
+    "commit": "0bc7003f79dd610c4df8d2ba277c5e2ac3556702",
     "platform": "darwin/arm64",
     "results": {
       "ag-cross-domain": {
@@ -160,8 +160,9 @@
         "steps": 3
       },
       "ag-workflows": {
-        "outcome": "XFAIL",
-        "source": "cloudflare/agents/examples/workflows@95dacf84dcdf"
+        "outcome": "PASS",
+        "source": "cloudflare/agents/examples/workflows@95dacf84dcdf",
+        "steps": 7
       },
       "ai-express": {
         "outcome": "PASS",

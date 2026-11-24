@@ -168,6 +168,7 @@ func (inst *instance) workerdCommand() (*exec.Cmd, error) {
 		}
 		return nil, err
 	}
+	cmd.Env = WorkerdEnv() // workerdenv.go (#336): not hostd's environment, on any branch
 	if f != nil {
 		cmd.ExtraFiles = []*os.File{f}
 	}

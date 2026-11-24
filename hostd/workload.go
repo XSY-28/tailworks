@@ -207,6 +207,9 @@ func (h *Host) deploy(w *workload, a mgmtapi.Assignment) {
 			c.Tags = ns.Tags
 		}
 	}
+	if off := nodesFromMgmt(app, a.Namespaces); len(off) > 0 { // nodeless.go (#359)
+		h.log.Info("classes without a node of their own (mgmt declares only tailnet.objects)", "workload", w.name, "classes", off)
+	}
 	// Container classes as mgmt resolved them at deploy (ADR-032 D3): the
 	// image refs the polyfill passes and their per-arch pins. A class the
 	// bundle doesn't declare is ignored.
@@ -561,6 +564,9 @@ func (h *Host) startInstance(w *workload, depID string, app *bundle.App, tier st
 		DeploymentID: depID,
 		Workload:     w.name,
 		HeapMiB:      h.workerdHeapMiB(),
+		// Experimental compatibility flags (gen/compatflags.go, #337).
+		AllowExperimentalFlags: h.cfg.AllowExperimentalFlags,
+		WorkerdBin:             h.cfg.WorkerdBin,
 	}
 	vmTier := tier == bundle.TierMicroVM
 	if vmTier {

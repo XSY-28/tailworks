@@ -27,4 +27,6 @@ Each Durable Object class picks how its outbound `fetch()` is attributed, in `ta
 
 Switching a class between modes changes its storage namespace (`Host_<Class>` vs `<Class>`), so existing objects of that class start empty. Pick the mode before you store data. The fix for both columns is upstream ask WD-3 (per-actor `globalOutbound`), which removes the facet requirement and gives alarms *and* per-object egress.
 
+**A class missing from `tailnet.objects`** (a `tailworks.jsonc` that lists some classes, or only `tailnet.tags`) runs in facet mode but gets no node of its own: mgmt declares only the classes `tailnet.objects` lists. Its `fetch()` and `connect()` leave as the workload node, and no create admission applies to it. `tw dev` still gives each of its objects a node with no tags. List the class (with `tags`) to give its objects nodes. Setting `"node": false` makes it plain-DO internal instead, which changes its storage namespace as above.
+
 **Hibernation (both modes).** workerd evicts idle objects after about 10 s, which drops in-memory state. The object's node stays online in netd, and the next request wakes the object (measured in `TestHostd/HibernationKeepsNode`).

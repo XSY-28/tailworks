@@ -89,7 +89,7 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "internet": { "type": ["boolean", "array"], "items": { "type": "string" }, "description": "Internet egress for Worker code and containers (docs/tailworks-jsonc.md#tailnetegressinternet). Absent: Workers may reach any public host, containers none. true: both may reach any public host. false or []: neither. A list of hosts (\"*.suffix\", IPs, CIDRs): both only those. Private, link-local, loopback and tailnet addresses are always refused." }
+            "internet": { "type": ["boolean", "array"], "items": { "type": "string" }, "description": "Internet egress for Worker code and containers (docs/tailworks-jsonc.md#tailnetegressinternet). Absent: Workers may reach any public host, containers none. true: both may reach any public host. false or []: neither. A list of hosts (\"*.suffix\", IPs, CIDRs, each with an optional :port): both only those; an entry with a port covers that port only. TCP port 25 is refused unless an entry names it (\"smtp.example.com:25\"). Private, link-local, loopback and tailnet addresses are always refused." }
           }
         },
         "spawn": {

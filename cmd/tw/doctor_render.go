@@ -72,6 +72,7 @@ var doctorMetas = map[string]doctorMeta{
 	"node_egress":                {group: "Isolation", label: "Node egress"},
 	"public_ingress":             {group: "Tailnet", label: "public ingress"},
 	"sandbox":                    {group: "Isolation", label: "sandbox", fact: submatch(reSandboxKind)},
+	"side_channels":              {group: "Isolation", label: "side channels"},
 	"state_dir_writable":         {group: "Install", label: "state dir writable"},
 	"store_sizes":                {group: "Storage", label: "stores", fact: submatch(reStoreTenants)},
 	"system_tailscaled_not_used": {group: "Tailnet", label: "system tailscaled unused"},
