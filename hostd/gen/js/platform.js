@@ -16,14 +16,13 @@ import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 import CFG from "tw-config.json";
 import MODULES from "tw-modules.js";
 import { deliverQueue } from "tw-queue.js";
-import { bindingCallee, setObjectEgress } from "tw-svc.js";
+import { DOC, bindingCallee, setObjectEgress } from "tw-svc.js";
 
 const FACET_MODULES = MODULES;
 
 const json = (status, body, extra = {}) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store", ...extra } });
 
-const DOC = "https://github.com/rosskukulinski/tailworks/blob/main/docs/errors.md#";
 const STATUS = {
   killed: 410, no_identity: 401, bad_request: 400, unknown_object: 404, identity_pending: 503, hostd_unavailable: 503,
   public_create_denied: 403, public_request: 403, not_public: 404, create_not_admitted: 403,

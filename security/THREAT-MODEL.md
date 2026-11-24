@@ -7,6 +7,8 @@ hosts' push API; attacker goals restated with what is fixed and what is
 open.
 Revised: 2026-11-17 (follow-up to #121): the macOS process tier matches the
 strict Seatbelt profile at master adae38b (#171).
+Revised: 2026-11-24 (#333): §3.1 on side channels inside a workload's
+process; the §5 MAC-key claim holds against JavaScript only.
 
 Companions: [`docs/security-model.md`](../docs/security-model.md) (the
 user-facing model; where this file and that one disagree, fix both),
@@ -70,7 +72,10 @@ code wins.
   tenant that the tailnet policy lets reach the target: the grant and the
   node certificate are the check, not the caller's `services`
   declaration. A tenant `fetch()` can't carry the header that marks such
-  a call (stripped on egress); a raw socket can (H-binding-wire).
+  a call (stripped on egress); a raw socket can (H-binding-wire). All of
+  this holds against JavaScript: the objects of one workload share a
+  process with the wrapper that holds the MAC root, so they are one
+  side-channel domain (§3.1).
 - **B4 Host ↔ mgmt.** A host is `tag:tw-host` by WhoIs, bound to its host
   ID by a one-time registration secret (`tw host add`), and trusted only
   for the leases it holds: every host write is fenced by lease holder and
@@ -207,6 +212,105 @@ shared-host checks refuse the unconfined cases (§4.1); a host that confines
 files but not TCP is admitted as shared, and `tw status`/`tw doctor` say
 so.
 
+### 3.1 Side channels inside a workload's process
+
+Every sandbox in §3 separates processes (or VMs). Inside one workload the
+separation is V8's: isolates, which keep JavaScript apart but are not a
+boundary against speculative execution (Spectre) or a memory-safety bug
+that yields a read without code execution. Cloudflare's production runtime
+adds what workerd alone can't: it freezes `Date.now()` while code runs,
+offers no shared memory or threads to build a timer from, moves suspicious
+Workers to their own process and restarts the runtime so memory moves;
+with all of that, researchers still leaked a secret across isolates at up
+to 12 bit/s ([Workers security model, 2020](https://blog.cloudflare.com/mitigating-spectre-and-other-security-threats-the-cloudflare-workers-security-model/);
+[revisiting Spectre on Workers, 2026](https://blog.cloudflare.com/revisiting-spectre-attacks-on-workers/);
+["workerd on its own is not sufficient to protect against hardware bugs
+like Spectre"](https://blog.cloudflare.com/workerd-open-source-workers-runtime/)).
+tailworks has none of those mitigations, and relies on none of them
+between tenants: one workload is one process.
+
+**What sits in a workload's process (process tier).** The platform
+wrapper, which holds `MAC_KEY` as a binding of the platform worker
+(`hostd/gen/gen.go`, the `MAC_KEY` line) and, under the Linux Landlock
+sandbox, `LOCAL_TOKEN` (the token hostd's per-instance loopback listeners
+require; `Options.Loopback`); the tenant Worker's isolate, with its plain
+DOs; and one isolate per facet object, loaded by the platform. `MAC_KEY` is
+the root of the per-object egress MACs (C11), of the caller seal (F5,
+H08), of `hostCap` (H27) and of the create ticket (F4). Secrets of other
+boundaries are not in the process: node keys (A1), mint credentials (A2)
+and custody (A3) are hostd's and mgmt's, in other processes, and hostd
+checks every MAC, seal and ticket against the key of the instance whose
+socket or listener the request arrived on.
+
+**What a leaked `MAC_KEY` yields**, all of it inside the attacker's own
+workload:
+
+1. Egress as a sibling object: a sub-agent whose caps were narrowed by
+   `lim` leaves from its parent's node and is admitted with the parent's
+   caps (B3, "every object's egress leaves from its own node").
+2. A sealed caller of its choice for any object in the workload:
+   `getCaller()` names whoever the attacker likes (I3, within the
+   workload; a replay of a real caller needs no key, H08).
+3. `hostCap`: the facet Host's platform-only entry points (`__tw_kill`,
+   `__tw_intercept`, `__tw_alarm_op`; H27).
+4. A create ticket, so a public request to the workload admits any object
+   name; the budget it spends is the tenant's own (I2, A9).
+
+`LOCAL_TOKEN` yields nothing by itself: using it takes a raw TCP socket to
+hostd's loopback listeners, which tenant code in workerd has only after a
+V8 escape, and an escape reads the process's memory anyway. So the
+boundary this weakens is **B3** (object ↔ object within a workload), not
+B1 or B2. Whether the workerd builds tailworks ships have V8's sandbox
+enabled is not recorded (the binary carries its symbols; nothing more was
+checked), and even with it and per-isolate memory protection keys
+Cloudflare says "a single arbitrary read vulnerability within a Worker
+process can lead to cross-tenant leakage"
+([Safe in the sandbox, 2025](https://blog.cloudflare.com/safe-in-the-sandbox-security-hardening-for-cloudflare-workers)).
+Here the tenants of that process are one tenant's objects.
+
+**Measured** (pinned workerd 1.20261121.1, `workerd serve --experimental`,
+the generated config, no flag tailworks sets; first measured with
+1.20261118.1 in #333): during a CPU-only loop `Date.now()` and
+`performance.now()` advance in 1 ms steps (about 200 distinct values each
+in 200 ms); `SharedArrayBuffer`, `Atomics.wait` and shared
+`WebAssembly.Memory` exist; there is no second thread (`node:worker_threads`'
+`Worker` throws `ERR_METHOD_NOT_IMPLEMENTED`), so no counting-thread timer.
+Remote timers and long sessions are available by design: internet egress
+is on by default (B11), WebSockets and Durable Objects are long-lived, and
+there is no CPU or subrequest limit (docs/limits.md, "Limits that don't
+exist"). Nothing detects an attack, nothing moves a suspicious object, and
+a workload's process restarts only when it is redeployed or crashes. The
+measurement is pinned by `gen.TestTenantClocks` (C-clocks), so a workerd
+bump that changes the clocks is noticed; the hypothesis itself is
+H-sidechannel-inproc, **disclosed**, not demonstrated.
+
+**So:** on the process tier the isolates of one workload and the platform
+wrapper are **one side-channel domain**. Object-to-object claims (B3, C05,
+C11, H27) hold against JavaScript, not against an object that mounts a
+speculative attack. Objects that must not trust each other belong in
+separate workloads, which are separate processes. The microVM tier has
+the same shape per workload (the guest "holds its workload's MAC root",
+§3); what stands between processes or VMs of different workloads on one
+host (SMT, kernel mitigations, memory deduplication) is the host's job,
+not workerd's: [#334](https://github.com/rosskukulinski/tailworks/issues/334).
+
+**Decisions (2026-11-24, #333; nothing in the code changes, so no ADR):**
+
+- No scheduled restart or rotation of `MAC_KEY`. A restart drops the
+  Durable Objects' in-memory state and every WebSocket of the workload,
+  and at the published rate a 256-bit key leaves in well under any restart
+  interval that would keep the workload usable; it would stop only slow
+  leaks. The key is drawn afresh each time hostd starts an instance
+  (`gen.Generate` from `startInstance`, `hostd/workload.go`).
+- Moving the MAC root out of the process waits on upstream ask WD-3
+  (a per-actor `globalOutbound`, RFC §4.8 and §12): hostd would then tell
+  objects apart by the connection they arrive on, and no MAC and no key
+  would sit in the process.
+- Follow-up upstream ask: a frozen-clock switch for self-hosters, so a
+  workerd config could opt into the production runtime's clock behaviour.
+  Not implemented here. Tenant-selected experimental timer flags are
+  [#337](https://github.com/rosskukulinski/tailworks/issues/337).
+
 ## 4. Attacker goals, and where each stands
 
 1. **Tenant → tenant** (B2): read A1/A2/A3, forge A5 to another object,
@@ -301,7 +405,12 @@ so.
   egress dials only an address that passed `netd/publicip` after DNS,
   never a name, and never from a tailnet node (`netd.TestInternetEgress`).
 - Per-object egress attribution via unforgeable `ctx.props` and the
-  per-object egress MAC; tenant code can't read the MAC key in-isolate.
+  per-object egress MAC. JavaScript in a tenant isolate can't read the MAC
+  key: it is a binding of the platform worker only
+  (`gen.TestGeneratedWrapperProbe/FacetEnvAndPrivacy`). That holds
+  against code, not against a speculative or memory-safety read from an
+  isolate in the same process (§3.1): within a workload, attribution is
+  as strong as the process.
 - Lease epoch fencing (single conditional writes), host-scoped reads,
   and the registration throttle (AIMD).
 - Audit hash-chain tamper-evidence, signed host records, and no silent
