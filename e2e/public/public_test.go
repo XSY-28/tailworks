@@ -39,6 +39,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -94,7 +95,7 @@ func approvedOnly(m policy.Snippet) error {
 
 // publicClient fetches like an internet client: public DNS (1.1.1.1),
 // verified TLS, never this machine's tailscaled or MagicDNS.
-// publicDNSGood: host → its last good public DNS answer (publicClient).
+// publicDNSGood: host → the public addresses that have connected (publicClient).
 var publicDNSGood sync.Map
 
 func publicClient(timeout time.Duration) *http.Client {
@@ -104,31 +105,43 @@ func publicClient(timeout time.Duration) *http.Client {
 	d := &net.Dialer{Timeout: 10 * time.Second, Resolver: r}
 	// Public DNS for a new Funnel name flaps for a while after it first
 	// resolves (an anycast resolver node can still hold the NXDOMAIN from
-	// before it existed), which is not what this suite tests. So a name's
-	// last good addresses are kept, and used when a later lookup fails: the
-	// request still goes over the internet to the Funnel edge.
+	// before it existed), which is not what this suite tests. So the
+	// addresses that connected are kept, and used when a later lookup fails
+	// or leaves them out: the request still goes over the internet to the
+	// Funnel edge.
 	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
 		host, port, err := net.SplitHostPort(addr)
 		if err != nil {
 			return nil, err
 		}
 		ips, lerr := r.LookupHost(ctx, host)
-		if lerr == nil && len(ips) > 0 {
-			publicDNSGood.Store(host, ips)
-		} else if v, ok := publicDNSGood.Load(host); ok {
-			ips = v.([]string)
-		} else {
+		// A lookup can also answer with only part of the name's addresses
+		// (only the AAAA, on a runner without IPv6). So addresses that
+		// connected before are tried after this lookup's.
+		if v, ok := publicDNSGood.Load(host); ok {
+			for _, ip := range v.([]string) {
+				if !slices.Contains(ips, ip) {
+					ips = append(ips, ip)
+				}
+			}
+		}
+		if len(ips) == 0 {
 			return nil, lerr
 		}
-		var last error
+		// Every address's error is reported, not just the last one's.
+		var errs []error
 		for _, ip := range ips {
 			c, err := d.DialContext(ctx, network, net.JoinHostPort(ip, port))
 			if err == nil {
+				if v, _ := publicDNSGood.Load(host); v == nil || !slices.Contains(v.([]string), ip) {
+					good, _ := v.([]string)
+					publicDNSGood.Store(host, append(slices.Clone(good), ip))
+				}
 				return c, nil
 			}
-			last = err
+			errs = append(errs, err)
 		}
-		return nil, last
+		return nil, errors.Join(errs...)
 	}
 	tr := &http.Transport{DialContext: dial, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 		Proxy: nil, ForceAttemptHTTP2: false, DisableKeepAlives: true}
