@@ -1,7 +1,7 @@
 package bundle
 
 // _redirects and _headers (Cloudflare's static-assets control files,
-// ADR-static-assets): parsed here, once, for tw (which reports a bad line
+// ADR-050): parsed here, once, for tw (which reports a bad line
 // before it uploads) and hostd (which hands the compiled rules to the
 // router Worker, hostd/gen/js/assets.js). Patterns compile to JavaScript
 // regular expressions: `*` is a splat (any characters, `/` too, captured as

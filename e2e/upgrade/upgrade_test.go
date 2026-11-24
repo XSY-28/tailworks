@@ -241,7 +241,7 @@ export default { async fetch(req, env) { return env.COUNTER.getByName("c").fetch
 	waitLive("h1") // the previous release's host keeps working with the new mgmt
 	bump(3)
 
-	// ---- an app with wrangler "assets" (ADR-static-assets) needs the
+	// ---- an app with wrangler "assets" (ADR-050) needs the
 	// "assets" host feature: the new mgmt doesn't place it on a host that
 	// lacks it (an older hostd would load assets/*.js as modules).
 	siteFiles := map[string][]byte{

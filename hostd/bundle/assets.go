@@ -1,6 +1,6 @@
 package bundle
 
-// Static assets (wrangler "assets", ADR-static-assets): tw deploy puts the
+// Static assets (wrangler "assets", ADR-050): tw deploy puts the
 // files of assets.directory in the bundle under AssetsPrefix, outside the
 // module graph, and the resolved wrangler.jsonc keeps the "assets" settings.
 // hostd writes the files to the instance dir and serves them through a

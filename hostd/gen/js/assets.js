@@ -1,4 +1,4 @@
-// The static assets router Worker (wrangler "assets", ADR-static-assets).
+// The static assets router Worker (wrangler "assets", ADR-050).
 // Generated per deployment by hostd/gen/assets.go: one workerd service,
 // "assets", with the deployment's files on a read-only disk service
 // (env.FILES) and a manifest of their ETags. It follows Cloudflare's asset

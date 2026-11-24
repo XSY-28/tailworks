@@ -1,4 +1,4 @@
-// Static assets in front of the app's Worker (ADR-static-assets): the
+// Static assets in front of the app's Worker (ADR-050): the
 // tenant service's default export is withAssets(<wrapped app handler>).
 // A GET or HEAD to the workload asks the assets router (js/assets.js) first;
 // a file or redirect is the answer, a miss runs the app as before. Cron

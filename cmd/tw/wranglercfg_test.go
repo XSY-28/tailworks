@@ -153,7 +153,7 @@ func TestWranglerWarnings(t *testing.T) {
 		"kv_namespaces": []any{map[string]any{"binding": "KV", "id": "k"}},
 		"r2_buckets":    []any{map[string]any{"binding": "BUCKET", "bucket_name": "b"}},
 		"ai":            map[string]any{"binding": "AI"},
-		// Static assets (ADR-static-assets): no line; Workers Sites still has one.
+		// Static assets (ADR-050): no line; Workers Sites still has one.
 		"assets":        map[string]any{"directory": "public"},
 		"site":          map[string]any{"bucket": "./public"},
 		"build":         map[string]any{"command": "npm run build"},

@@ -1,8 +1,8 @@
-# ADR-static-assets: wrangler `assets` are served by a generated router Worker in front of the app, from files in the bundle
+# ADR-050: wrangler `assets` are served by a generated router Worker in front of the app, from files in the bundle
 
 **Date:** 2026-11-23
-**Status:** Proposed (issue #278; built on branch `static-assets-278`).
-Number it when it merges (AGENTS.md rule 5).
+**Status:** Accepted (2026-11-23; issue #278, built on branch
+`static-assets-278`). Drafted as `ADR-static-assets`.
 
 **Context.**
 

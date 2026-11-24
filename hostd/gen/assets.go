@@ -1,6 +1,6 @@
 package gen
 
-// Static assets (wrangler "assets", ADR-static-assets). For an app with
+// Static assets (wrangler "assets", ADR-050). For an app with
 // assets the instance gets:
 //
 //	assets/<path>              the files (read-only disk service "assets-disk")

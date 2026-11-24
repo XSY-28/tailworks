@@ -1,6 +1,6 @@
 package main
 
-// Static assets (wrangler "assets", ADR-static-assets): tw deploy and tw
+// Static assets (wrangler "assets", ADR-050): tw deploy and tw
 // dev read assets.directory and put its files in the bundle under
 // bundle.AssetsPrefix, outside the module graph. hostd serves them through
 // a generated router Worker (hostd/gen/assets.go). docs/wrangler.md#assets.

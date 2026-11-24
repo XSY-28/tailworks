@@ -4,9 +4,8 @@ Earlier: static assets (wrangler `assets`, issue #278) built; `static-site` temp
 
 # Static assets (`assets`), issue #278
 
-Design: `docs/design/adr/static-assets.md` (`ADR-static-assets`, Proposed;
-number it when merging, AGENTS.md rule 5. `docs:TestADRIndex` fails in CI
-until it is numbered).
+Design: `docs/design/adr/050-static-assets.md` (ADR-050, numbered in the
+merging PR; drafted as `ADR-static-assets`).
 
 ## What's built
 

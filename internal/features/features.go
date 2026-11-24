@@ -21,7 +21,7 @@ import (
 // is its own feature: "d1", "kv", "r2", …
 const (
 	// Assets is wrangler "assets": static files served by a generated
-	// router Worker (ADR-static-assets). An older hostd would load the
+	// router Worker (ADR-050). An older hostd would load the
 	// bundle's assets/ files as modules, or not serve them.
 	Assets = "assets"
 	// Queues is queue producers and consumers (ADR-039).
