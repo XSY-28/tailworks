@@ -164,6 +164,24 @@ limit is `429 rate_limited` ([limits.md](limits.md#management-api)).
   `tw up --worker-internet=off` (`tw-hostd -worker-internet=off` on a host
   added with `tw host add`) turns it off for a whole host. A refused
   destination is `internet_egress_unavailable`.
+- **What a workload can do with the host's address.** Since ADR-052,
+  `connect()` (and `node:net`, and the Node tier's CONNECT) reaches any
+  public address on any TCP port, from the host's own address, and the
+  destination can't tell tenants on one host apart: whatever a workload
+  sends, the operator's address takes the blame for. The controls are
+  `tailnet.egress.internet: false` or a list, per workload, and
+  `-worker-internet=off` per host. Two things are bounded by default:
+  **TCP port 25 is refused** (`internet_port_refused`, audited as `deny`),
+  so a prompt-injected agent can't relay mail as the operator unless the
+  workload lists the relay with the port (`["smtp.example.com:25"]`;
+  submission ports 465 and 587 stay open); and an object has at most 256
+  open sockets. **Not bounded:** how many flows or `fetch()` calls a
+  workload starts per unit of time
+  ([limits.md](limits.md#limits-that-dont-exist)). A workload that is
+  allowed internet egress can scan, stuff credentials or flood from the
+  host's address until it is killed; the audit trail (every TCP flow,
+  the first `fetch()` per destination, every refusal) records it
+  afterwards.
 - **The SSRF guard always applies.** netd refuses loopback, private
   (RFC 1918, ULA), link-local (including `169.254.169.254` and other cloud
   metadata), CGNAT `100.64.0.0/10` and the tailnet ranges, the host's own

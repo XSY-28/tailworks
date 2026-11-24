@@ -29,6 +29,11 @@ const (
 	// with tailnet.egress.via "exit-node" needs it. It depends on the
 	// host's flags, not its build, so hostd adds it to Host() itself.
 	InternetExitNode = "internet-exit-node"
+	// InternetPorts is a tailnet.egress.internet entry that names a port
+	// ("smtp.example.com:25"), the override of the internet port policy
+	// (ADR-052 follow-up, 2026-11-24). An older hostd reads such an entry
+	// as a host name that matches nothing.
+	InternetPorts = "internet-ports"
 	// Queues is queue producers and consumers (ADR-039).
 	Queues = "queues"
 	// ServiceBindings is wrangler "services" (ADR-053). An
@@ -50,6 +55,7 @@ const (
 func Host() []string {
 	out := []string{
 		Assets,
+		InternetPorts,
 		Queues,
 		ServiceBindings,
 		Telemetry,
@@ -78,6 +84,9 @@ func Required(app *bundle.App) []string {
 	}
 	if app.Internet.Boolean() {
 		out = append(out, WorkerInternet)
+	}
+	if app.Internet.NamesPort() {
+		out = append(out, InternetPorts)
 	}
 	if len(app.Services) > 0 {
 		out = append(out, ServiceBindings)

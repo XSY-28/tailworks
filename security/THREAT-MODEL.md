@@ -143,11 +143,16 @@ code wins.
   ranges, the host's own addresses and translated forms are refused on the
   address actually dialled, after DNS; any forbidden answer refuses the
   name (no rebinding); special-use names are never looked up. Tailnet
-  names never reach host DNS. **Residual:** a Worker can send whatever it
-  can read on the tailnet to the internet; the host's resolver sees the
-  internet names it looks up, and tenants on one host share its cache (a
-  timing side channel); an upstream sees the host's address, so it can't
-  tell tenants on one host apart.
+  names never reach host DNS. Since ADR-052 the same path carries raw TCP
+  (`connect()`, `node:net`); TCP port 25 is refused by default unless the
+  workload's list names the destination with the port
+  (`internet_port_refused`, ADR-052 follow-up, #339). **Residual:** a
+  Worker can send whatever it can read on the tailnet to the internet; the
+  host's resolver sees the internet names it looks up, and tenants on one
+  host share its cache (a timing side channel); an upstream sees the
+  host's address, so it can't tell tenants on one host apart, and nothing
+  caps how many flows a workload opens from it per unit of time
+  (docs/limits.md "Limits that don't exist").
 
 ## 3. Attacker capabilities per tier
 
