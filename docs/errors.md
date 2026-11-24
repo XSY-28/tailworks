@@ -64,6 +64,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### bad_request
 400 · netd, mgmt, hostd, cli. **When:** a malformed body, parameter, filter or command line (the CLI uses it for every usage error: missing argument, unknown template, unreadable key file, bad `tailworks.jsonc`). **Fix:** the detail says what was wrong; `tw <command> --help` lists the flags.
 
+### binding_forbidden
+403 · hostd. **When:** a request named a service binding entrypoint or RPC method (the `Tailworks-Binding` header) but did not come from a tailworks workload or object of the target's tenant (its node has no certificate from the tenant), or it reached an object's node or a public route rather than a workload's entry node. Plain requests are not affected. **Fix:** call named entrypoints and RPC methods through a wrangler `services` binding of a workload in the same tenant ([wrangler.md](wrangler.md#service-bindings)); from anywhere else, call the target's default `fetch()` over the tailnet.
+
 ### bootstrap_failed
 502 · netd, mgmt, cli. **When:** an object's node could not be created: the control plane refused the mint (tag not owned, key invalid), the token exchange failed, or the node never joined. From `tw up`, mgmt's or the host's own node failed to join. **Fix:** check the tagOwners snippet (`policy_missing_tag_owners`), the credential (`tw doctor`), then `tw logs --component mgmt`.
 
@@ -134,7 +137,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 403 · mgmt, hostd. **When:** the caller's role is fine but the record is not its own: a host reading another host's deployment or lease, a request to a workerd instance from the wrong peer; a host node asking for the admin UI (`/ui/`); or, with the message `cross-site request refused`, a browser-originated mutation (it carried `Origin` or `Sec-Fetch-Mode`) whose `Sec-Fetch-Site` was not `same-origin`/`none`, whose `Origin` was not the request's own host and one of mgmt's own names, or which hit `/v1` without the `X-Tw-UI: 1` header (docs/ADMIN-UI.md). **Fix:** usually a bug or stale state; `tw status` and report it. For the cross-site refusal, use the admin UI from mgmt's own URL (`http(s)://tw-mgmt.<tailnet>/ui/`), never through another origin; CLI and hostd clients send none of those headers and are never affected.
 
 ### forbidden_destination
-403 · netd. **When:** egress to a destination class netd always refuses: loopback, private (RFC 1918, ULA), link-local, multicast, cloud metadata, CGNAT and tailnet addresses that aren't peers, the object itself, a sibling object on the same host, or the host (ADR-019). For internet egress this is checked on the address actually dialled, so an internet name that resolves to any such address is refused too, as is a name under a special-use suffix (`.internal`, `.local`, `.localhost`, `.lan`, …), which is never looked up. On a host with no internet path, any non-tailnet IP address. **Fix:** call tailnet peers by their tailnet name; talk to siblings through the tailnet name of another host, or `tw up --allow-sibling-egress` for dev. A service on your LAN isn't reachable as "internet": put it on the tailnet.
+403 · netd. **When:** egress to a destination class netd always refuses: loopback, private (RFC 1918, ULA), link-local, multicast, cloud metadata, CGNAT and tailnet addresses that aren't peers, the object itself, or the host (ADR-019). For internet egress this is checked on the address actually dialled, so an internet name that resolves to any such address is refused too, as is a name under a special-use suffix (`.internal`, `.local`, `.localhost`, `.lan`, …), which is never looked up. On a host with no internet path, any non-tailnet IP address. **Fix:** call tailnet peers by their tailnet name (an object on the same host is one: netd delivers the call in process). A service on your LAN isn't reachable as "internet": put it on the tailnet.
 
 ### funnel_required
 412 · cli. **When:** `tw deploy` of an app with tailworks.jsonc `"public"` routes, and the tenant policy has no `funnel` node attribute for `tag:tw-public` (ADR-029). **Fix:** add the printed `nodeAttrs` entry for `tag:tw-public` (never `tag:tw-mgmt`) and deploy again.
@@ -293,7 +296,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 429 · mgmt. **When:** the tenant's `maxObjects` is reached. **Fix:** `tw tenant set <tenant> --max-objects N`, or kill idle objects.
 
 ### peer_not_visible
-403 · netd. **When:** the destination is a tailnet name or address that is not in this node's netmap: a grant is missing, or the name does not exist (also how one tenant's objects see another tenant's nodes). A tailnet name is never looked up in host DNS. An internet name goes out the internet path instead ([`internet_egress_unavailable`](#internet_egress_unavailable) when that is off). **Fix:** add a grant from the object's tag to the destination's tag (`tw deploy` prints it), or check the name.
+403 · netd. **When:** the destination is a tailnet name or address that is not in this node's netmap: a grant is missing, or the name does not exist (also how one tenant's objects see another tenant's nodes), or, for an object on the same host, that object's packet filter does not accept this caller. A tailnet name is never looked up in host DNS. An internet name goes out the internet path instead ([`internet_egress_unavailable`](#internet_egress_unavailable) when that is off). **Fix:** add a grant from the object's tag to the destination's tag (`tw deploy` prints it), or check the name.
 
 ### plan_feature_missing
 501 · netd (SDK). **When:** the tailnet's plan or control server lacks a feature tailworks would use. **Fix:** see the message for the feature; [COMPAT.md](COMPAT.md) lists what is built.
@@ -373,6 +376,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### restore_failed
 500 · cli. **When:** `tw restore` could not save the current state first, copy the backup in, or run the restore fence. **Fix:** the message names the step. If the copy failed, `tw restore <the before-restore backup it printed> --yes` puts the old state back; then fix the cause and restore again.
 
+### rpc_not_forwardable
+Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<binding>.method(...)`) passed, or the method returned, a value Cloudflare passes by reference: a function, an `RpcTarget` or RPC stub, a `ReadableStream`/`WritableStream`, a `Request`, `Response` or `Headers`, or a value with a cycle. On tailworks the call crosses the tailnet, so only structured-clone values can. **Fix:** pass plain data; send a body with `env.<binding>.fetch()` instead of a stream ([wrangler.md](wrangler.md#service-bindings)).
+
 ### sandbox_unavailable
 409 · hostd, cli. **When:** a second tenant's process-tier workload on a host that must not be shared: no process sandbox (Linux without Landlock, or `-sandbox none`), or the tailworks user can reach a container engine socket, is in the docker/podman/lxd/incus group, or can reach the system tailscaled while a workload could use it. **Fix:** run tailworks as a dedicated user without those sockets and groups, enable Landlock, use TCP listen mode for Node apps, deploy with `"tier": "microvm"`; or (tenants NOT isolated) `tw up --insecure-shared-host`.
 
@@ -381,6 +387,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### service_failed
 500 · cli. **When:** `systemctl --user` or `launchctl` failed while installing, starting or removing the service. **Fix:** the detail has the command and its output; `systemctl --user status tw` / `launchctl print gui/$(id -u)`.
+
+### service_not_found
+404 · hostd, mgmt, platform. **When:** a service binding's target doesn't exist: the deployment declares no such binding, no workload of that name is deployed in the tenant (a binding can't name another tenant's workload), its entry node failed, or its main module doesn't export the binding's `entrypoint`. **Fix:** deploy the target workload in the same tenant (`tw ls`), or fix `services[].service` / `entrypoint` in `wrangler.jsonc` and redeploy.
 
 ### service_running
 409 · cli. **When:** tailworks runs as a service (installed by `tw up --service`) and you ran a plain `tw up`/`tw down` that would fight it. **Fix:** `tw down --service`, then `tw up` again; or manage it with `systemctl --user`.

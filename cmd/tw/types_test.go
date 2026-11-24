@@ -59,6 +59,7 @@ func TestTypesEnv(t *testing.T) {
 		"  DB: D1Database;\n",
 		"  JOBS: Queue;\n",
 		"  CHECKOUT: Workflow;\n",
+		"  AUTH: Fetcher;\n",
 		"  STRIPE_KEY: string;\n",
 		"  API_TOKEN: string;\n",
 		"  WEBHOOK_SECRET: string;\n",
@@ -67,7 +68,7 @@ func TestTypesEnv(t *testing.T) {
 			t.Errorf("%s lacks %q:\n%s", typesFile, want, got)
 		}
 	}
-	for _, bad := range []string{"AUTH", "STAGE_ONLY", "s3cret", "shop"} {
+	for _, bad := range []string{"STAGE_ONLY", "s3cret", "shop"} {
 		if strings.Contains(got, bad) {
 			t.Errorf("%s has %q:\n%s", typesFile, bad, got)
 		}

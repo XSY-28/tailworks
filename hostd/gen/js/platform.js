@@ -16,6 +16,7 @@ import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 import CFG from "tw-config.json";
 import MODULES from "tw-modules.js";
 import { deliverQueue } from "tw-queue.js";
+import { bindingCallee, setObjectEgress } from "tw-svc.js";
 
 const FACET_MODULES = MODULES;
 
@@ -192,6 +193,9 @@ export default {
         return objectStub(env, ctx, t.class, t.name).__tw_intercept(t.key, r, await hostCap(env));
       }
       case "workload": {
+        // A service binding call to a named entrypoint or an RPC method
+        // (hostd admitted it: cf.tw.binding; tw-svc.js).
+        if (t.binding) return bindingCallee(req, env, t);
         // /_tw/o/<Class>/<name>/... on the workload node reaches an object
         // before (or instead of) its own node.
         const u = new URL(req.url);
@@ -268,6 +272,7 @@ function hostFacet(h, cls) {
       env.__TW = exp.TailnetApi({ props: { kind: "object", class: cls, name } });
       for (const s of CFG.stores ?? []) env[s.binding] = exp[s.facet]({ props: s.props });
       for (const q of CFG.queues?.producers ?? []) env[q.binding] = exp.QueueFacetProxy({ props: { binding: q.binding } });
+      for (const sb of CFG.services ?? []) env[sb.binding] = exp.ServiceBinding({ props: { binding: sb.binding, class: cls, name } });
       const wrap = Object.fromEntries((CFG.stores ?? []).filter((s) => s.wrap).map((s) => [s.binding, s.wrap]));
       if (Object.keys(wrap).length) env.__TW_WRAP = wrap; // tw-rt.js puts the API around these stubs (D1)
       return {
@@ -499,24 +504,33 @@ async function sealedRequest(env, req) {
   return cf ? new Request(req, { cf }) : req;
 }
 
+// objectEgress sends a request as facet object cls/name: hostd verifies the
+// MAC, maps class+name to the object and its node, and netd dials from that
+// node. extra are platform headers set after tenant x-tw-* are stripped
+// (a service binding's, tw-svc.js).
+async function objectEgress(env, cls, name, url, init, extra = {}) {
+  const h = new Headers(init.headers);
+  for (const k of [...h.keys()]) if (k.startsWith("x-tw-") || k.startsWith("tw-") || k === "proxy-authorization") h.delete(k);
+  for (const [k, v] of Object.entries(extra)) h.set(k, v);
+  const ts = String(Date.now());
+  const nonce = crypto.randomUUID();
+  h.set("x-tw-class", cls);
+  h.set("x-tw-name", encodeURIComponent(name));
+  h.set("x-tw-ts", ts);
+  h.set("x-tw-nonce", nonce);
+  h.set("x-tw-mac", await mac(env, cls, name, [cls, name, init.method, url, ts, nonce].join("\n")));
+  // workerd's proxy-style external sends absolute-form without Host; Go's net/http rejects that.
+  h.set("host", new URL(url).host);
+  return env.NETD_EGRESS.fetch(new Request(url, { ...init, headers: h, redirect: "manual" }));
+}
+setObjectEgress(objectEgress);
+
 // Egress for a facet's fetch(). props were minted by Host_<Class>; tenant code
-// cannot change them. hostd verifies the MAC, maps class+name to the object
-// and its node, and netd dials from that node.
+// cannot change them.
 export class Egress extends WorkerEntrypoint {
   async fetch(request) {
     const { class: cls, name } = this.ctx.props;
-    const h = new Headers(request.headers);
-    for (const k of [...h.keys()]) if (k.startsWith("x-tw-") || k.startsWith("tw-") || k === "proxy-authorization") h.delete(k);
-    const ts = String(Date.now());
-    const nonce = crypto.randomUUID();
-    h.set("x-tw-class", cls);
-    h.set("x-tw-name", encodeURIComponent(name));
-    h.set("x-tw-ts", ts);
-    h.set("x-tw-nonce", nonce);
-    h.set("x-tw-mac", await mac(this.env, cls, name, [cls, name, request.method, request.url, ts, nonce].join("\n")));
-    // workerd's proxy-style external sends absolute-form without Host; Go's net/http rejects that.
-    h.set("host", new URL(request.url).host);
-    return this.env.NETD_EGRESS.fetch(new Request(request.url, { method: request.method, headers: h, body: request.body, redirect: "manual" }));
+    return objectEgress(this.env, cls, name, request.url, { method: request.method, headers: request.headers, body: request.body });
   }
   // Stock connect() from a facet: as the object's own node.
   async connect(socket) {
@@ -524,6 +538,9 @@ export class Egress extends WorkerEntrypoint {
     await tcpServe(socket, (dst) => tcpDial(this.env, this.env.NETD_EGRESS, dst, { class: cls, name }, false));
   }
 }
+
+// Service bindings (tw-svc.js, ADR-053).
+export { ServiceBinding } from "tw-svc.js";
 
 // WorkloadEgress is the tenant service's globalOutbound: the Worker and
 // plain-DO objects egress as the workload node.

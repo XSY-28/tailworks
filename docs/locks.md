@@ -140,11 +140,9 @@ calls are `acquire`, `tryAcquire`, `renew`, `release` and `status`.
 - Put the `Lock` class in the same app (Pattern 1's binding) when only that
   app takes the lock.
 - Deploy it as its own workload when other workloads, replicas or machines
-  take it. Calls from a workload **on the same host** over the tailnet are
-  refused today: netd blocks sibling hairpins (`forbidden_destination`,
-  ADR-019). So run the lock workload on a host its clients aren't on
-  (`tw deploy --host`), or use `tw up --allow-sibling-egress` on a
-  single-host setup.
+  take it. A client workload on the **same host** reaches it as one on
+  another host does: netd delivers the call in process after the same
+  netmap and packet-filter checks (RFC §4.8), so it still needs the grant.
 
 ## Fencing tokens
 

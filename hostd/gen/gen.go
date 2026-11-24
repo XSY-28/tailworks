@@ -210,7 +210,8 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	}
 	// Tenant service main module.
 	var ms strings.Builder
-	fmt.Fprintf(&ms, "import * as T from %s;\nimport { wrapHandler, wrapPlainClass, wrapWorkflowClass } from \"./__tw_rt.js\";\nconst B = %s;\nexport * from %s;\n", jsq(mainImport), bjs, jsq(mainImport))
+	fmt.Fprintf(&ms, "import * as T from %s;\nimport { wrapHandler, wrapPlainClass, wrapWorkflowClass, bindingDispatcher } from \"./__tw_rt.js\";\nconst B = %s;\nexport * from %s;\n", jsq(mainImport), bjs, jsq(mainImport))
+	ms.WriteString(serviceMainExports())                         // services.go
 	ms.WriteString(assetsMain(app, "wrapHandler(T.default, B)")) // assets.go
 	ms.WriteString(workflowsMainExports(app))
 	for _, c := range plains {
@@ -286,7 +287,10 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 		Queues queueCfg `json:"queues"`
 
 		Workflows []workflowCfg `json:"workflows"`
-	}{o.DeploymentID, o.Workload, app.CompatDate, tenantFlags(app.CompatFlags), []bindCfg{}, map[string]classCfg{}, app.Vars, nonNil(app.Crons), storeConfig(app), queueConfig(app), workflowsConfig(app)}
+
+		// Services are the service bindings a facet's env gets (services.go).
+		Services []serviceCfg `json:"services"`
+	}{o.DeploymentID, o.Workload, app.CompatDate, tenantFlags(app.CompatFlags), []bindCfg{}, map[string]classCfg{}, app.Vars, nonNil(app.Crons), storeConfig(app), queueConfig(app), workflowsConfig(app), serviceConfig(app)}
 	cfg.Vars = varsWithSecrets(cfg.Vars, app.Secrets)
 	if cfg.Vars == nil {
 		cfg.Vars = map[string]json.RawMessage{}
@@ -326,6 +330,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 		"platform.js": pjs, "tw-config.json": string(cfgb), "tw-modules.js": tm.String(),
 		"__tw_facet.js": fs.String(), "__tw_main.js": ms.String(), "__tw_rt.js": runtimeJS, "deny.js": denyJS,
 		"tw-queue.js": queueJS,
+		"tw-svc.js":   svcJS, // services.go
 	} {
 		if err := write(name, []byte(b)); err != nil {
 			return nil, err
@@ -381,6 +386,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	c.WriteString("    (name = \"__tw_facet.js.txt\", text = embed \"__tw_facet.js\"),\n")
 	c.WriteString("    (name = \"__tw_rt.js.txt\", text = embed \"__tw_rt.js\"),\n")
 	c.WriteString("    (name = \"tw-queue.js\", esModule = embed \"tw-queue.js\"),\n")
+	c.WriteString("    (name = \"tw-svc.js\", esModule = embed \"tw-svc.js\"),\n")
 	c.WriteString(storeModules(app))
 	for _, n := range shimNames {
 		fmt.Fprintf(&c, "    (name = %s, text = embed %s),\n", cq(n+".txt"), cq(n))
@@ -406,6 +412,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	}
 	c.WriteString(storePlatformBindings(app))
 	c.WriteString(queuePlatformBindings(app))
+	c.WriteString(servicePlatformBindings()) // services.go
 	for _, cl := range plains {
 		fmt.Fprintf(&c, "    (name = %s, durableObjectNamespace = (className = %s, serviceName = \"tenant\")),\n", cq("NS_"+cl), cq(cl))
 	}
@@ -471,6 +478,7 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 	c.WriteString(secretBindings(app))
 	c.WriteString(storeTenantBindings(app))
 	c.WriteString(queueTenantBindings(app))
+	c.WriteString(serviceTenantBindings(app)) // services.go
 	c.WriteString(assetsTenantBindings(app))
 	c.WriteString("  ],\n  globalOutbound = (name = \"platform\", entrypoint = \"WorkloadEgress\"),\n" + tailsLine + ");\n\n")
 	c.WriteString(workflowsWorker(app))

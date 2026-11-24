@@ -80,8 +80,8 @@ type Config struct {
 	// sandbox, still serve process-tier workloads of several tenants
 	// (incl. Node-tier apps whose egress is then unenforced, RT-08).
 	InsecureSharedHost bool `json:"insecureSharedHost,omitempty"`
-	// AllowSiblingEgress: objects may reach other objects on this host over
-	// the tailnet (single-host tests/demos).
+	// AllowSiblingEgress: objects dial other objects on this host over
+	// WireGuard instead of netd's in-process hop (tests).
 	AllowSiblingEgress bool `json:"allowSiblingEgress,omitempty"`
 	// Fast identity (STATUS.md "Fast identity"). WarmKeys and PoolNodes are
 	// pointers so state written before they existed (nil) keeps the

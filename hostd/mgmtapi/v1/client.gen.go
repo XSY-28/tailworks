@@ -516,6 +516,7 @@ const (
 	ErrorCodeReservedTag             ErrorCode = "reserved_tag"
 	ErrorCodeServiceAPIFailed        ErrorCode = "service_api_failed"
 	ErrorCodeServiceConflict         ErrorCode = "service_conflict"
+	ErrorCodeServiceNotFound         ErrorCode = "service_not_found"
 	ErrorCodeSharedOwnerTag          ErrorCode = "shared_owner_tag"
 	ErrorCodeSpawnBudgetExceeded     ErrorCode = "spawn_budget_exceeded"
 	ErrorCodeStorageQuotaExceeded    ErrorCode = "storage_quota_exceeded"
@@ -679,6 +680,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeServiceAPIFailed:
 		return true
 	case ErrorCodeServiceConflict:
+		return true
+	case ErrorCodeServiceNotFound:
 		return true
 	case ErrorCodeSharedOwnerTag:
 		return true
@@ -2338,6 +2341,7 @@ type Error struct {
 	// | `unknown_secret` | 404 | the workload has no secret of that name |
 	// | `unknown_store` | 404 | the workload has no store of that kind and name |
 	// | `unknown_queue` | 404 | the tenant has no queue of that name |
+	// | `service_not_found` | 404 | a workload's service binding is not declared, or its target workload was never deployed in the tenant |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
@@ -2441,6 +2445,7 @@ type Error struct {
 // | `unknown_secret` | 404 | the workload has no secret of that name |
 // | `unknown_store` | 404 | the workload has no store of that kind and name |
 // | `unknown_queue` | 404 | the tenant has no queue of that name |
+// | `service_not_found` | 404 | a workload's service binding is not declared, or its target workload was never deployed in the tenant |
 // | `exists` | 409 | create of an existing ID |
 // | `lease_lost` | 409 | epoch/holder fence failed |
 // | `lease_held` | 409 | another host holds the lease |
@@ -2663,6 +2668,7 @@ type HostDrainResult struct {
 		// | `unknown_secret` | 404 | the workload has no secret of that name |
 		// | `unknown_store` | 404 | the workload has no store of that kind and name |
 		// | `unknown_queue` | 404 | the tenant has no queue of that name |
+		// | `service_not_found` | 404 | a workload's service binding is not declared, or its target workload was never deployed in the tenant |
 		// | `exists` | 409 | create of an existing ID |
 		// | `lease_lost` | 409 | epoch/holder fence failed |
 		// | `lease_held` | 409 | another host holds the lease |
@@ -3973,6 +3979,30 @@ type SelfInfo struct {
 	Transport *Transport `json:"transport,omitempty"`
 }
 
+// ServiceBindingTarget Where a service binding's calls go (ADR-053).
+type ServiceBindingTarget struct {
+	Binding string `json:"binding"`
+
+	// Entrypoint The named export the binding calls; absent for the default export.
+	Entrypoint *string `json:"entrypoint,omitempty"`
+	Hostname   string  `json:"hostname"`
+
+	// MagicDNS The entry node's MagicDNS name (no trailing dot).
+	MagicDNS string `json:"magicDNS"`
+
+	// ObjectID The target's entry node object.
+	ObjectID string `json:"objectID"`
+
+	// Service The target workload.
+	Service string `json:"service"`
+
+	// Status `pending` → `minted` → `ready`; or, for an object given a pre-joined
+	// pool node (`ObjectCreate.poolObjectID`, ADR-031), `assigned` → `ready`
+	// (never minted). Terminal: `killed` (tombstone, `410`), `failed`, and
+	// `transferred` (a `_pool` node whose node went to an object).
+	Status ObjectStatus `json:"status"`
+}
+
 // ServiceEndpoint A workload's Tailscale Service: a stable name and VIPs that survive the workload node being re-minted or moving host. Callers need a grant to the `svc:` name; control routes it to the workload node only when policy `autoApprovers.services` lets the workload tags host it.
 type ServiceEndpoint struct {
 	// Addrs The Service VIPs (on create).
@@ -4502,6 +4532,7 @@ type TombstoneError struct {
 	// | `unknown_secret` | 404 | the workload has no secret of that name |
 	// | `unknown_store` | 404 | the workload has no store of that kind and name |
 	// | `unknown_queue` | 404 | the tenant has no queue of that name |
+	// | `service_not_found` | 404 | a workload's service binding is not declared, or its target workload was never deployed in the tenant |
 	// | `exists` | 409 | create of an existing ID |
 	// | `lease_lost` | 409 | epoch/holder fence failed |
 	// | `lease_held` | 409 | another host holds the lease |
@@ -5283,6 +5314,12 @@ type ListWorkloadSecretsParams struct {
 
 	// Cursor Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetServiceBindingTargetParams defines parameters for GetServiceBindingTarget.
+type GetServiceBindingTargetParams struct {
+	// Epoch The namespace lease epoch the caller believes it holds. Fenced in the store (`409 lease_lost`).
+	Epoch Epoch `form:"epoch" json:"epoch"`
 }
 
 // ListWorkloadStoresParams defines parameters for ListWorkloadStores.
@@ -7500,6 +7537,28 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `PutWorkloadSecret` operationId).
 	PutWorkloadSecret(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, body PutWorkloadSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetServiceBindingTarget Resolve a workload's service binding to its target's entry node
+	//
+	// hostd calls this when a workload uses a service binding
+	// (`env.<binding>.fetch()` or an RPC call; ADR-053). The
+	// caller must hold the workload's lease at `epoch` (`409
+	// lease_lost`), and the workload's latest deployment must declare the
+	// binding (`404 service_not_found`). The target is the workload
+	// named by the binding's `service`, in the same tenant: there is no
+	// way to name another tenant's workload. The answer is the target's
+	// entry node (its MagicDNS name), which the call is sent to as the
+	// calling node over the tenant's tailnet (in process when it is on
+	// the same host).
+	//
+	// - `404 service_not_found`: the binding is not declared, or the
+	//   target workload was never deployed in this tenant.
+	// - `410 killed`: the target's entry node was killed.
+	// - `503 identity_pending`: the target is deployed but its entry
+	//   node has no MagicDNS name yet (retry).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/service-bindings/{binding} (the `GetServiceBindingTarget` operationId).
+	GetServiceBindingTarget(ctx context.Context, id TenantID, workload WorkloadName, binding string, params *GetServiceBindingTargetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListWorkloadStores List a workload's stores
 	//
@@ -10799,6 +10858,38 @@ func (c *Client) PutWorkloadSecretWithBody(ctx context.Context, id TenantID, wor
 // Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `PutWorkloadSecret` operationId).
 func (c *Client) PutWorkloadSecret(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, body PutWorkloadSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutWorkloadSecretRequest(c.Server, id, workload, name, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetServiceBindingTarget Resolve a workload's service binding to its target's entry node
+//
+// hostd calls this when a workload uses a service binding
+// (`env.<binding>.fetch()` or an RPC call; ADR-053). The
+// caller must hold the workload's lease at `epoch` (`409
+// lease_lost`), and the workload's latest deployment must declare the
+// binding (`404 service_not_found`). The target is the workload
+// named by the binding's `service`, in the same tenant: there is no
+// way to name another tenant's workload. The answer is the target's
+// entry node (its MagicDNS name), which the call is sent to as the
+// calling node over the tenant's tailnet (in process when it is on
+// the same host).
+//
+//   - `404 service_not_found`: the binding is not declared, or the
+//     target workload was never deployed in this tenant.
+//   - `410 killed`: the target's entry node was killed.
+//   - `503 identity_pending`: the target is deployed but its entry
+//     node has no MagicDNS name yet (retry).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/service-bindings/{binding} (the `GetServiceBindingTarget` operationId).
+func (c *Client) GetServiceBindingTarget(ctx context.Context, id TenantID, workload WorkloadName, binding string, params *GetServiceBindingTargetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetServiceBindingTargetRequest(c.Server, id, workload, binding, params)
 	if err != nil {
 		return nil, err
 	}
@@ -16333,6 +16424,77 @@ func NewPutWorkloadSecretRequestWithBody(server string, id TenantID, workload Wo
 	return req, nil
 }
 
+// NewGetServiceBindingTargetRequest constructs an http.Request for the GetServiceBindingTarget method
+func NewGetServiceBindingTargetRequest(server string, id TenantID, workload WorkloadName, binding string, params *GetServiceBindingTargetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "binding", binding, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/service-bindings/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "epoch", params.Epoch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListWorkloadStoresRequest constructs an http.Request for the ListWorkloadStores method
 func NewListWorkloadStoresRequest(server string, id TenantID, workload WorkloadName, params *ListWorkloadStoresParams) (*http.Request, error) {
 	var err error
@@ -19561,6 +19723,30 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/secrets/{name} (the `PutWorkloadSecret` operationId).
 	PutWorkloadSecretWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name SecretName, body PutWorkloadSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*PutWorkloadSecretResponse, error)
+
+	// GetServiceBindingTargetWithResponse Resolve a workload's service binding to its target's entry node
+	//
+	// hostd calls this when a workload uses a service binding
+	// (`env.<binding>.fetch()` or an RPC call; ADR-053). The
+	// caller must hold the workload's lease at `epoch` (`409
+	// lease_lost`), and the workload's latest deployment must declare the
+	// binding (`404 service_not_found`). The target is the workload
+	// named by the binding's `service`, in the same tenant: there is no
+	// way to name another tenant's workload. The answer is the target's
+	// entry node (its MagicDNS name), which the call is sent to as the
+	// calling node over the tenant's tailnet (in process when it is on
+	// the same host).
+	//
+	// - `404 service_not_found`: the binding is not declared, or the
+	//   target workload was never deployed in this tenant.
+	// - `410 killed`: the target's entry node was killed.
+	// - `503 identity_pending`: the target is deployed but its entry
+	//   node has no MagicDNS name yet (retry).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/service-bindings/{binding} (the `GetServiceBindingTarget` operationId).
+	GetServiceBindingTargetWithResponse(ctx context.Context, id TenantID, workload WorkloadName, binding string, params *GetServiceBindingTargetParams, reqEditors ...RequestEditorFn) (*GetServiceBindingTargetResponse, error)
 
 	// ListWorkloadStoresWithResponse List a workload's stores
 	//
@@ -27962,6 +28148,131 @@ func (r PutWorkloadSecretResponse) ContentType() string {
 	return ""
 }
 
+// GetServiceBindingTargetResponse400Headers the declared response headers of an HTTP 400 response for GetServiceBindingTarget
+type GetServiceBindingTargetResponse400Headers struct {
+	TwError *string
+}
+
+// GetServiceBindingTargetResponse403Headers the declared response headers of an HTTP 403 response for GetServiceBindingTarget
+type GetServiceBindingTargetResponse403Headers struct {
+	TwError *string
+}
+
+// GetServiceBindingTargetResponse409Headers the declared response headers of an HTTP 409 response for GetServiceBindingTarget
+type GetServiceBindingTargetResponse409Headers struct {
+	TwError *string
+}
+
+// GetServiceBindingTargetResponse410Headers the declared response headers of an HTTP 410 response for GetServiceBindingTarget
+type GetServiceBindingTargetResponse410Headers struct {
+	TwError *string
+}
+
+// GetServiceBindingTargetResponseDefaultHeaders the declared response headers of an HTTP default response for GetServiceBindingTarget
+type GetServiceBindingTargetResponseDefaultHeaders struct {
+	TwError *string
+}
+
+type GetServiceBindingTargetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServiceBindingTarget
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *LeaseLost
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *Gone
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *GetServiceBindingTargetResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *GetServiceBindingTargetResponse403Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *GetServiceBindingTargetResponse409Headers
+	// Headers410 the parsed response headers for an HTTP 410 response
+	Headers410 *GetServiceBindingTargetResponse410Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *GetServiceBindingTargetResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetServiceBindingTargetResponse) GetJSON200() *ServiceBindingTarget {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetServiceBindingTargetResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetServiceBindingTargetResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetServiceBindingTargetResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r GetServiceBindingTargetResponse) GetJSON409() *LeaseLost {
+	return r.JSON409
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r GetServiceBindingTargetResponse) GetJSON410() *Gone {
+	return r.JSON410
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r GetServiceBindingTargetResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetServiceBindingTargetResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetServiceBindingTargetResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetServiceBindingTargetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetServiceBindingTargetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetServiceBindingTargetResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // ListWorkloadStoresResponse400Headers the declared response headers of an HTTP 400 response for ListWorkloadStores
 type ListWorkloadStoresResponse400Headers struct {
 	TwError *string
@@ -32472,6 +32783,36 @@ func (c *ClientWithResponses) PutWorkloadSecretWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParsePutWorkloadSecretResponse(rsp)
+}
+
+// GetServiceBindingTargetWithResponse Resolve a workload's service binding to its target's entry node
+//
+// hostd calls this when a workload uses a service binding
+// (`env.<binding>.fetch()` or an RPC call; ADR-053). The
+// caller must hold the workload's lease at `epoch` (`409
+// lease_lost`), and the workload's latest deployment must declare the
+// binding (`404 service_not_found`). The target is the workload
+// named by the binding's `service`, in the same tenant: there is no
+// way to name another tenant's workload. The answer is the target's
+// entry node (its MagicDNS name), which the call is sent to as the
+// calling node over the tenant's tailnet (in process when it is on
+// the same host).
+//
+//   - `404 service_not_found`: the binding is not declared, or the
+//     target workload was never deployed in this tenant.
+//   - `410 killed`: the target's entry node was killed.
+//   - `503 identity_pending`: the target is deployed but its entry
+//     node has no MagicDNS name yet (retry).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/service-bindings/{binding} (the `GetServiceBindingTarget` operationId).
+func (c *ClientWithResponses) GetServiceBindingTargetWithResponse(ctx context.Context, id TenantID, workload WorkloadName, binding string, params *GetServiceBindingTargetParams, reqEditors ...RequestEditorFn) (*GetServiceBindingTargetResponse, error) {
+	rsp, err := c.GetServiceBindingTarget(ctx, id, workload, binding, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetServiceBindingTargetResponse(rsp)
 }
 
 // ListWorkloadStoresWithResponse List a workload's stores
@@ -41086,6 +41427,134 @@ func ParsePutWorkloadSecretResponse(rsp *http.Response) (*PutWorkloadSecretRespo
 		response.Headers404 = &headers
 	case true:
 		var headers PutWorkloadSecretResponseDefaultHeaders
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetServiceBindingTargetResponse parses an HTTP response from a GetServiceBindingTargetWithResponse call
+func ParseGetServiceBindingTargetResponse(rsp *http.Response) (*GetServiceBindingTargetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetServiceBindingTargetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServiceBindingTarget
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest LeaseLost
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest Gone
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 400:
+		var headers GetServiceBindingTargetResponse400Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers GetServiceBindingTargetResponse403Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 409:
+		var headers GetServiceBindingTargetResponse409Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers409 = &headers
+	case rsp.StatusCode == 410:
+		var headers GetServiceBindingTargetResponse410Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers410 = &headers
+	case true:
+		var headers GetServiceBindingTargetResponseDefaultHeaders
 		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {

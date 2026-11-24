@@ -23,6 +23,9 @@ var CATALOG = Object.freeze({
   namespace_conflict: { status: 409, title: "mgmt returned another identity's object for this workload's class + object name (an invariant violation; tailworks fails closed rather than share a node)" },
   bad_request: { status: 400, title: "the request is malformed" },
   unknown_object: { status: 404, title: "no such object" },
+  service_not_found: { status: 404, title: "a service binding's target workload (or its entrypoint) does not exist in this tenant" },
+  binding_forbidden: { status: 403, title: "a named entrypoint or RPC method was called by something that is not a tailworks node of the same tenant" },
+  rpc_not_forwardable: { status: 400, title: "an RPC argument or result is passed by reference on Cloudflare (a function, RpcTarget, stream, Request or Response) and cannot cross a service binding" },
   dial_failed: { status: 502, title: "the tailnet dial failed" },
   upstream_unavailable: { status: 503, title: "the platform upstream is unavailable" },
   hostd_unavailable: { status: 503, title: "the host agent is unavailable" },
@@ -1736,7 +1739,70 @@ function wrapHandler(H, bindings) {
   }
   return out;
 }
+var wrappedEntrypoints = /* @__PURE__ */ new WeakMap();
+function callCtx(ctx, cf) {
+  if (!ctx || typeof ctx !== "object") return ctx;
+  return new Proxy(ctx, {
+    get(t, k) {
+      if (k === "cf") return cf;
+      const v = Reflect.get(t, k, t);
+      return typeof v === "function" ? v.bind(t) : v;
+    }
+  });
+}
+function bindingDispatcher(T, bindings) {
+  const target = (ep) => {
+    const H = ep ? T[ep] : T.default;
+    if (!H || typeof H !== "function" && typeof H !== "object") {
+      throw new TailnetError("service_not_found", ep ? `this workload's main module exports no entrypoint ${ep}` : "this workload has no default export");
+    }
+    let W = wrappedEntrypoints.get(H);
+    if (!W) {
+      W = wrapHandler(H, bindings);
+      wrappedEntrypoints.set(H, W);
+    }
+    return { H, W, name: ep || "default" };
+  };
+  return {
+    async fetch(ctx, env, req) {
+      const ep = String(req?.cf?.tw?.binding?.entrypoint ?? "");
+      let t;
+      try {
+        t = target(ep);
+      } catch (e) {
+        return e.toResponse();
+      }
+      if (typeof t.H === "function") {
+        if (typeof t.W.prototype?.fetch !== "function") return new TailnetError("service_not_found", `entrypoint ${t.name} has no fetch() handler`).toResponse();
+        const inst = new t.W(ctx, env);
+        return inst.fetch(req);
+      }
+      if (typeof t.W.fetch !== "function") return new TailnetError("service_not_found", `entrypoint ${t.name} has no fetch() handler`).toResponse();
+      return t.W.fetch(req, env, ctx);
+    },
+    async call(ctx, env, ep, method, args, cf) {
+      const tw = env?.__TW;
+      const sealed = await sealedRequest(tw, { cf });
+      const scf = sealed?.cf ?? {};
+      const t = target(ep);
+      if (typeof t.H !== "function") throw new TypeError(`entrypoint ${t.name} is not a WorkerEntrypoint class; RPC needs one`);
+      const cctx = callCtx(ctx, scf);
+      const inst = new t.W(cctx, env);
+      const ticket = typeof scf?.tw?.ticket === "string" && scf.tw.ticket ? scf.tw.ticket : void 0;
+      if (ticket) {
+        inst.env = guardEnv(env, bindings, "tailnet", admitter(tw, { ticket }));
+        if (tw) define(cctx, createTailnetContext(tw, inst.env, bindings, void 0, ticket));
+      }
+      const f = typeof method === "string" && !(method in Object.prototype) ? inst[method] : void 0;
+      if (typeof f !== "function" || HANDLER_METHODS.includes(method) || method === "constructor") {
+        throw new TypeError(`The RPC receiver does not implement the method "${method}".`);
+      }
+      return await f.apply(inst, args);
+    }
+  };
+}
 export {
+  bindingDispatcher,
   createTailnetContext,
   guardTailnetEnv,
   isApprovalType,
