@@ -160,6 +160,27 @@ tw agent setup    # installs skills for Claude Code, Codex, Cursor, Gemini CLI, 
 Then ask your agent to "build me an MCP server and run it on tw". Every
 command takes `--json`. Details: [docs/agents.md](docs/agents.md).
 
+## What you should know before you run this
+
+- **Isolation.** By default each workload is a workerd process in an OS
+  sandbox (Seatbelt on macOS, Landlock and seccomp on Linux). That confines
+  a buggy app. It is not a VM boundary, so don't run code you don't trust
+  on it; for that, use the opt-in microVM tier (one VM per workload).
+  [Isolation tiers](docs/security-model.md#isolation-tiers) ·
+  [threat model](security/THREAT-MODEL.md)
+- **Durability.** A Durable Object's storage lives on one host's disk and
+  is not replicated; a workload moved to another host starts its objects
+  empty. So do R2 object bytes with the default file backend. KV and D1
+  writes are also journaled in the control plane, so they survive a move,
+  but on a default install the control plane is that same machine.
+  [Back up the state directory](docs/INSTALL.md#back-up-and-restore).
+  Replication is being explored
+  ([#297](https://github.com/rosskukulinski/tailworks/issues/297)).
+- **Identity.** Callers are identified by WireGuard and the tailnet's WhoIs,
+  never by tokens. tailworks never uses your machine's own Tailscale: it
+  mints its own nodes with an OAuth client scoped to `tag:tw`.
+  [Identity](docs/security-model.md#identity-wireguard-not-tokens)
+
 ## Compatibility at a glance
 
 What of Cloudflare Workers works on tailworks, surface by surface. Details
@@ -240,6 +261,7 @@ No telemetry. The CLI checks GitHub for a new release at most once a day
 
 - [All docs, by role and task](docs/README.md) ·
   [CLI reference](docs/cli.md) · [Concepts](docs/concepts.md) ·
+  [Alternatives](docs/alternatives.md) ·
   [Install, upgrade, back up](docs/INSTALL.md) ·
   [Troubleshooting](docs/troubleshooting.md) · [Errors](docs/errors.md)
 - [`tailworks.jsonc`](docs/tailworks-jsonc.md) · [Secrets](docs/secrets.md) ·

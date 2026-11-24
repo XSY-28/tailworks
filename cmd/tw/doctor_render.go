@@ -67,6 +67,7 @@ var doctorMetas = map[string]doctorMeta{
 	"landlock":                   {group: "Linux host", label: "Landlock"},
 	"microvm_tier":               {group: "Linux host", label: "microVM tier"},
 	"mint_mode":                  {group: "Tailnet", label: "mint", fact: mintFact},
+	"node_budget":                {group: "Tailnet", label: "node budget", fact: nodeBudgetFact}, // nodebudget.go
 	"node_egress":                {group: "Isolation", label: "Node egress"},
 	"public_ingress":             {group: "Tailnet", label: "public ingress"},
 	"sandbox":                    {group: "Isolation", label: "sandbox", fact: submatch(reSandboxKind)},
