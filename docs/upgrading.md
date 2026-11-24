@@ -115,6 +115,33 @@ When `tw doctor` reports its protocol out of range, run
 the one before it, so hostd and the helper can be upgraded in either order
 within one release line.
 
+### Installed with npm
+
+If `tw` came from npm (`npm install -g tailworks`, or `npx tailworks`;
+[INSTALL.md](INSTALL.md#install-with-npm)), npm owns the binaries, so
+`tw upgrade` refuses with `npm_install` and `tw version --check` prints the
+npm command. Upgrade with npm instead:
+
+```sh
+tw backup                                            # npm has no rollback: keep a way back
+tw down
+npm install -g tailworks@latest                      # or tailworks@0.5.0
+tw up                                                # starts the new release (and the service, if it was one)
+```
+
+The state dir, and with it the store, custody and node state, isn't
+touched. The new tw-mgmt runs its migrations when it starts, as it does
+after `tw upgrade`. Check `tw upgrade --plan` on a tarball install, or the
+release notes, for contract migrations and breaking changes first.
+
+To go back, `tw down`, then `npm install -g tailworks@<previous>`. If a
+migration ran, restore the backup (`tw restore <backup>`), then `tw up`.
+From `npx`, `npx tailworks@latest …` always runs the newest release.
+`tw down` first, so the daemons of the old one aren't left running.
+
+`tw-hostd -self-upgrade` refuses on an npm install for the same reason.
+A remote host that should upgrade itself needs the release tarball.
+
 ## A fleet (tw-mgmt replicas and remote hosts)
 
 From a machine linked to tw-mgmt (`tw link`), or with `--fleet`:

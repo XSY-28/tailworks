@@ -2020,6 +2020,61 @@ paths:
         "409": { $ref: "#/components/responses/LeaseLost" }
         default: { $ref: "#/components/responses/Error" }
 
+  /v1/tenants/{id}/workloads/{workload}/service-bindings/{binding}:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - name: binding
+        in: path
+        required: true
+        description: The env name of a wrangler `services` entry of the workload's latest deployment.
+        schema: { type: string, pattern: "^[A-Za-z_$][A-Za-z0-9_$]{0,127}$" }
+    get:
+      tags: [objects]
+      operationId: GetServiceBindingTarget
+      summary: Resolve a workload's service binding to its target's entry node
+      description: |
+        hostd calls this when a workload uses a service binding
+        (`env.<binding>.fetch()` or an RPC call; ADR-053). The
+        caller must hold the workload's lease at `epoch` (`409
+        lease_lost`), and the workload's latest deployment must declare the
+        binding (`404 service_not_found`). The target is the workload
+        named by the binding's `service`, in the same tenant: there is no
+        way to name another tenant's workload. The answer is the target's
+        entry node (its MagicDNS name), which the call is sent to as the
+        calling node over the tenant's tailnet (in process when it is on
+        the same host).
+
+        - `404 service_not_found`: the binding is not declared, or the
+          target workload was never deployed in this tenant.
+        - `410 killed`: the target's entry node was killed.
+        - `503 identity_pending`: the target is deployed but its entry
+          node has no MagicDNS name yet (retry).
+      x-tw-role: host
+      parameters:
+        - $ref: "#/components/parameters/epoch"
+      responses:
+        "200":
+          description: The target.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceBindingTarget" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: "`service_not_found`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409": { $ref: "#/components/responses/LeaseLost" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "503":
+          description: "`identity_pending`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   /v1/tenants/{id}/telemetry:
     parameters:
       - $ref: "#/components/parameters/tenantID"
@@ -4440,6 +4495,7 @@ components:
         | `unknown_secret` | 404 | the workload has no secret of that name |
         | `unknown_store` | 404 | the workload has no store of that kind and name |
         | `unknown_queue` | 404 | the tenant has no queue of that name |
+        | `service_not_found` | 404 | a workload's service binding is not declared, or its target workload was never deployed in the tenant |
         | `exists` | 409 | create of an existing ID |
         | `lease_lost` | 409 | epoch/holder fence failed |
         | `lease_held` | 409 | another host holds the lease |
@@ -4528,6 +4584,7 @@ components:
         - unknown_secret
         - unknown_store
         - unknown_queue
+        - service_not_found
         - exists
         - lease_lost
         - lease_held
@@ -6344,6 +6401,18 @@ components:
           type: object
           additionalProperties: { type: string, format: password }
         signals: { type: array, items: { $ref: "#/components/schemas/TelemetrySignal" } }
+    ServiceBindingTarget:
+      type: object
+      description: Where a service binding's calls go (ADR-053).
+      required: [binding, service, objectID, hostname, magicDNS, status]
+      properties:
+        binding: { type: string }
+        service: { type: string, description: The target workload. }
+        entrypoint: { type: string, description: The named export the binding calls; absent for the default export. }
+        objectID: { type: string, description: The target's entry node object. }
+        hostname: { type: string }
+        magicDNS: { type: string, description: The entry node's MagicDNS name (no trailing dot). }
+        status: { $ref: "#/components/schemas/ObjectStatus" }
     TelemetryGrant:
       type: object
       description: A fenced release of the tenant's OTLP export config. Never logged.

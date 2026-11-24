@@ -14,6 +14,8 @@ var CATALOG = Object.freeze({
   identity_pending: { status: 503, title: "the object's node is not ready yet" },
   derp_unreachable: { status: 502, title: "no direct path and no reachable DERP relay" },
   plan_feature_missing: { status: 501, title: "the tailnet's plan or control server lacks a feature tailworks can use" },
+  not_supported: { status: 501, title: "tailworks doesn't support this call here (yet)" },
+  socket_limit: { status: 429, title: "too many open sockets for this object" },
   killed: { status: 410, title: "the object was killed" },
   object_killed: { status: 410, title: "a new request reached a killed object (its node's tombstone answered)" },
   no_identity: { status: 401, title: "the request carries no verified tailnet caller" },
@@ -21,6 +23,9 @@ var CATALOG = Object.freeze({
   namespace_conflict: { status: 409, title: "mgmt returned another identity's object for this workload's class + object name (an invariant violation; tailworks fails closed rather than share a node)" },
   bad_request: { status: 400, title: "the request is malformed" },
   unknown_object: { status: 404, title: "no such object" },
+  service_not_found: { status: 404, title: "a service binding's target workload (or its entrypoint) does not exist in this tenant" },
+  binding_forbidden: { status: 403, title: "a named entrypoint or RPC method was called by something that is not a tailworks node of the same tenant" },
+  rpc_not_forwardable: { status: 400, title: "an RPC argument or result is passed by reference on Cloudflare (a function, RpcTarget, stream, Request or Response) and cannot cross a service binding" },
   dial_failed: { status: 502, title: "the tailnet dial failed" },
   upstream_unavailable: { status: 503, title: "the platform upstream is unavailable" },
   hostd_unavailable: { status: 503, title: "the host agent is unavailable" },
@@ -991,13 +996,103 @@ async function tracedStubFetch(cls, name, args, call) {
     throw e;
   }
 }
+function startChild(name, attrs) {
+  const st = als?.getStore();
+  if (!st) return void 0;
+  const rec = { traceId: st.traceId, spanId: newSpanId(), parentSpanId: st.spanId, name, start: Date.now(), end: 0, error: false, attrs };
+  return {
+    traceparent: `00-${st.traceId}-${rec.spanId}-${st.flags}`,
+    finish(error) {
+      rec.end = Date.now();
+      rec.error = error;
+      if (st.spans.length < MAX_SPANS) st.spans.push(rec);
+    }
+  };
+}
+async function runEntry(parent, name, attrs, fn, flush) {
+  if (!als) return fn();
+  const tp = parseTraceparent(parent);
+  const st = { traceId: tp?.traceId ?? randHex(16), spanId: newSpanId(), flags: tp?.flags ?? "01", incoming: "", spans: [] };
+  const rec = { traceId: st.traceId, spanId: st.spanId, parentSpanId: tp?.spanId ?? "", name, start: Date.now(), end: 0, error: false, attrs, kind: "server" };
+  return als.run(st, async () => {
+    try {
+      return await fn();
+    } catch (e) {
+      rec.error = true;
+      throw e;
+    } finally {
+      rec.end = Date.now();
+      const spans = [rec, ...st.spans.splice(0, MAX_SPANS - 1)];
+      if (flush) {
+        try {
+          flush(spans);
+        } catch {
+        }
+      }
+    }
+  });
+}
+
+// js/packages/tailnet/src/rpctrace.ts
+var MARK = "__tw_tp";
+async function rpcCall(cls, name, method, args, call) {
+  const c = startChild(`${cls} ${method}`, { "tw.do.class": cls, "tw.do.name": name, "rpc.method": method });
+  if (!c) return call(...args);
+  try {
+    const r = await call(...args, { [MARK]: c.traceparent });
+    c.finish(false);
+    return r;
+  } catch (e) {
+    c.finish(true);
+    throw e;
+  }
+}
+function takeMark(args) {
+  if (!args.length) return void 0;
+  const m = args[args.length - 1];
+  if (!m || typeof m !== "object") return void 0;
+  const proto = Object.getPrototypeOf(m);
+  if (proto !== Object.prototype && proto !== null) return void 0;
+  const keys = Object.keys(m);
+  if (keys.length !== 1 || keys[0] !== MARK || typeof m[MARK] !== "string") return void 0;
+  args.pop();
+  return m[MARK];
+}
+function tracedEntry(info, p, args, run) {
+  if (typeof p !== "string") return run(args);
+  if (p === info.alarm) {
+    return runEntry(null, `${info.cls} alarm`, { "tw.do.class": info.cls, ...info.attrs(), "tw.trigger": "alarm" }, () => run(args), info.flush());
+  }
+  const tp = takeMark(args);
+  if (tp === void 0) return run(args);
+  return runEntry(tp, `${info.cls} ${p}`, { "tw.do.class": info.cls, ...info.attrs(), "tw.trigger": "rpc", "rpc.method": p }, () => run(args), info.flush());
+}
+function traceGate(obj, info) {
+  const wrapped2 = /* @__PURE__ */ new Map();
+  return new Proxy(obj, {
+    get(t, p) {
+      const v = Reflect.get(t, p, t);
+      if (typeof v !== "function" || p === "constructor") return v;
+      const c = wrapped2.get(p);
+      if (c && c.v === v) return c.w;
+      const w = function(...args) {
+        return tracedEntry(info, p, args, (a) => v.apply(t, a));
+      };
+      wrapped2.set(p, { v, w });
+      return w;
+    },
+    set(t, p, v) {
+      return Reflect.set(t, p, v, t);
+    }
+  });
+}
 
 // js/packages/tailnet/src/runtime.ts
 installFetchPropagation();
-function spanFlusher(tw, ctx) {
+function spanFlusher(tw, ctx, as) {
   return (spans) => {
     if (!tw || typeof tw.call !== "function") return;
-    const p = Promise.resolve().then(() => tw.call("spans", { spans })).catch(() => {
+    const p = Promise.resolve().then(() => tw.call("spans", as ? { spans, as } : { spans })).catch(() => {
     });
     try {
       ctx?.waitUntil?.(p);
@@ -1006,6 +1101,34 @@ function spanFlusher(tw, ctx) {
   };
 }
 var twOf = /* @__PURE__ */ new WeakMap();
+function entryInfo(obj, cls, plain) {
+  const ctx = () => obj.ctx;
+  const oname = () => {
+    const n = ctx()?.id?.name;
+    return typeof n === "string" && n ? n : void 0;
+  };
+  return {
+    cls,
+    alarm: plain ? "alarm" : "__tw_alarm",
+    attrs() {
+      const a = {};
+      const n = oname();
+      if (n) a["tw.do.name"] = n;
+      if (plain) {
+        try {
+          const id = ctx()?.id?.toString?.();
+          if (typeof id === "string" && id) a["tw.do.id"] = id;
+        } catch {
+        }
+      }
+      return a;
+    },
+    flush() {
+      const n = oname();
+      return spanFlusher(twOf.get(obj), ctx(), plain && n ? { class: cls, name: n } : void 0);
+    }
+  };
+}
 function createTailnetContext(tw, env, bindings, self, ticket) {
   if (!tw || typeof tw.call !== "function") throw new TailnetError("no_identity", "tw platform binding missing (not running on tailworks?)");
   const op = async (name, args = {}) => {
@@ -1072,11 +1195,64 @@ function createTailnetContext(tw, env, bindings, self, ticket) {
     self() {
       return op("self", {});
     },
-    connect() {
-      throw new TailnetError("plan_feature_missing", "ctx.tailnet.connect() is not implemented yet (raw TCP egress)");
+    connect(address, options = {}) {
+      return tailnetSocket(tw, socketAddress(address), options, self);
     }
   };
   return Object.freeze(tn);
+}
+function socketAddress(address) {
+  if (typeof address === "string") return address;
+  if (!address || typeof address.hostname !== "string" || !Number.isInteger(address.port)) {
+    throw new TailnetError("bad_request", 'connect: address must be "host:port" or { hostname, port }');
+  }
+  const h = address.hostname.includes(":") && !address.hostname.startsWith("[") ? "[" + address.hostname + "]" : address.hostname;
+  return h + ":" + address.port;
+}
+function tailnetSocket(tw, address, options, self) {
+  if (options.secureTransport && options.secureTransport !== "off") {
+    throw new TailnetError("not_supported", 'ctx.tailnet.connect: secureTransport "' + String(options.secureTransport) + '" is not supported; use { tls: "netd" }');
+  }
+  if (options.tls !== void 0 && options.tls !== "netd") throw new TailnetError("bad_request", 'ctx.tailnet.connect: tls must be "netd"');
+  if (typeof tw.tcpConnect !== "function") throw new TailnetError("not_supported", "ctx.tailnet.connect() needs a newer tailworks host");
+  const toUp = new TransformStream();
+  const fromUp = new TransformStream();
+  let closeUp = async () => {
+  };
+  const opened = (async () => {
+    const args = { address };
+    if (options.tls) args.tls = options.tls;
+    if (self) args.as = self;
+    const r = await tw.tcpConnect(args);
+    if (!r || !r.ok) throw TailnetError.from(r?.error);
+    return r.value;
+  })();
+  const closed = opened.then(
+    async (up) => {
+      const a = new AbortController();
+      closeUp = async () => a.abort();
+      await Promise.allSettled([
+        toUp.readable.pipeTo(up.writable, { signal: a.signal }),
+        up.readable.pipeTo(fromUp.writable, { signal: a.signal })
+      ]);
+    },
+    async (e) => {
+      await Promise.allSettled([toUp.readable.cancel(e), fromUp.writable.abort(e)]);
+      throw e;
+    }
+  );
+  closed.catch(() => {
+  });
+  return {
+    readable: fromUp.readable,
+    writable: toUp.writable,
+    opened: opened.then(() => ({ remoteAddress: address })),
+    closed,
+    async close() {
+      await closeUp();
+      await Promise.allSettled([toUp.writable.abort(), fromUp.readable.cancel()]);
+    }
+  };
 }
 function define(ctx, tn) {
   try {
@@ -1125,6 +1301,7 @@ function wrapFacetClass(C, name, bindings, opts = {}) {
         if (tw && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container));
         super(ctx, e);
         twOf.set(this, tw);
+        return traceGate(this, entryInfo(this, name, false));
       }
       // Called by the Host DO when the delegated alarm fires.
       async __tw_alarm(info) {
@@ -1185,7 +1362,7 @@ function findDescriptor(o, p) {
   }
   return void 0;
 }
-function killGate(obj, cls) {
+function killGate(obj, cls, info) {
   const killedErr = (k) => new Error("[killed] object " + cls + "/" + (obj.ctx?.id?.name ?? "") + " was killed: " + k);
   const wrapped2 = /* @__PURE__ */ new Map();
   return new Proxy(obj, {
@@ -1207,7 +1384,7 @@ function killGate(obj, cls) {
             throw killedErr(k);
           }
         }
-        return v.apply(t, args);
+        return tracedEntry(info, p, args, (a) => v.apply(t, a));
       };
       wrapped2.set(p, { v, w });
       return w;
@@ -1232,7 +1409,7 @@ function wrapPlainClass(C, name, bindings, opts) {
         if (tw && oname && opts.container) defineContainer(ctx, createContainer(tw, ctx, name, opts.container, { class: name, name: oname }));
         super(ctx, e);
         twOf.set(this, tw);
-        const gated = killGate(this, name);
+        const gated = killGate(this, name, entryInfo(this, name, true));
         if (tw && oname && opts.node && !killedMark(ctx)) {
           const p = tw.call("ensure", { as: { class: name, name: oname } }).then((r) => {
             if (r && !r.ok) {
@@ -1325,7 +1502,7 @@ function guardStub(adm, cls, name, real) {
           await admit(adm, cls, name);
           const target = real && typeof real.then === "function" ? await real : real;
           if (p === "fetch") return tracedStubFetch(cls, name, args, (...a) => target.fetch(...a));
-          return target[p](...args);
+          return rpcCall(cls, name, String(p), args, (...a) => target[p](...a));
         };
       }
     }
@@ -1494,9 +1671,10 @@ function wrapHandler(H, bindings) {
           if (tw) define(this.ctx, createTailnetContext(tw, this.env, bindings, void 0, ticket));
           if (isScheduledReq(req)) {
             const sc = scheduledCtx(this.ctx);
+            const flush = spanFlusher(tw, this.ctx);
             this.ctx = sc.ctx;
             const sf = typeof this.scheduled === "function" ? this.scheduled.bind(this) : void 0;
-            return runScheduled(sf, req, [], sc.drain);
+            return runTraced(req, () => runScheduled(sf, req, [], sc.drain), flush);
           }
         }
         try {
@@ -1537,7 +1715,7 @@ function wrapHandler(H, bindings) {
         if (ctx && tw) define(ctx, createTailnetContext(tw, env, bindings, void 0, ticket));
         if (k === "fetch" && isScheduledReq(a)) {
           const sc = scheduledCtx(ctx);
-          return runScheduled(H.scheduled, a, [env, sc.ctx], sc.drain);
+          return runTraced(a, () => runScheduled(H.scheduled, a, [env, sc.ctx], sc.drain), spanFlusher(tw, ctx));
         }
       }
       let r;
@@ -1561,11 +1739,75 @@ function wrapHandler(H, bindings) {
   }
   return out;
 }
+var wrappedEntrypoints = /* @__PURE__ */ new WeakMap();
+function callCtx(ctx, cf) {
+  if (!ctx || typeof ctx !== "object") return ctx;
+  return new Proxy(ctx, {
+    get(t, k) {
+      if (k === "cf") return cf;
+      const v = Reflect.get(t, k, t);
+      return typeof v === "function" ? v.bind(t) : v;
+    }
+  });
+}
+function bindingDispatcher(T, bindings) {
+  const target = (ep) => {
+    const H = ep ? T[ep] : T.default;
+    if (!H || typeof H !== "function" && typeof H !== "object") {
+      throw new TailnetError("service_not_found", ep ? `this workload's main module exports no entrypoint ${ep}` : "this workload has no default export");
+    }
+    let W = wrappedEntrypoints.get(H);
+    if (!W) {
+      W = wrapHandler(H, bindings);
+      wrappedEntrypoints.set(H, W);
+    }
+    return { H, W, name: ep || "default" };
+  };
+  return {
+    async fetch(ctx, env, req) {
+      const ep = String(req?.cf?.tw?.binding?.entrypoint ?? "");
+      let t;
+      try {
+        t = target(ep);
+      } catch (e) {
+        return e.toResponse();
+      }
+      if (typeof t.H === "function") {
+        if (typeof t.W.prototype?.fetch !== "function") return new TailnetError("service_not_found", `entrypoint ${t.name} has no fetch() handler`).toResponse();
+        const inst = new t.W(ctx, env);
+        return inst.fetch(req);
+      }
+      if (typeof t.W.fetch !== "function") return new TailnetError("service_not_found", `entrypoint ${t.name} has no fetch() handler`).toResponse();
+      return t.W.fetch(req, env, ctx);
+    },
+    async call(ctx, env, ep, method, args, cf) {
+      const tw = env?.__TW;
+      const sealed = await sealedRequest(tw, { cf });
+      const scf = sealed?.cf ?? {};
+      const t = target(ep);
+      if (typeof t.H !== "function") throw new TypeError(`entrypoint ${t.name} is not a WorkerEntrypoint class; RPC needs one`);
+      const cctx = callCtx(ctx, scf);
+      const inst = new t.W(cctx, env);
+      const ticket = typeof scf?.tw?.ticket === "string" && scf.tw.ticket ? scf.tw.ticket : void 0;
+      if (ticket) {
+        inst.env = guardEnv(env, bindings, "tailnet", admitter(tw, { ticket }));
+        if (tw) define(cctx, createTailnetContext(tw, inst.env, bindings, void 0, ticket));
+      }
+      const f = typeof method === "string" && !(method in Object.prototype) ? inst[method] : void 0;
+      if (typeof f !== "function" || HANDLER_METHODS.includes(method) || method === "constructor") {
+        throw new TypeError(`The RPC receiver does not implement the method "${method}".`);
+      }
+      return await f.apply(inst, args);
+    }
+  };
+}
 export {
+  bindingDispatcher,
   createTailnetContext,
   guardTailnetEnv,
   isApprovalType,
   publicEnv,
+  socketAddress,
   wrapFacetClass,
   wrapHandler,
   wrapPlainClass,

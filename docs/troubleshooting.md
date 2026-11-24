@@ -124,9 +124,10 @@ tags to it, printing any that are missing:
 
 `tw dev` has no policy evaluator (every dev node sees every other), so a
 call that works in `tw dev` can still need a grant once deployed.
-Destinations outside the tailnet, the host itself and sibling objects are
-refused with [`forbidden_destination`](errors.md#forbidden_destination)
-instead.
+Destinations outside the tailnet and the host itself are refused with
+[`forbidden_destination`](errors.md#forbidden_destination) instead. An
+object on the same host is reached like one on another host (netd delivers
+the call in process), with the same grant.
 
 ## The deployment is `failed` in `tw ls`
 

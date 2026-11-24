@@ -16,17 +16,36 @@ Tailscale Inc.
 ## Quick start
 
 You need macOS 14+ on Apple silicon or Linux (arm64/amd64, glibc ≥ 2.35),
-and admin rights on a Tailscale tailnet. No Go or Node.js.
+and admin rights on a Tailscale tailnet. No Go.
 [Prerequisites](docs/INSTALL.md#prerequisites) has the details; Headscale works too
 ([docs/headscale.md](docs/headscale.md)).
 
+To try an app first, with no tailnet and no install:
+
+```sh
+npx tailworks init hello && cd hello && npx tailworks dev
+```
+
 ### 1. Install
+
+With Node.js:
+
+```sh
+npm install -g tailworks
+tw doctor
+```
+
+Without Node.js, use the release tarball:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rosskukulinski/tailworks/master/scripts/get.sh | sh
 export PATH="$HOME/.tailworks/bin:$PATH"    # also add this to your shell profile
 tw doctor
 ```
+
+Both install the same binaries. The tarball also has the microVM
+tier, and `tw upgrade` upgrades it; npm upgrades the npm install
+([Install with npm](docs/INSTALL.md#install-with-npm)).
 
 ### 2. Add tailworks to your tailnet policy
 
@@ -149,7 +168,7 @@ and the tests behind each row: [docs/COMPAT.md](docs/COMPAT.md).
 |---|---|---|---|
 | Runtime | [`fetch` handler, outbound `fetch()`](docs/COMPAT.md#fetch) | ⚠️ | outbound reaches tailnet peers from the workload's (or object's) own node, and public internet hosts from the host's network (on by default; `tailnet.egress.internet: false` turns it off, [call an internet API](docs/recipes.md#call-an-internet-api)) |
 | Runtime | [WebSockets](docs/COMPAT.md#websockets) | ✅ | |
-| Runtime | [TCP sockets (`connect()`)](docs/COMPAT.md#connect) | ❌ | egress is HTTP only |
+| Runtime | [TCP sockets (`connect()`)](docs/COMPAT.md#connect) | ⚠️ | to tailnet peers and the internet with the object's identity; no `secureTransport` TLS |
 | Runtime | [WebAssembly](docs/COMPAT.md#wasm) | ✅ | |
 | Runtime | [`nodejs_compat`](docs/COMPAT.md#nodejs-compat) | ✅ | |
 | Runtime | [Python Workers](docs/COMPAT.md#python) | ❌ | Python runs in containers |
@@ -172,10 +191,10 @@ and the tests behind each row: [docs/COMPAT.md](docs/COMPAT.md).
 | Bindings | [Workflows](docs/COMPAT.md#workflows) | ✅ | workerd's built-in engine; approval events are tailworks' |
 | Bindings | [Workers AI](docs/COMPAT.md#workers-ai) | ❌ | use an LLM gateway on your tailnet |
 | Bindings | [Vectorize](docs/COMPAT.md#vectorize) | ❌ | |
-| Bindings | [Hyperdrive](docs/COMPAT.md#hyperdrive) | ❌ | |
+| Bindings | [Hyperdrive](docs/COMPAT.md#hyperdrive) | ❌ | drivers connect directly with `connect()` |
 | Bindings | [Browser Rendering](docs/COMPAT.md#browser) | ❌ | |
 | Bindings | [Email](docs/COMPAT.md#email) | ❌ | |
-| Bindings | [Service bindings](docs/COMPAT.md#service-bindings) | ❌ | call the workload over the tailnet |
+| Bindings | [Service bindings](docs/COMPAT.md#service-bindings) | ⚠️ | `fetch()` and RPC between a tenant's workloads, over the tailnet as the calling node |
 | Bindings | [Secrets](docs/COMPAT.md#secrets) | ⚠️ | `tw secret`; applied on the next deploy |
 | Bindings | [Vars](docs/COMPAT.md#vars) | ✅ | |
 | Bindings | [Static assets](docs/COMPAT.md#assets) | ⚠️ | `_redirects`, `_headers` and assets-only work; within the 64 MiB bundle |

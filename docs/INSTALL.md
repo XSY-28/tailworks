@@ -2,7 +2,8 @@
 
 tailworks runs on **macOS (Apple silicon)** and **Linux (arm64 and amd64, glibc
 ≥ 2.35)**. Each has a self-contained release tarball and the same
-`install.sh`; nothing needs root. Windows isn't supported, not even for
+`install.sh`; nothing needs root. With Node.js, [npm](#install-with-npm)
+installs the same binaries: `npx tailworks …` or `npm install -g tailworks`. Windows isn't supported, not even for
 the `tw` CLI alone. Every prerequisite is in [one table](#prerequisites).
 
 The path through this page: install on [macOS](#macos) or [Linux](#linux),
@@ -20,6 +21,7 @@ measured there: [install-testing.md](install-testing.md).
 | To | You need |
 |---|---|
 | Run tailworks (the release) | macOS 14 or later on Apple silicon, or Linux arm64/amd64 with glibc ≥ 2.35; a Tailscale tailnet where you're an admin, or a self-hosted Headscale server ([headscale.md](headscale.md)). No Go and no Node.js. |
+| Install it with npm (`npx tailworks`, `npm install -g tailworks`) | The same platforms, and Node.js ≥ 18 with npm ([Install with npm](#install-with-npm)). |
 | Scaffold an app and type-check it (`npm create tailworks`) | Node.js ≥ 20 only. |
 | Try an app locally (`tw dev`) | The release only: no tailnet, no credentials. |
 | Build tailworks from source | Go ≥ 1.27 and Node.js ≥ 20. |
@@ -27,6 +29,57 @@ measured there: [install-testing.md](install-testing.md).
 | Use the Linux microVM tier | `/dev/kvm`, cgroups v2, systemd and a one-time sudo setup ([details](#linux-the-microvm-tier-firecracker-kvm)). |
 
 Windows isn't supported, not even as a CLI client.
+
+## Install with npm
+
+If you have Node.js, npm installs tailworks without the tarball steps:
+
+```sh
+npx tailworks init hello && cd hello && npx tailworks dev    # try it, nothing installed globally
+npm install -g tailworks && tw doctor                        # or install tw (and tailworks) on your PATH
+```
+
+The `tailworks` package is a small shim. npm installs it with one platform
+package as an optional dependency: `@tailworks/cli-darwin-arm64`,
+`@tailworks/cli-linux-arm64` or `@tailworks/cli-linux-amd64`, picked by
+the package's `os`, `cpu` and `libc`. The platform package holds the
+release tarball's own files (`tw`, `tw-mgmt`, `tw-hostd`, `tw-netd`,
+workerd, the templates and their vendored modules). They are made from the
+signed tarball and published with npm provenance, so the binaries are the
+same ones. Neither package has an install script.
+
+How it differs from a tarball install:
+
+- **State** is where it always is: `~/.tailworks` (or `--state-dir`). Only
+  the binaries live in npm's directory, so switching between npm and the
+  tarball keeps your apps, keys and stores.
+- **Upgrade with npm:** `tw down && npm install -g tailworks@latest && tw up`.
+  `tw upgrade` refuses (`npm_install`), because npm owns the directory.
+  `tw version --check` prints the npm command. npm gives you no backup or
+  automatic rollback, so take a
+  [`tw backup`](#back-up-a-running-install-tw-backup) first. See
+  [upgrading.md](upgrading.md#installed-with-npm).
+- **The login service** (`tw up --service`, on by default) needs a global
+  install, which has a stable path. From `npx`, `tw up` runs in the
+  background without a service, and an explicit `--service` refuses,
+  because npm may clear npx's cache at any time. If you change Node.js
+  versions with nvm or similar, the service keeps running the old
+  version's copy until you `tw up` again from the new one.
+- **No microVM tier.** The npm packages leave out the microVM guest
+  (kernel and rootfs, about 200 MB). The process tier works as usual. For
+  the microVM tier, install the release tarball (`scripts/get.sh`).
+  `tw doctor` reports which kind of install it found.
+- **`--omit=optional`** (or `--no-optional`) skips the platform package,
+  and `tw` then says so. Reinstall without it.
+- **Size:** about 120 MB to download and 400 MB on disk, mostly workerd.
+
+`npm create tailworks` runs `tw init` when `tw` is on your PATH, so an
+`npm install -g tailworks` makes it name the app's workload and tags after
+the directory.
+
+To remove it: `tw down --service` (if you ran `tw up`), then
+`npm uninstall -g tailworks`. Your state in `~/.tailworks` stays until you
+delete it ([Uninstall](#uninstall)).
 
 ## macOS
 
@@ -607,21 +660,55 @@ Everything tailworks keeps is in its state dir (`~/.tailworks`, or `--state-dir`
 tw backup --out ~/tw-backup-$(date +%F)
 ```
 
-`tw backup` works while tailworks runs. It writes a new directory with:
+`tw backup` works while tailworks runs. Nothing is stopped and no request
+waits. It writes a new directory with:
 
 - a consistent copy of `mgmt.db` (SQLite `VACUUM INTO`),
 - the rest of `mgmt/`: custody, the ID secret, mgmt's node state,
 - `tw.json`,
+- `hostd/`: each workload's **Durable Object storage**, and with the `fs`
+  backend, the **R2 object bytes** (see below),
 - `backup.json`, which says what the backup holds and what it doesn't.
+  Its `hostd` entry lists the workloads whose DO storage it holds and
+  counts the databases and R2 blobs.
 
 Without `--out` it writes to `~/.tailworks/backups/`. The backup holds the
 custody key and mgmt's node key, so store it like a secret.
 
+How `hostd/` is copied while workloads write to it:
+
+- **Durable Object storage.** Each object's storage is a SQLite database.
+  `tw backup` copies each one with `VACUUM INTO`, through a read-only
+  connection that shares workerd's locks. Each copy is the object as of
+  one committed write, never a torn one, and workerd keeps writing while
+  it is taken. Objects are copied one after another, not at a single
+  instant. No Durable Object transaction spans two objects, so that is
+  enough.
+- **R2 bytes** (`fs` backend). Blobs are immutable: a put writes a
+  temporary file and renames it into place, and a blob is never
+  rewritten. So every blob in the backup is whole. They are copied once
+  before mgmt's store (which holds the R2 index) and again after it, to
+  pick up blobs written in between. A blob on the same disk as the backup
+  is hard-linked, not copied, which is safe because it never changes.
+  One case is not covered: an object written *and* then overwritten or
+  deleted during the backup itself can come back from the restore
+  without its bytes (reading it fails). Take the backup again if that
+  matters.
+
+`tw backup --hostd=false` copies the control plane only, as `tw upgrade`'s
+backup does.
+
 It doesn't hold:
 
-- **`hostd/`:** Durable Object storage and, with the `fs` backend, R2 object
-  bytes. These are files the running workloads write. For a consistent
-  copy, `tw down`, copy `~/.tailworks/hostd`, then `tw up`.
+- **A microVM workload's DO volume** (`do.img`). The guest has it mounted,
+  so `tw backup` lists it as not included. Copy it with tailworks stopped.
+- **Node.js workloads' data directories** (`TW_DATA_DIR`). These are plain
+  files the app writes. Copy them with tailworks stopped.
+- **The rest of `hostd/`:** node state, logs, `objects.json`. `tw restore`
+  leaves this machine's copy in place.
+- **Other hosts.** `tw backup` copies this machine's `hostd/` only. Workloads
+  on a host added with `tw host add` keep their DO storage on that host.
+- **R2 bytes in an `s3` backend.** Back up the S3 bucket.
 - **`mgmt/registry/`:** container image blobs. If you deploy container
   images, copy it separately; it is content-addressed, so a copy taken
   while tailworks runs is fine.
@@ -629,11 +716,12 @@ It doesn't hold:
 - **A Postgres store.** `pg_dump` it ([postgres.md](postgres.md#back-up-and-restore-with-postgres)).
 
 For one database, `tw d1 export <db> --output <file>` also works while
-tailworks runs ([d1.md](d1.md)). `tw upgrade` takes the same kind of
-backup before it installs, in `~/.tailworks/backups/`
+tailworks runs ([d1.md](d1.md)). `tw upgrade` takes the control-plane part
+of this backup before it installs, in `~/.tailworks/backups/`
 ([upgrading.md](upgrading.md)).
 
-To copy everything, `hostd/` included, stop tailworks first:
+To copy everything, microVM volumes and Node.js data included, stop
+tailworks first:
 
 ```sh
 tw down
@@ -658,6 +746,11 @@ It:
 1. copies the state it replaces to `~/.tailworks/backups/<time>-before-restore`,
    so you can undo the restore with another `tw restore`;
 2. puts the backup's `mgmt/` and `tw.json` back;
+   if the backup holds `hostd/`, it also replaces every workload's Durable
+   Object storage and the R2 blobs with the backup's. What it replaces
+   moves into the safety backup from step 1. DO storage of workloads
+   created after the backup moves there too, so a workload that is
+   created again later starts empty;
 3. runs the **restore fence**: every lease epoch moves up past any epoch
    handed out since the backup, so no fencing token
    ([locks.md](locks.md)) is ever issued twice.
@@ -689,6 +782,7 @@ tw agent remove                               # if you installed the coding-agen
 tw down --purge --service                     # kill every object, delete its device, stop, remove the service
 sudo ~/.tailworks/bin/tw host setup --undo          # Linux, only if you ran host setup --microvm
 rm -rf ~/.tailworks                                  # or: <release dir>/install.sh --uninstall --purge
+npm uninstall -g tailworks                           # if you installed it with npm
 ```
 
 `tw down --purge` deletes the objects' devices (any `tw down` revokes

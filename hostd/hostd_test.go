@@ -230,10 +230,17 @@ func TestHostd(t *testing.T) {
 		if code != 200 || r["name"] != "a" || get(r, "caller", "nodeId") != s.clientID {
 			t.Fatalf("%d %v", code, r)
 		}
-		for k := range r["sawHeaders"].(map[string]any) {
-			if k != "x-tw-object" {
-				t.Fatalf("tenant saw identity header %q: %v", k, r["sawHeaders"])
-			}
+		// No x-tw-* at all, not even netd's own x-tw-object routing header
+		// (#303): neither in the object (a DO) nor in the Worker's fetch.
+		if seen := r["sawHeaders"].(map[string]any); len(seen) != 0 {
+			t.Fatalf("object saw platform/identity headers: %v", seen)
+		}
+		code, r = s.getJSON("http://"+probe.IP+"/", "x-tw-object", "b", "x-tw-cf", `{"objectId":"b"}`)
+		if code != 200 || r["kind"] != "worker" {
+			t.Fatalf("worker: %d %v", code, r)
+		}
+		if seen := r["sawHeaders"].(map[string]any); len(seen) != 0 {
+			t.Fatalf("worker fetch saw platform/identity headers: %v", seen)
 		}
 		// Forged egress attribution from tenant code.
 		ob, _ := e.Host.Object(e.TenantID, "probe", "Probe", "b")

@@ -115,6 +115,9 @@ func (a semver) newerThan(b semver) bool { return a.v.Compare(b.v) > 0 }
 // upgradeCommand is how to install a newer release: `tw upgrade` where
 // this tailworks has it, else get.sh (docs/INSTALL.md).
 func upgradeCommand() string {
+	if c := npmUpgradeCommand(); c != "" { // npm_install.go
+		return c
+	}
 	for _, c := range commands {
 		if c.name == "upgrade" && !c.hidden {
 			return "tw upgrade"

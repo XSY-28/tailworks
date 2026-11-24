@@ -9,6 +9,7 @@ the recipe says what you'll see instead.
 
 - [Call an internet API](#call-an-internet-api)
 - [Call an LLM through a gateway on your tailnet](#call-an-llm-through-a-gateway-on-your-tailnet)
+- [Connect to Postgres on your tailnet](#connect-to-postgres-on-your-tailnet)
 - [A Durable Object per user, authorized by `getCaller`](#a-durable-object-per-user-authorized-by-getcaller)
 - [A public webhook with signature verification](#a-public-webhook-with-signature-verification)
 - [A cron job that writes to KV](#a-cron-job-that-writes-to-kv)
@@ -201,6 +202,92 @@ instead: the `ai-agent` template's `src/model.ts` shows the swap from its
 mock model to `createOpenAICompatible({ baseURL: "http://llm-gw/v1", fetch: ctx.tailnet.fetch })`.
 Inside a Durable Object in facet mode, the request then leaves from that
 object's own node, so the gateway (and its logs) sees which agent called.
+
+## Connect to Postgres on your tailnet
+
+Database drivers that run on Workers use `connect()` from
+`cloudflare:sockets`, and so does tailworks (ADR-052): the socket leaves
+from the workload's node (from the Worker) or the object's own node (from a
+facet-mode Durable Object), under the same grants as `fetch()`. Here
+[postgres.js](https://github.com/porsager/postgres) talks to a Postgres on
+a tailnet machine tagged `tag:db`. Put the port in `tailnet.connects`, so
+`tw deploy` checks and prints the grant for `tcp:5432` instead of `tcp:80`.
+
+```jsonc
+// tailworks.jsonc
+{
+  "name": "notes",
+  "tailnet": {
+    "tags": ["tag:tw-wl-notes"],
+    "connects": ["tag:db:5432"]
+  }
+}
+```
+
+```jsonc
+// wrangler.jsonc
+{
+  "name": "notes",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": { "PGHOST": "db", "PGDATABASE": "notes", "PGUSER": "notes" }
+}
+```
+
+```ts
+// src/index.ts
+import postgres from "postgres";
+
+interface Env {
+  PGHOST: string; // the database's tailnet name
+  PGDATABASE: string;
+  PGUSER: string;
+  PGPASSWORD: string; // a secret: `tw secret put PGPASSWORD`, or .dev.vars for tw dev
+}
+
+export default {
+  async fetch(req: Request, env: Env): Promise<Response> {
+    // ssl: false. WireGuard already encrypts the flow, and workerd can't
+    // hand a TLS socket to tailworks' egress (COMPAT.md#connect).
+    const sql = postgres({ host: env.PGHOST, port: 5432, database: env.PGDATABASE, username: env.PGUSER, password: env.PGPASSWORD, ssl: false, max: 1, fetch_types: false });
+    try {
+      const rows = await sql`SELECT now() AS at, current_user AS "user"`;
+      return Response.json(rows[0]);
+    } finally {
+      await sql.end();
+    }
+  },
+};
+```
+
+```sh
+npm install postgres
+tw secret put PGPASSWORD
+tw deploy
+```
+
+The grant is `{"src": ["tag:tw-wl-notes"], "dst": ["tag:db"], "ip": ["tcp:5432"]}`.
+On the database machine, allow the workload's tailnet addresses in
+`pg_hba.conf` (`100.64.0.0/10` and `fd7a:115c:a1e0::/48`, or tighter).
+The database sees each connection from the workload's node, so
+`tailscale whois <client address>` on it names the workload. From a
+Durable Object in facet mode it names that object.
+
+Things to know:
+
+- A refused socket (no grant, a name not in the netmap) reaches the driver
+  as "Network connection lost". `tw audit <object>` shows it as a `deny`
+  with the code. `ctx.tailnet.connect()` gives the code directly,
+  as a `TailnetError`.
+- A database on the internet needs TLS, which stock `connect()` can't do
+  here (`secureTransport` fails). `ctx.tailnet.connect({ hostname, port },
+  { tls: "netd" })` returns a socket whose TLS the host does. Use it with a
+  driver that lets you supply the socket.
+- Each flow is an audit record and a trace span. Keep connections few:
+  `max: 1` per request as above, or hold one in a Durable Object.
+- `make e2e-pg-socket` runs the same driver code against Postgres 17, from
+  a Worker and from a facet object (`hostd/testdata/apps/pgprobe`).
 
 ## A Durable Object per user, authorized by `getCaller`
 

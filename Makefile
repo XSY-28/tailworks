@@ -67,6 +67,7 @@ test-go:
 .PHONY: test-js
 test-js:
 	npm test --silent
+	node --test js/cli/tailworks/test/*.test.js
 
 ## test-sdk: M5 SDK conformance (hermetic): real Cloudflare Agents SDK and Vercel AI SDK
 ## apps on tw-hostd + stock workerd over testcontrol + local DERP; mock LLM, no keys.
@@ -114,6 +115,12 @@ PG_PORT ?=
 .PHONY: test-pg
 test-pg:
 	sh scripts/test-pg.sh "$(PG_CTX)" "$(PG_PORT)"
+
+## e2e-pg-socket: postgres.js from a Worker and a facet object over connect() (raw TCP egress,
+## ADR-052) to Postgres 17 on the hermetic tailnet (docker context PG_CTX, as test-pg).
+.PHONY: e2e-pg-socket
+e2e-pg-socket: deps
+	sh scripts/e2e-pg-socket.sh "$(PG_CTX)"
 
 ## e2e-upgrade: the upgrade release gate (ADR-041 §9), hermetic: the previous
 ## release's tw-mgmt + tw-hostd (TW_UPGRADE_FROM: a git ref, default the newest published
@@ -418,6 +425,24 @@ e2e-public: deps
 	TW_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TW_E2E_TAILNET="$(TAILNET1)" \
 		$(GO) test -tags e2epublic -count=1 -v -timeout 30m ./e2e/public/...
 
+## e2e-compat: the Cloudflare compatibility suite on tailnet 1 (e2e/compat/README.md): 30 of Cloudflare's own
+## example projects (cloudflare/templates, create-cloudflare, cloudflare/agents, cloudflare/ai), pinned by
+## commit and unmodified, deployed with tw deploy to a real tw-hostd host (`tw up --oauth-client-file`) and
+## called from a tailnet client as their READMEs call them; known gaps must fail as COMPAT.md says.
+## Needs npm; sources are cached in ~/.cache/tailworks-compat. TW_COMPAT_ONLY=<regexp> runs some.
+## The only policy write it may make is the tag:tw-wl-compat tagOwner + its grant.
+.PHONY: e2e-compat
+e2e-compat: deps
+	@if [ ! -f "$(TS_CREDS)/tailnet1_api.env" ]; then \
+		echo "e2e-compat: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
+	TW_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TW_E2E_TAILNET="$(TAILNET1)" \
+		$(GO) test -tags e2ecompat -count=1 -v -timeout 60m -run TestE2ECompat ./e2e/compat/...
+
+## e2e-compat-prepare: only fetch, npm install and build the e2e-compat projects (no tailnet).
+.PHONY: e2e-compat-prepare
+e2e-compat-prepare:
+	$(GO) test -tags e2ecompat -count=1 -v -timeout 40m -run TestCompatPrepare ./e2e/compat/...
+
 ## release: self-contained tarballs in dist/ (darwin-arm64, linux-arm64, linux-amd64): Go binaries
 ## (CGO_ENABLED=0, esbuild built in), pinned workerd, templates + vendored node_modules,
 ## install.sh, VERSION, SHA256SUMS. darwin binaries are ad-hoc signed (run on macOS).
@@ -541,6 +566,12 @@ changes-check:
 install-test:
 	sh scripts/install_test.sh
 
+## npm-cli-test: the tw CLI's npm packages: built from signed tarballs, npm install -g, the
+## tailworks shim runs tw (hermetic, fake releases, offline npm; issue #240).
+.PHONY: npm-cli-test
+npm-cli-test:
+	sh scripts/npm_cli_test.sh
+
 .PHONY: lint
 lint: api-check compat-check changes-check
 	@out=$$(gofmt -l $$(git ls-files -co --exclude-standard '*.go')); if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
@@ -566,6 +597,7 @@ lint: api-check compat-check changes-check
 	$(GO) vet -tags e2emulti ./e2e/multi/...
 	$(GO) vet -tags e2eoauth ./e2e/oauth/...
 	$(GO) vet -tags e2eheadscale ./e2e/headscale/...
+	$(GO) vet -tags e2ecompat ./e2e/compat/...
 	$(GO) vet -tags e2epublic ./e2e/public/...
 	$(GO) vet -tags e2embp ./e2e/mbp/...
 	$(GO) vet -tags e2elinux ./e2e/linux/...

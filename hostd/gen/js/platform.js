@@ -6,6 +6,7 @@
 //   EGRESS_WL    hostd's workload egress socket (the tenant service's identity)
 //   HOSTD        hostd's local host API socket (ensure/spawn/ready/kill/audit)
 //   MAC_KEY      per-process root key; per-object egress MAC keys are derived from it (RT-04)
+//   LOCAL_TOKEN  hostd's loopback token (Landlock sandbox only), sent in connect() tunnels
 //   TENANT       the tenant service (the app's default export)
 //   NS_<Class>   plain-DO namespaces (classes with "egress": "workload")
 //
@@ -15,6 +16,7 @@ import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 import CFG from "tw-config.json";
 import MODULES from "tw-modules.js";
 import { deliverQueue } from "tw-queue.js";
+import { bindingCallee, setObjectEgress } from "tw-svc.js";
 
 const FACET_MODULES = MODULES;
 
@@ -99,6 +101,11 @@ async function routeObject(env, ctx, cls, name, req) {
 // scheduled() with a controller and answers {outcome, noRetry, error}.
 // (workerd's native Fetcher.scheduled() builds its own controller, so the
 // ticket could not ride on that.)
+function traceparentOnly(req) {
+  const tp = req.headers.get("traceparent");
+  return tp ? { traceparent: tp } : {};
+}
+
 async function scheduled(env, t, req) {
   const cron = t.cron;
   if (typeof cron !== "string" || !CFG.crons.includes(cron)) return errResponse("bad_request", "no such cron trigger in this deployment");
@@ -109,6 +116,8 @@ async function scheduled(env, t, req) {
       new Request("http://tenant/_tw/scheduled", {
         method: "POST",
         signal: req.signal,
+        // The run's root span (hostd crontrace.go): its record and egress join that trace.
+        headers: traceparentOnly(req),
         cf: { tw: { kind: "scheduled", cron, scheduledTime: st, ticket: t.ticket }, traceId: req.cf?.traceId },
       }),
     );
@@ -184,6 +193,9 @@ export default {
         return objectStub(env, ctx, t.class, t.name).__tw_intercept(t.key, r, await hostCap(env));
       }
       case "workload": {
+        // A service binding call to a named entrypoint or an RPC method
+        // (hostd admitted it: cf.tw.binding; tw-svc.js).
+        if (t.binding) return bindingCallee(req, env, t);
         // /_tw/o/<Class>/<name>/... on the workload node reaches an object
         // before (or instead of) its own node.
         const u = new URL(req.url);
@@ -260,6 +272,7 @@ function hostFacet(h, cls) {
       env.__TW = exp.TailnetApi({ props: { kind: "object", class: cls, name } });
       for (const s of CFG.stores ?? []) env[s.binding] = exp[s.facet]({ props: s.props });
       for (const q of CFG.queues?.producers ?? []) env[q.binding] = exp.QueueFacetProxy({ props: { binding: q.binding } });
+      for (const sb of CFG.services ?? []) env[sb.binding] = exp.ServiceBinding({ props: { binding: sb.binding, class: cls, name } });
       const wrap = Object.fromEntries((CFG.stores ?? []).filter((s) => s.wrap).map((s) => [s.binding, s.wrap]));
       if (Object.keys(wrap).length) env.__TW_WRAP = wrap; // tw-rt.js puts the API around these stubs (D1)
       return {
@@ -491,26 +504,43 @@ async function sealedRequest(env, req) {
   return cf ? new Request(req, { cf }) : req;
 }
 
+// objectEgress sends a request as facet object cls/name: hostd verifies the
+// MAC, maps class+name to the object and its node, and netd dials from that
+// node. extra are platform headers set after tenant x-tw-* are stripped
+// (a service binding's, tw-svc.js).
+async function objectEgress(env, cls, name, url, init, extra = {}) {
+  const h = new Headers(init.headers);
+  for (const k of [...h.keys()]) if (k.startsWith("x-tw-") || k.startsWith("tw-") || k === "proxy-authorization") h.delete(k);
+  for (const [k, v] of Object.entries(extra)) h.set(k, v);
+  const ts = String(Date.now());
+  const nonce = crypto.randomUUID();
+  h.set("x-tw-class", cls);
+  h.set("x-tw-name", encodeURIComponent(name));
+  h.set("x-tw-ts", ts);
+  h.set("x-tw-nonce", nonce);
+  h.set("x-tw-mac", await mac(env, cls, name, [cls, name, init.method, url, ts, nonce].join("\n")));
+  // workerd's proxy-style external sends absolute-form without Host; Go's net/http rejects that.
+  h.set("host", new URL(url).host);
+  return env.NETD_EGRESS.fetch(new Request(url, { ...init, headers: h, redirect: "manual" }));
+}
+setObjectEgress(objectEgress);
+
 // Egress for a facet's fetch(). props were minted by Host_<Class>; tenant code
-// cannot change them. hostd verifies the MAC, maps class+name to the object
-// and its node, and netd dials from that node.
+// cannot change them.
 export class Egress extends WorkerEntrypoint {
   async fetch(request) {
     const { class: cls, name } = this.ctx.props;
-    const h = new Headers(request.headers);
-    for (const k of [...h.keys()]) if (k.startsWith("x-tw-") || k.startsWith("tw-") || k === "proxy-authorization") h.delete(k);
-    const ts = String(Date.now());
-    const nonce = crypto.randomUUID();
-    h.set("x-tw-class", cls);
-    h.set("x-tw-name", encodeURIComponent(name));
-    h.set("x-tw-ts", ts);
-    h.set("x-tw-nonce", nonce);
-    h.set("x-tw-mac", await mac(this.env, cls, name, [cls, name, request.method, request.url, ts, nonce].join("\n")));
-    // workerd's proxy-style external sends absolute-form without Host; Go's net/http rejects that.
-    h.set("host", new URL(request.url).host);
-    return this.env.NETD_EGRESS.fetch(new Request(request.url, { method: request.method, headers: h, body: request.body, redirect: "manual" }));
+    return objectEgress(this.env, cls, name, request.url, { method: request.method, headers: request.headers, body: request.body });
+  }
+  // Stock connect() from a facet: as the object's own node.
+  async connect(socket) {
+    const { class: cls, name } = this.ctx.props;
+    await tcpServe(socket, (dst) => tcpDial(this.env, this.env.NETD_EGRESS, dst, { class: cls, name }, false));
   }
 }
+
+// Service bindings (tw-svc.js, ADR-053).
+export { ServiceBinding } from "tw-svc.js";
 
 // WorkloadEgress is the tenant service's globalOutbound: the Worker and
 // plain-DO objects egress as the workload node.
@@ -521,6 +551,130 @@ export class WorkloadEgress extends WorkerEntrypoint {
     h.set("host", new URL(request.url).host);
     return this.env.EGRESS_WL.fetch(new Request(request.url, { method: request.method, headers: h, body: request.body, redirect: "manual" }));
   }
+  // Stock connect() from the Worker or a plain-DO object (RFC §4.8: as
+  // the workload node).
+  async connect(socket) {
+    await tcpServe(socket, (dst) => tcpDial(this.env, this.env.EGRESS_WL, dst, null, false));
+  }
+}
+
+// ---- raw TCP egress (ADR-052) ----
+//
+// A tenant's connect() reaches its globalOutbound's connect() handler.
+// The handler opens a CONNECT tunnel to hostd (workerd sends it with no
+// headers), writes one preamble line (gen.ConnectPreamble: the loopback
+// token, a facet's MAC'd identity), and reads hostd's status line
+// (gen.ConnectStatus) before any of the flow's bytes. Refusals reach stock
+// connect() only as a lost connection (workerd has no way to fail a
+// handler's socket with a reason); ctx.tailnet.connect() gets them typed
+// (TailnetApi.tcpConnect).
+
+const MAX_DST = 512;
+const NL = 10;
+
+class TcpRefused extends Error {
+  constructor(code, message) {
+    super("[" + code + "] " + message);
+    this.code = code;
+    this.detail = message;
+  }
+}
+
+function checkDst(dst) {
+  if (typeof dst !== "string" || !dst || dst.length > MAX_DST || /[\s\/@]/.test(dst) || !/:\d{1,5}$/.test(dst)) {
+    throw new TcpRefused("bad_request", "connect() needs host:port");
+  }
+  return dst;
+}
+
+// tcpDial opens an authenticated tunnel for dst through binding and returns
+// { readable, writable, close } once hostd has dialled, or throws TcpRefused.
+// ident is a facet's { class, name } (MAC'd), null for the workload.
+async function tcpDial(env, binding, dst, ident, tls) {
+  checkDst(dst);
+  const up = binding.connect(dst);
+  const pre = { v: 1 };
+  if (env.LOCAL_TOKEN) pre.token = env.LOCAL_TOKEN;
+  if (ident) {
+    const ts = String(Date.now());
+    const nonce = crypto.randomUUID();
+    Object.assign(pre, {
+      class: ident.class,
+      name: encodeURIComponent(ident.name),
+      ts,
+      nonce,
+      mac: await mac(env, ident.class, ident.name, [ident.class, ident.name, "CONNECT", dst, ts, nonce].join("\n")),
+    });
+  }
+  if (tls) pre.tls = true;
+  const r = up.readable.getReader();
+  let buf = new Uint8Array(0);
+  let st;
+  try {
+    const w = up.writable.getWriter();
+    await w.write(enc.encode(JSON.stringify(pre) + "\n"));
+    w.releaseLock();
+    for (;;) {
+      const i = buf.indexOf(NL);
+      if (i >= 0) {
+        st = JSON.parse(new TextDecoder().decode(buf.subarray(0, i)));
+        buf = buf.subarray(i + 1);
+        break;
+      }
+      if (buf.length > 4096) throw new Error("status line too long");
+      const { value, done } = await r.read();
+      if (done) throw new Error("hostd closed the tunnel");
+      const b = new Uint8Array(buf.length + value.length);
+      b.set(buf);
+      b.set(value, buf.length);
+      buf = b;
+    }
+  } catch (e) {
+    up.close().catch(() => {});
+    throw new TcpRefused("hostd_unavailable", "egress tunnel: " + String(e?.message ?? e));
+  }
+  if (!st || st.ok !== true) {
+    up.close().catch(() => {});
+    throw new TcpRefused(String(st?.code || "dial_failed"), String(st?.message || "refused"));
+  }
+  // The destination may speak first (MySQL, Redis greetings): bytes read
+  // past the status line come first.
+  let rest = buf.length ? buf : null;
+  const readable = new ReadableStream({
+    async pull(c) {
+      if (rest) {
+        c.enqueue(rest);
+        rest = null;
+        return;
+      }
+      const { value, done } = await r.read();
+      if (done) c.close();
+      else c.enqueue(value);
+    },
+    cancel(reason) {
+      return r.cancel(reason);
+    },
+  });
+  return { readable, writable: up.writable, close: () => up.close() };
+}
+
+// tcpServe answers a connect() handler's socket with dial(dst)'s tunnel.
+async function tcpServe(socket, dial) {
+  let dst, up;
+  try {
+    const info = await socket.opened;
+    dst = info?.localAddress ?? info?.remoteAddress;
+    up = await dial(dst);
+  } catch (e) {
+    console.warn("tw: connect(" + String(dst) + ") refused: " + String(e?.message ?? e));
+    await socket.close().catch(() => {});
+    return;
+  }
+  await Promise.allSettled([
+    socket.readable.pipeTo(up.writable),
+    up.readable.pipeTo(socket.writable),
+  ]);
+  await Promise.allSettled([socket.close(), up.close()]);
 }
 
 // attestedAs is who a TailnetApi call acts for: the facet object named by
@@ -548,6 +702,24 @@ function containerAs(props, args) {
 // tenant service, which may act as a plain-DO object it hosts (args.as) but
 // never as a facet object.
 export class TailnetApi extends WorkerEntrypoint {
+  // ctx.tailnet.connect(): the socket's streams, or a typed refusal. A
+  // facet connects as its own node; the Worker as the workload node. A
+  // plain-DO object has no node of its own to connect from (WD-3), so it
+  // is refused rather than silently given the workload's identity.
+  async tcpConnect(args = {}) {
+    const p = this.ctx.props ?? {};
+    const tls = args.tls === "netd";
+    try {
+      let s;
+      if (p.kind === "object") s = await tcpDial(this.env, this.env.NETD_EGRESS, args.address, { class: p.class, name: p.name }, tls);
+      else if (args.as) throw new TcpRefused("not_supported", "ctx.tailnet.connect() in a plain-DO object (\"egress\": \"workload\") has no per-object identity; use connect() from cloudflare:sockets (egresses as the workload node) or facet mode");
+      else s = await tcpDial(this.env, this.env.EGRESS_WL, args.address, null, tls);
+      return { ok: true, value: { readable: s.readable, writable: s.writable } };
+    } catch (e) {
+      if (e instanceof TcpRefused) return { ok: false, error: errBody(e.code, e.detail) };
+      return { ok: false, error: errBody("dial_failed", String(e?.message ?? e)) };
+    }
+  }
   // ctx.container ops (JSON): status, start, destroy, signal, monitor,
   // setInactivityTimeout, inspect, intercept, exec-signal, exec-resize.
   async ctr(op, args = {}) {

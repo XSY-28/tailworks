@@ -21,7 +21,7 @@ usage: tw up [--oauth-client-file <file>] [--service=false]  |  up --control=hea
 
 flags:
   -allow-sibling-egress
-    	let objects reach other objects on this host over the tailnet (hairpin; single-host tests and demos)
+    	dial other objects on this host over WireGuard (a hairpin) instead of netd's in-process hop (tests)
   -api-key-file string
     	--control=headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied). Tailscale API keys are not a mint mode: use --oauth-client-file
   -audit-max-age duration
@@ -2112,14 +2112,16 @@ flags:
 
 ### tw backup
 
-back up mgmt's store, custody and tw.json, online
+back up mgmt's store, custody and DO storage, online
 
 ```text
-tw backup: back up this install's control plane while it runs: mgmt's store (a consistent SQLite copy), custody, the ID secret, mgmt's node state and tw.json, into a new directory (tw restore puts it back)
+tw backup: back up this install while it runs: mgmt's store (a consistent SQLite copy), custody, the ID secret, mgmt's node state and tw.json, and this host's Durable Object storage (each database a consistent copy) and fs R2 bytes, into a new directory (tw restore puts it back); --hostd=false copies the control plane only
 
-usage: tw backup [--out <dir>]
+usage: tw backup [--out <dir>] [--hostd=false]
 
 flags:
+  -hostd
+    	also copy each workload's Durable Object storage and the fs backend's R2 bytes (--hostd=false: the control plane only) (default true)
   -json
     	machine-readable output
   -out string
