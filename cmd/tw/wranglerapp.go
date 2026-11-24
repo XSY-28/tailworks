@@ -279,6 +279,9 @@ func readWranglerOut(outdir, main string, userRules []esbundle.Rule) (files map[
 // packWorkerd adds tw-bundle.json, tailworks.jsonc and the resolved wrangler
 // config (as wrangler.jsonc, with --var overrides) to files and packs them.
 func (a *app) packWorkerd(files map[string][]byte, main string, types map[string]string, vars map[string]string) ([]byte, error) {
+	if err := a.addAssets(files); err != nil { // assets.go
+		return nil, err
+	}
 	tb := map[string]any{"main": main}
 	if len(types) > 0 {
 		tb["modules"] = types
@@ -301,5 +304,9 @@ func (a *app) packWorkerd(files map[string][]byte, main string, types map[string
 		w["vars"] = nv
 	}
 	files["wrangler.jsonc"], _ = json.MarshalIndent(w, "", "  ")
-	return bundle.Pack(files)
+	tb2, err := bundle.Pack(files)
+	if err != nil {
+		return nil, err
+	}
+	return tb2, checkBundleSize(tb2)
 }

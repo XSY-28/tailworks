@@ -253,7 +253,7 @@ func cmdDev(args []string) error {
 	}
 	// Snapshot before ready is announced: an edit made right after it
 	// (a test's, an agent's) must still trigger a reload.
-	last := snapshot(a.Dir)
+	last := snapshot(a.Dir, a.assetsDir())
 	// --json: NDJSON events on stdout (agentjson.go) instead of the text.
 	var hout io.Writer = os.Stdout
 	ev := newEvents(*f.json, os.Stdout)
@@ -324,7 +324,7 @@ func cmdDev(args []string) error {
 			fmt.Fprintln(hout, "\nstopping")
 			return nil
 		case <-tick.C:
-			now := snapshot(a.Dir)
+			now := snapshot(a.Dir, a.assetsDir())
 			if now == last {
 				continue
 			}
@@ -489,24 +489,34 @@ func devMCPInitialize(u string) map[string]any {
 }
 
 // snapshot is a cheap change detector: newest mtime + file count of the
-// app's sources (node_modules, dist and dot-dirs excluded).
-func snapshot(dir string) string {
+// app's sources (node_modules, dist and dot-dirs excluded) and of
+// assetsDir, the wrangler assets.directory ("" for none), walked whole even
+// when it is dist: an edit to a static file reloads too.
+func snapshot(dir, assetsDir string) string {
 	var newest time.Time
 	n := 0
-	filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() && p != dir && (d.Name() == "node_modules" || d.Name() == "dist" || strings.HasPrefix(d.Name(), ".")) {
-			return filepath.SkipDir
-		}
-		if info, err := d.Info(); err == nil && !d.IsDir() {
-			n++
-			if info.ModTime().After(newest) {
-				newest = info.ModTime()
+	walk := func(root string, skip func(fs.DirEntry) bool) {
+		filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
 			}
-		}
-		return nil
+			if d.IsDir() && p != root && skip(d) {
+				return filepath.SkipDir
+			}
+			if info, err := d.Info(); err == nil && !d.IsDir() {
+				n++
+				if info.ModTime().After(newest) {
+					newest = info.ModTime()
+				}
+			}
+			return nil
+		})
+	}
+	walk(dir, func(d fs.DirEntry) bool {
+		return d.Name() == "node_modules" || d.Name() == "dist" || strings.HasPrefix(d.Name(), ".")
 	})
+	if assetsDir != "" {
+		walk(assetsDir, func(d fs.DirEntry) bool { return d.Name() == "node_modules" || d.Name() == ".git" })
+	}
 	return fmt.Sprintf("%d/%d", n, newest.UnixNano())
 }

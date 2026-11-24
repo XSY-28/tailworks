@@ -63,3 +63,4 @@ has no row below.
 | [047](047-approval-notifications.md) | Tenant notification webhooks, starting with `approval_requested` | 2026-11-15 | Accepted |
 | [048](048-deploy-preview.md) | A preview is a workload of its own next to the workload; promote deploys its bundle to the workload | 2026-11-15 | Accepted |
 | [049](049-worker-internet-egress.md) | Workers have internet egress by default, from the host's network through netd's SSRF guard; `tailnet.egress.internet` turns it off or limits it, for Workers and containers alike | 2026-11-21 | Accepted |
+| [050](050-static-assets.md) | wrangler `assets` are served by a generated router Worker in front of the app, from files in the bundle, with `_redirects`, `_headers` and assets-only projects | 2026-11-23 | Accepted |
