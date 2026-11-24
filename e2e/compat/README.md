@@ -17,6 +17,7 @@ queue consumer output in `tw logs`.
 make e2e-compat                                    # everything (~15 min warm)
 TW_COMPAT_ONLY='^(d1-|chanfana)' make e2e-compat   # some (a regexp on the ID)
 make e2e-compat-prepare                            # fetch + install + build only, no tailnet
+make e2e-compat-dev                                # the upstream SDK examples under tw dev: no tailnet, no credentials
 ```
 
 It needs `npm` and the tailnet-1 key file (`make e2e-compat` skips without
@@ -60,6 +61,10 @@ warnings, workarounds). The run's log ends with the matrix as a table.
 | `mcp-server` | agents `examples/mcp-server` | stateless MCP (`@modelcontextprotocol/server`) | mcp | pass |
 | `mcp-agent` | agents `examples/mcp` | stateful `McpAgent` (state in a Durable Object) | agents-sdk, mcp, do-storage, assets | pass |
 
+| `mcp-server`, `mcp-agent`, `ag-*` | agents `examples/` | [the upstream SDK examples](#the-upstream-sdk-examples-issue-325) | agents-sdk, mcp, … | see COMPAT.md |
+| `mcph-*` | vercel/mcp-handler `examples/` | the same | mcp | see COMPAT.md |
+| `ai-*` | vercel/ai `examples/` | the same | vercel-ai | see COMPAT.md |
+
 "refused": `tw deploy` must refuse it with an error that names the
 surface. "fails": it deploys, and its probe must fail (a binding tailworks
 doesn't provide). If one of those starts passing, that's an **XPASS** and the
@@ -67,6 +72,81 @@ run fails, so that COMPAT.md and `projects.go` get updated together.
 
 The last run's numbers are in [`status/cloudflare-examples-compat-suite.md`](../../status/cloudflare-examples-compat-suite.md)
 (or the newest results file).
+
+## The upstream SDK examples (issue #325)
+
+`upstream.go` adds the examples of the three SDK projects the README's
+"run unmodified" sentence is about: `cloudflare/agents` `examples/` (the
+playground is one of them), `vercel/mcp-handler` `examples/` and the Vercel
+AI SDK's `examples/`. A project with a `Section` is one of these.
+
+They run twice, with the same probes:
+
+- **`make e2e-compat-dev`** (`TestCompatDev`): each example under
+  `tw dev --json`, probed on 127.0.0.1. No tailnet, no credentials, about
+  20 s warm. This is the run the GitHub nightly does
+  (`.github/workflows/nightly.yml`), and it writes the tables it gets to the
+  job summary.
+- **`make e2e-compat`**: deployed on tailnet 1 with everything else.
+
+Every example of the three projects is accounted for: the ones that run are
+projects, the rest are in `UpstreamNotRun()` with the reason. The results
+are **published in [COMPAT.md](../../docs/COMPAT.md#upstream-examples-agents-sdk)**,
+one row per example, and those tables are generated:
+
+```sh
+make e2e-compat-dev && make e2e-compat   # or TW_COMPAT_ONLY=… for some
+make compat-upstream                     # newest results → upstream-results.json + the COMPAT.md tables
+git add e2e/compat/upstream-results.json docs/COMPAT.md
+```
+
+`make compat-upstream-check` (in `make lint`) fails when a table differs
+from what `upstream-results.json` and the project list render, when a
+published project has no recorded `tw dev` result, and when a recorded
+result is for another commit of the example than the one pinned now. So a
+row can't be edited by hand, and an example can't be added or re-pinned
+without running it. The date in each table is the date of the run that was
+committed; the nightly's job summary has last night's.
+
+What the published result means:
+
+- **pass**: no `Changes`, the probe passed in every mode it ran in.
+- **pass with change**: the probe passed, and the project lists `Changes`:
+  what the run changed in the example itself (its config, an added Worker
+  entry, a scripted model). `Workarounds` are install mechanics (a
+  workspace dependency pinned to its published version, `npm install`
+  outside the monorepo) and don't make a pass "with change".
+- **fail**: an `Expect` (both modes) or `ExpectDeployed` (deployed only),
+  with the issue it is tied to. The run stays green while it fails the
+  expected way, and reports XPASS when it starts passing.
+- **not run**: `UpstreamNotRun()`.
+
+The Vercel AI SDK examples call OpenAI. The suite never calls a model: the
+Worker entry it adds (`tw-compat-openai.ts`) answers the example's
+Responses API calls with a scripted stream. That is listed as a change.
+
+### What the upstream run found (2026-11-24)
+
+1. **Open ([#354](https://github.com/rosskukulinski/tailworks/issues/354)): a pre-built Worker that imports `cloudflare:email` can't start.**
+   The Agents playground does, for its email demos, so none of it runs.
+2. **Open ([#355](https://github.com/rosskukulinski/tailworks/issues/355)): agents reached through the imported env are not created.**
+   `cross-domain` and `mcp-elicitation` pass
+   `import { env } from "cloudflare:workers"` to the Agents SDK and get
+   `create_not_admitted`.
+3. **Open ([#356](https://github.com/rosskukulinski/tailworks/issues/356)): the built-in bundler and CommonJS `require()` of a Node builtin.**
+   A Worker with `dotenv` in it bundles and then can't start. The three AI
+   SDK examples bundle with `--wrangler`.
+4. **Open ([#359](https://github.com/rosskukulinski/tailworks/issues/359)): an `AgentWorkflow` started with `runWorkflow` stays queued on a deployed host.**
+   The `workflows` example passes under `tw dev` and not deployed.
+5. **Open ([#360](https://github.com/rosskukulinski/tailworks/issues/360)): no HTTPS origin on the tailnet.**
+   workers-oauth-provider refuses an `http://` resource URL, so
+   `mcp-worker-authenticated` passes under `tw dev` (loopback) and can't be
+   configured for a tailnet URL.
+6. Upstream quirks: `@hono/node-server` replaces the global `Request` and
+   `Response`, which no Workers runtime survives (stock `wrangler dev`
+   fails the same way), so the Hono example's `serve()` is aliased to a
+   shim. The `workflows` example throws after each step 9 times in 10 on
+   purpose, so its approval step isn't reached.
 
 ## What "unmodified" means
 
@@ -95,8 +175,9 @@ Anything beyond that is a **workaround**. It's listed in the project's
 `Workarounds` and in the results, and it's a tailworks gap or an upstream
 quirk to look at:
 
-- **Vite plugin projects** (`react-router-ssr`, `workflows-starter`,
-  `mcp-agent`; [#301](https://github.com/rosskukulinski/tailworks/issues/301)): the build writes `.wrangler/deploy/config.json`, which
+- **Vite plugin projects** (`react-router-ssr`, `workflows-starter`;
+  `mcp-agent` and the `ag-*` examples deploy plainly now that #301 is
+  fixed; [#301](https://github.com/rosskukulinski/tailworks/issues/301)): the build writes `.wrangler/deploy/config.json`, which
   points at a generated `dist/<worker>/wrangler.json` (`no_bundle`, ESModule
   `rules` over pre-split chunks). `wrangler deploy` follows it. `tw deploy`
   reads the project's own config, and its built-in bundler refuses

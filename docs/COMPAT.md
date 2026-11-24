@@ -43,6 +43,15 @@ README does. The rows marked ❌ that those projects hit (Python Workers,
 service bindings, Workers AI) are expected to fail there in the way the row
 says.
 
+The same suite runs the **upstream projects' own examples** for the three
+SDK rows, at pinned commits, under `tw dev` and deployed: every example in
+`cloudflare/agents`, `vercel/mcp-handler` and the Vercel AI SDK is listed
+with its result (pass, pass with a change, fail, or not run and why) under
+[Agents SDK](#upstream-examples-agents-sdk),
+[Vercel AI SDK](#upstream-examples-vercel-ai-sdk) and
+[mcp-handler](#upstream-examples-mcp-handler). Those tables are generated
+from the suite's results, and `make lint` fails if they are edited by hand.
+
 ## Runtime
 
 | Surface | Status | workerd provides | tailworks adds | Different from Cloudflare | Missing | Tests |
@@ -121,9 +130,9 @@ says.
 
 | Surface | Status | workerd provides | tailworks adds | Different from Cloudflare | Missing | Tests |
 |---|---|---|---|---|---|---|
-| <a id="agents-sdk"></a>Cloudflare Agents SDK (`agents`) | ⚠️ | — | runs unmodified: routing, state, SQL, schedules, WebSockets and hibernation, MCP client and server, in both object modes. `getCaller` in `onRequest` and `onConnect`. `AgentWorkflow` and `waitForApproval`, with the approver's verified identity. [Details](#cloudflare-agents-sdk-agents-0330) | an agent can't call an MCP server on the same host over the tailnet (`forbidden_destination`); `approveWorkflow()`/`rejectWorkflow()` from app code are refused by design ([approvals](#approvals)) | `subAgent()`, `env.AI`, email, browser, codemode; `McpAgent`, `@callable` and `AIChatAgent` not tested | `e2e/sdk:TestCloudflareAgents/RouteAgentRequest`, `e2e/sdk:TestCloudflareAgents/Schedule`, `e2e/sdk:TestCloudflareAgents/AgentAsMCPClient`, `e2e/sdk:TestAgentTemplate`, `e2e/sdk:TestWorkflowApprovals` (nightly: `make test-sdk`) |
-| <a id="mcp"></a>MCP servers (`createMcpHandler`, `mcp-handler`) | ✅ | — | `@tailworks/mcp` `withTailnet`: a per-request caller, and tools allowed or denied by tailnet grants (`cap_missing`) | — | stdio transport | `e2e/sdk:TestCloudflareAgents/CreateMcpHandlerWithTailnet`, `e2e/sdk:TestVercelAI/McpHandlerWithTailnet` (nightly: `make test-sdk`) |
-| <a id="vercel-ai"></a>Vercel AI SDK (`ai`) | ⚠️ | — | `ToolLoopAgent` and UI message streams run in the Worker and in objects (one agent, one node). [Details](#vercel-ai-sdk-ai-70177-and-mcp-handler-240) | `@ai-sdk/mcp` with the default `fetch` throws in workerd; use `@tailworks/mcp` `mcpFetch` | `WorkflowAgent` in the Worker (it runs on [Node apps](#node-runtime)), on-behalf-of assertions | `e2e/sdk:TestVercelAI/ToolLoopAgent`, `e2e/sdk:TestVercelAI/EgressRefusalIsTyped`, `e2e/node:TestNodeWorkflow` (nightly: `make test-sdk`, `make test-node`) |
+| <a id="agents-sdk"></a>Cloudflare Agents SDK (`agents`) | ⚠️ | — | runs unmodified: routing, state, SQL, schedules, `@callable` RPC, WebSockets and hibernation, MCP client and server (`createMcpHandler`, `McpAgent`), in both object modes. `getCaller` in `onRequest` and `onConnect`. `AgentWorkflow` and `waitForApproval`, with the approver's verified identity. [Details](#cloudflare-agents-sdk-agents-0330). Cloudflare's own examples, one row each: [upstream examples](#upstream-examples-agents-sdk) | an agent can't call an MCP server on the same host over the tailnet (`forbidden_destination`); `approveWorkflow()`/`rejectWorkflow()` from app code are refused by design ([approvals](#approvals)); agents reached through the imported env (`import { env } from "cloudflare:workers"`) can't be created (`create_not_admitted`: pass the handler's `env`) | `subAgent()`, `env.AI`, email, browser, codemode; `AIChatAgent` not tested. Most of Cloudflare's examples need Workers AI or another of these and were not run, and some of those that ran fail ([each one, and why](#upstream-examples-agents-sdk)) | `e2e/sdk:TestCloudflareAgents/RouteAgentRequest`, `e2e/sdk:TestCloudflareAgents/Schedule`, `e2e/sdk:TestCloudflareAgents/AgentAsMCPClient`, `e2e/sdk:TestAgentTemplate`, `e2e/sdk:TestWorkflowApprovals`, `e2e/compat:TestCompatDev` (nightly: `make test-sdk`, `make e2e-compat-dev`) |
+| <a id="mcp"></a>MCP servers (`createMcpHandler`, `mcp-handler`) | ✅ | — | `@tailworks/mcp` `withTailnet`: a per-request caller, and tools allowed or denied by tailnet grants (`cap_missing`). mcp-handler's own examples, one row each: [upstream examples](#upstream-examples-mcp-handler) | mcp-handler's examples are route modules, so each needs a Worker entry that mounts it | stdio transport; an OAuth-protected server on a tailnet (`http://`) URL ([#360](https://github.com/rosskukulinski/tailworks/issues/360)) | `e2e/sdk:TestCloudflareAgents/CreateMcpHandlerWithTailnet`, `e2e/sdk:TestVercelAI/McpHandlerWithTailnet`, `e2e/compat:TestCompatDev` (nightly: `make test-sdk`, `make e2e-compat-dev`) |
+| <a id="vercel-ai"></a>Vercel AI SDK (`ai`) | ⚠️ | — | `ToolLoopAgent` and UI message streams run in the Worker and in objects (one agent, one node). [Details](#vercel-ai-sdk-ai-70177-and-mcp-handler-240). The AI SDK's own examples, one row each: [upstream examples](#upstream-examples-vercel-ai-sdk) | `@ai-sdk/mcp` with the default `fetch` throws in workerd; use `@tailworks/mcp` `mcpFetch`. None of the AI SDK's examples targets Workers: the three that ran are Node servers given a Worker entry, with a scripted model | `WorkflowAgent` in the Worker (it runs on [Node apps](#node-runtime)), on-behalf-of assertions; the AI SDK's Next.js, Nuxt and SvelteKit examples (not run) | `e2e/sdk:TestVercelAI/ToolLoopAgent`, `e2e/sdk:TestVercelAI/EgressRefusalIsTyped`, `e2e/node:TestNodeWorkflow`, `e2e/compat:TestCompatDev` (nightly: `make test-sdk`, `make test-node`, `make e2e-compat-dev`) |
 
 ## Tooling
 
@@ -189,15 +198,71 @@ check below runs in both.
 | `subAgent()` / sub-agent facets | ❌ | ? | `UnsupportedBindings` | inside a facet the Dynamic Worker's `ctx.exports` has no tenant classes ("Sub-agent class … not found in worker exports"). Use `ctx.tailnet.spawn` (own node, narrower caps) |
 | `env.AI` (Workers AI) | ❌ | ❌ | `UnsupportedBindings` | no binding. Use an AI SDK provider pointed at a tailnet LLM gateway (`ai-agent` template, `src/model.ts`) |
 | Workers KV binding (incl. `OAUTH_KV` for workers-oauth-provider) | ✅ | ✅ | `TestOAuthProviderKV` | `@cloudflare/workers-oauth-provider` 1.2.4 unmodified: registration, PKCE code flow, refresh, the protected API, `listClients`/`listUserGrants`, replay revocation. See [Workers KV](#workers-kv-details). For tailnet callers `getCaller` is still simpler than OAuth |
-| Workflows: `AgentWorkflow`, `runWorkflow`, `getWorkflowStatus`, `step.reportComplete` | ✅ | ✅ | `TestWorkflowApprovals`, `TestRefundApprovalTemplate` | on workerd's built-in engine. A failed step retries from itself (completed steps return their stored results); the instance survives a hostd restart. Tailworks keeps `AgentWorkflow` from reporting the engine's end of a long wait (`WorkflowAbortedError`) to the Agent as an error |
+| Workflows: `AgentWorkflow`, `runWorkflow`, `getWorkflowStatus`, `step.reportComplete` | ✅ | ✅ | `TestWorkflowApprovals`, `TestRefundApprovalTemplate` | on a deployed host, the workflow that Cloudflare's `workflows` example starts with `runWorkflow` stays queued ([#359](https://github.com/rosskukulinski/tailworks/issues/359), [upstream examples](#upstream-examples-agents-sdk)); these tests use the embedded host. On workerd's built-in engine. A failed step retries from itself (completed steps return their stored results); the instance survives a hostd restart. Tailworks keeps `AgentWorkflow` from reporting the engine's end of a long wait (`WorkflowAbortedError`) to the Agent as an error |
 | `waitForApproval` | ✅ | ✅ | `TestWorkflowApprovals/ApproveWithIdentity`, `TestWorkflowApprovals/Reject` | resolved only by tailworks ([approvals](#approvals)): the returned metadata carries `approver` (user, node, nodeId, tags, via) and `comment`; a forged `approver` in the request is replaced; a rejection throws `WorkflowRejectedError` with the comment as reason; a timeout rejects |
 | `approveWorkflow` / `rejectWorkflow` from app code | 🚫 | 🚫 | `TestWorkflowApprovals/NoGrantRefused` | by design: an approval is a decision by a tailnet identity, so app code may not send one (`approval_requires_identity`); approve with `tw approve`, the admin UI or `POST /_tw/approvals/<workflow>/<instance>` |
 | Email (`cloudflare:email`, `routeAgentEmail`) | ❌ | ❌ | `UnsupportedBindings` | the bundler stubs `cloudflare:email`; constructing `EmailMessage` throws "not supported on tw" |
 | Browser Rendering (`env.BROWSER`, `agents/browser`) | ❌ | ❌ | `UnsupportedBindings` | |
 | Codemode / dynamic agents (`env.LOADER` for tenants) | ❌ | ❌ | `UnsupportedBindings` | Worker Loader is platform-only |
 | `harness/container/*` | not tested | not tested | — | was ❌ (needed a container). Tailworks now implements `ctx.container` (ADR-032, below), the primitive it builds on, but no `harness/container` code has been run on tailworks |
-| `McpAgent` | not tested | | — | deprecated upstream; use `createMcpHandler` (ADR-022) |
-| `@callable` RPC, `useAgent`, `AIChatAgent` | not tested | | — | same DO/WebSocket primitives as above (assumption) |
+| `McpAgent` | ✅ | | `e2e/compat` (`mcp-agent`, `ag-webmcp`) | Cloudflare's `mcp` and `webmcp` examples ([upstream examples](#upstream-examples-agents-sdk)): tools, and state in the Durable Object across calls. Deprecated upstream; prefer `createMcpHandler` (ADR-022) |
+| `@callable` RPC over the agent's WebSocket (what `useAgent` calls), streaming callables | ✅ | | `e2e/compat` (`ag-github-webhook`, `ag-push-notifications`, `ag-workflows`) | from Cloudflare's examples, with a Go client speaking the `rpc` messages; the React `useAgent` hook itself is not run |
+| Agents reached through the imported env (`import { env } from "cloudflare:workers"` passed to `routeAgentRequest` / `getAgentByName`) | ❌ | | `e2e/compat` (`ag-cross-domain`, `ag-mcp-elicitation`: expected failures) | a new agent name is `403 create_not_admitted` ([create admission](create-admission.md), [#355](https://github.com/rosskukulinski/tailworks/issues/355)); pass the `env` argument of `fetch` instead |
+| `AIChatAgent` | not tested | | — | every upstream example that uses it needs Workers AI |
+
+### Upstream examples: Agents SDK
+
+Cloudflare's own examples, from the `examples/` directory of
+[cloudflare/agents](https://github.com/cloudflare/agents) (the playground is
+one of them), run by [`e2e/compat`](../e2e/compat/README.md). "Unmodified"
+is what that README says: the example's source and config as they are at the
+pinned commit, installed outside the monorepo, plus a `tailworks.jsonc` with
+only a name and a tag. Anything more is in the last column.
+
+<!-- upstream-examples:agents-sdk:begin -->
+<!-- Generated by `make compat-upstream` from e2e/compat/upstream-results.json: don't edit this block by hand. -->
+
+Upstream: [cloudflare/agents](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples) `examples/` at commit `95dacf84dcdf`. Versions: `agents` 0.34.0 (the examples depend on `"agents": "*"`, a workspace link; the suite installs the published version the repo carries at that commit, with `npm install`), `@modelcontextprotocol/server` 2.4.0 and `@modelcontextprotocol/sdk` 1.32.2 (pinned by the examples themselves). No other versions were run, so none is known not to work.
+
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-24 on darwin/arm64, tailworks `a7a7393cae68`.
+- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-24 on darwin/arm64, tailworks `a7a7393cae68`.
+
+69 examples: **9 pass, 0 pass with a change, 5 fail, 55 not run.** (The repo has 56 example directories. One of them, `next/`, holds 14 examples of its own, counted here one by one, with `next/harnesses` as one.) A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
+
+| Example | What it is | `tw dev` | Deployed | Result | The change, or why it fails |
+|---|---|---|---|---|---|
+| [`mcp-server`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/mcp-server) | Stateless MCP server (createMcpHandler) | pass | pass | **pass** | — |
+| [`mcp`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/mcp) | Stateful MCP server on an Agents SDK McpAgent (Durable Object state) | pass | pass | **pass** | — |
+| [`cross-domain`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/cross-domain) | Agent behind onBeforeConnect / onBeforeRequest token checks: HTTP and WebSocket | fail | fail | **fail** | The example passes the imported env (`import { env } from "cloudflare:workers"`) to the Agents SDK; tailworks creates a new object only through the `env` it hands the handler, so the first request for a new agent is `403 create_not_admitted` ([#355](https://github.com/rosskukulinski/tailworks/issues/355)). With the handler's `env` (a one-line change) it runs |
+| [`github-webhook`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/github-webhook) | GitHub webhook receiver: HMAC check, one agent per repo, SQL event log, state sync | pass | pass | **pass** | — |
+| [`mcp-client`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/mcp-client) | Agent as MCP client (addMcpServer, @callable RPC) | pass | pass | **pass** | — |
+| [`mcp-elicitation`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/mcp-elicitation) | Stateful MCP server with elicitation (MCP SDK v1 on a Durable Object, WorkerTransport) | fail | fail | **fail** | The example passes the imported env (`import { env } from "cloudflare:workers"`) to the Agents SDK; tailworks creates a new object only through the `env` it hands the handler, so the first request for a new agent is `403 create_not_admitted` ([#355](https://github.com/rosskukulinski/tailworks/issues/355)). With the handler's `env` (a one-line change) it runs |
+| [`mcp-elicitation-mrtr`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/mcp-elicitation-mrtr) | Stateless MCP elicitation, multi-round-trip requests (MCP 2026-07-28 only) | pass | pass | **pass** | — |
+| [`mcp-worker`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/mcp-worker) | Stateless MCP server in a Worker (createMcpHandler) + React tool tester | pass | pass | **pass** | — |
+| [`mcp-worker-authenticated`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/mcp-worker-authenticated) | MCP server behind OAuth 2.1 (@cloudflare/workers-oauth-provider on KV) | pass | fail | **fail** deployed (pass with change under `tw dev`) | Deployed: workers-oauth-provider accepts only an HTTPS resource URL (`http` on loopback), and a tailnet workload is served over `http://`, so with `MCP_RESOURCE` set to its tailnet URL workerd can't start the Worker ([#360](https://github.com/rosskukulinski/tailworks/issues/360)). Under `tw dev`: `vars.MCP_RESOURCE` in wrangler.jsonc set to the served URL + `/mcp`, as the example's README says to |
+| [`push-notifications`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/push-notifications) | Reminder agent: @callable RPC, schedule(), state sync, Web Push (VAPID secrets) | pass | pass | **pass** | — |
+| [`webmcp`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/webmcp) | McpAgent (MCP SDK v1, state in a Durable Object) + browser WebMCP adapter page | pass | pass | **pass** | — |
+| [`webmcp-react`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/webmcp-react) | WebMCP starter: a React SPA (tools run in the browser), Worker only as the 404 fallback | pass | pass | **pass** | — |
+| [`workflows`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/workflows) | AgentWorkflow started by an agent: steps, progress reports to the agent and its clients, restart, list. (Its approval step sits behind the example's intentional random failures and isn't reached) | pass | fail | **fail** deployed (pass under `tw dev`) | Deployed: the workflow the agent starts with `runWorkflow` stays queued: no progress report reaches the agent or its clients ([#359](https://github.com/rosskukulinski/tailworks/issues/359)). Plain Workflows in the same run pass |
+| [`playground`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/playground) | The Agents playground: 30 agent classes in one Worker (state, callable, streaming, schedule, SQL, routing, multi-agent, MCP, workflows; AI, email, voice and codemode demos too) | fail | fail | **fail** | The Worker imports `cloudflare:email` for its email demos; in a Vite-built Worker that import stops workerd from starting ([#354](https://github.com/rosskukulinski/tailworks/issues/354)), so no demo runs |
+
+Not run:
+
+| Why | Examples |
+|---|---|
+| needs Workers AI (`env.AI`, an `ai` binding in its wrangler config), which tailworks doesn't provide | `a2a`, `agents-as-tools`, `auth-agent`, `chat-sdk-messenger`, `codemode-browser`, `context-overflow-recovery`, `deploy-churn`, `dynamic-tools`, `mcp-rpc-transport`, `multi-ai-chat`, `resumable-stream-chat`, `structured-input`, `think-chat-sdk`, `think-submissions`, `think-workflows`, `vue-chat`, `web-fetch-lab`, `web-research` |
+| needs Workers AI, and a voice or telephony provider's API key | `elevenlabs-starter`, `plivo-voice-agent`, `telnyx-voice-agent`, `voice-agent`, `voice-input` |
+| needs Workers AI and Browser Rendering (`browser` binding) | `ai-chat`, `browser-live-view`, `browser-quick-actions`, `codemode-connectors` |
+| needs Workers AI and the Worker Loader (`worker_loaders` binding) | `codemode`, `computer-skills`, `r2-skills`, `worker-bundler-playground`, `workspace-chat` |
+| needs the Worker Loader (`worker_loaders` binding), which tailworks keeps to the platform | `codemode-mcp`, `codemode-mcp-openapi`, `dynamic-workers`, `dynamic-workers-playground` |
+| needs Workers AI and a container (`containers` binding with a Dockerfile); the suite runs the process tier only | `sandbox-coding-agent` |
+| needs Email Routing (`send_email` binding, the `email()` handler) | `email-agent` |
+| needs an OpenAI API key (the agent's moves come from `@ai-sdk/openai`) | `tictactoe` |
+| needs a funded test wallet key and the public x402.org facilitator | `x402`, `x402-mcp` |
+| not reached in this pass. These declare no Cloudflare-only binding (plain `DurableObject` + `Lifecycle` capabilities), so they are the next ones to add | `next/lifecycle`, `next/mcp-client`, `next/queue`, `next/routing`, `next/schedules`, `next/sessions`, `next/streams`, `next/tasks`, `next/websockets` |
+| not reached in this pass; needs Workers AI, the Worker Loader, a container or a model provider key | `next/channels`, `next/dynamic-agents`, `next/harnesses/*`, `next/models`, `next/tools/browser` |
+
+<!-- upstream-examples:agents-sdk:end -->
 
 ## Secrets: details
 
@@ -320,6 +385,65 @@ separate processes).
 | On-behalf-of (`actingFor`) assertions on MCP calls | ❌ | — | RFC §4.6 not implemented: the server sees the agent's node, not the human it acts for |
 | `WorkflowAgent` / Workflow SDK | ❌ | — | `node:vm` (ADR-022: Node process tier, branch m9) |
 | `HarnessAgent`, Vercel Sandbox, hosted Vercel services | ❌ | — | client-only or process tier (Cloudflare's Sandbox SDK: see below) |
+
+### Upstream examples: Vercel AI SDK
+
+The examples in [vercel/ai](https://github.com/vercel/ai)'s `examples/`
+directory. None of them targets Workers, and all of them call a model
+provider with an API key. The three that expose their server without a
+framework build (Hono, `node:http`, Express) run here as Workers, with a
+scripted stand-in for the OpenAI API, so these rows show the AI SDK's
+streaming and agent loop running on tailworks, not a model.
+
+<!-- upstream-examples:vercel-ai:begin -->
+<!-- Generated by `make compat-upstream` from e2e/compat/upstream-results.json: don't edit this block by hand. -->
+
+Upstream: [vercel/ai](https://github.com/vercel/ai/tree/8956ca55ed9c31b4b7680621a10ad0269f9629b1/examples) `examples/` at commit `8956ca55ed9c`. Versions: `ai` 7.0.181 and `@ai-sdk/openai` 4.0.122 (the examples depend on `workspace:*`; the suite installs the published versions the repo carries at that commit). No other versions were run.
+
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-24 on darwin/arm64, tailworks `a7a7393cae68`.
+- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-24 on darwin/arm64, tailworks `a7a7393cae68`.
+
+25 examples: **0 pass, 3 pass with a change, 0 fail, 22 not run.** A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
+
+| Example | What it is | `tw dev` | Deployed | Result | The change, or why it fails |
+|---|---|---|---|---|---|
+| [`hono`](https://github.com/vercel/ai/tree/8956ca55ed9c31b4b7680621a10ad0269f9629b1/examples/hono) | Hono server: `streamText`, text and UI message streams, a `ToolLoopAgent` behind `createAgentUIStreamResponse` | pass | pass | **pass with change** | (1) The example is a Node server with no Workers config: a wrangler.jsonc and a Worker entry are added, and `@hono/node-server` is aliased to a shim whose `serve()` hands Hono's `app.fetch` to that entry instead of listening on port 8080; `src/` is unchanged. (2) No OpenAI key: the entry answers the example's OpenAI Responses API calls with a scripted stream, so no model is called. (3) Wrangler is added and bundles it (`tw deploy --wrangler`): with `dotenv` in it, which the example imports, a Worker bundled by tailworks' built-in bundler can't start ([#356](https://github.com/rosskukulinski/tailworks/issues/356)). |
+| [`node-http-server`](https://github.com/vercel/ai/tree/8956ca55ed9c31b4b7680621a10ad0269f9629b1/examples/node-http-server) | `node:http` server: `streamText` piped with `pipeUIMessageStreamToResponse` | pass | pass | **pass with change** | (1) The example is a Node server with no Workers config: a wrangler.jsonc and a 4-line Worker entry (`httpServerHandler({ port: 8080 })` from `cloudflare:node`) are added; `src/` is unchanged. (2) No OpenAI key: the entry answers the example's OpenAI Responses API calls with a scripted stream, so no model is called. (3) Wrangler is added and bundles it (`tw deploy --wrangler`): with `dotenv` in it, which the example imports, a Worker bundled by tailworks' built-in bundler can't start ([#356](https://github.com/rosskukulinski/tailworks/issues/356)). |
+| [`express`](https://github.com/vercel/ai/tree/8956ca55ed9c31b4b7680621a10ad0269f9629b1/examples/express) | Express 5 server: `streamText`, and a `ToolLoopAgent` piped with `pipeAgentUIStreamToResponse` | pass | pass | **pass with change** | (1) The example is a Node server with no Workers config: a wrangler.jsonc and a 4-line Worker entry (`httpServerHandler({ port: 8080 })` from `cloudflare:node`) are added; `src/` is unchanged. (2) No OpenAI key: the entry answers the example's OpenAI Responses API calls with a scripted stream, so no model is called. (3) Wrangler is added and bundles it (`tw deploy --wrangler`): with `dotenv` in it, which the example imports, a Worker bundled by tailworks' built-in bundler can't start ([#356](https://github.com/rosskukulinski/tailworks/issues/356)). |
+
+Not run:
+
+| Why | Examples |
+|---|---|
+| a Next.js, Nuxt, SvelteKit or Angular app that calls a model provider with an API key. tailworks' Worker tier runs Workers projects, not these frameworks' builds, and none of them has a Workers target | `ai-e2e-next`, `angular`, `harness-e2e-next`, `next`, `next-agent`, `next-fastapi`, `next-google-vertex`, `next-langchain`, `next-openai-kasada-bot-protection`, `next-openai-pages`, `next-openai-telemetry`, `next-openai-telemetry-sentry`, `next-openai-upstash-rate-limits`, `next-workflow`, `nuxt-openai`, `sveltekit-openai`, `xai-tts-demo` |
+| a Node server on a framework with its own HTTP layer (Fastify, Nest); not tried | `fastify`, `nest` |
+| scripts and a terminal UI, not servers; they call model providers with API keys | `ai-functions`, `harness-e2e-tui` |
+| Node MCP servers and clients run as script pairs (`tsx server.ts`, `tsx client.ts`), several over stdio; not tried | `mcp` |
+
+<!-- upstream-examples:vercel-ai:end -->
+
+### Upstream examples: mcp-handler
+
+The three examples in [vercel/mcp-handler](https://github.com/vercel/mcp-handler)'s
+`examples/` directory.
+
+<!-- upstream-examples:mcp:begin -->
+<!-- Generated by `make compat-upstream` from e2e/compat/upstream-results.json: don't edit this block by hand. -->
+
+Upstream: [vercel/mcp-handler](https://github.com/vercel/mcp-handler/tree/5518e8af4386a92756d189169a97601a4a7162ee/examples) `examples/` at commit `5518e8af4386`. Versions: `mcp-handler` 2.4.0 (the repo's version at that commit), `@modelcontextprotocol/server` 2.4.0, `zod` 4.6.7. No other versions were run.
+
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-24 on darwin/arm64, tailworks `a7a7393cae68`.
+- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-24 on darwin/arm64, tailworks `a7a7393cae68`.
+
+3 examples: **0 pass, 3 pass with a change, 0 fail, 0 not run.** A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
+
+| Example | What it is | `tw dev` | Deployed | Result | The change, or why it fails |
+|---|---|---|---|---|---|
+| [`route.ts`](https://github.com/vercel/mcp-handler/blob/5518e8af4386a92756d189169a97601a4a7162ee/examples/route.ts) | `createMcpHandler`, one tool | pass | pass | **pass with change** | The example is a route module (`export { handler as GET, handler as POST }`), not a project: a package.json, a wrangler.jsonc and a 10-line Worker entry that mounts it at `/api/mcp` are added; `route.ts` is unchanged |
+| [`auth/route.ts`](https://github.com/vercel/mcp-handler/blob/5518e8af4386a92756d189169a97601a4a7162ee/examples/auth/route.ts) | `withMcpAuth`: bearer token with required scopes | pass | pass | **pass with change** | The example is a route module (`export { handler as GET, handler as POST }`), not a project: a package.json, a wrangler.jsonc and a 10-line Worker entry that mounts it at `/api/mcp` are added; `route.ts` is unchanged |
+| [`auth-cookie/route.ts`](https://github.com/vercel/mcp-handler/blob/5518e8af4386a92756d189169a97601a4a7162ee/examples/auth-cookie/route.ts) | `withMcpAuth`: same-origin session cookie, or bearer token | pass | pass | **pass with change** | The example is a route module (`export { handler as GET, handler as POST }`), not a project: a package.json, a wrangler.jsonc and a 10-line Worker entry that mounts it at `/api/mcp` are added; `route.ts` is unchanged |
+
+<!-- upstream-examples:mcp:end -->
 
 ## Containers: `ctx.container` and the Cloudflare Sandbox SDK (ADR-032)
 

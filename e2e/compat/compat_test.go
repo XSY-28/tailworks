@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -89,6 +90,7 @@ type Result struct {
 	Steps       []string `json:"steps,omitempty"`
 	Warnings    []string `json:"deployWarnings,omitempty"`
 	Workarounds []string `json:"workarounds,omitempty"`
+	Changes     []string `json:"changes,omitempty"`
 }
 
 func compatAnchors(t *testing.T, root string) map[string]bool {
@@ -265,7 +267,7 @@ func TestE2ECompat(t *testing.T) {
 		res.Cleanup["tw_named_devices_left"] = untrackedTw
 		res.Cleanup["errors"] = errs
 		os.RemoveAll(state)
-		writeResults(t, resultsTo, res, results)
+		writeRunFile(t, resultsTo, "deployed", root, res, results)
 		if len(devs) > 0 || len(keys) > 0 {
 			t.Errorf("after tw down: leftover tw devices %v, valid keys %d", devs, len(keys))
 		}
@@ -314,7 +316,7 @@ func TestE2ECompat(t *testing.T) {
 				case "PASS", "XFAIL":
 					t.Logf("%s: %s", r.Outcome, r.Detail)
 				case "XPASS":
-					t.Errorf("XPASS: %s is expected to fail (COMPAT.md #%s) but passed: update COMPAT.md and projects.go", p.ID, p.Expect.Compat)
+					t.Errorf("XPASS: %s is expected to fail (COMPAT.md #%s) but passed: update COMPAT.md and the project", p.ID, p.ExpectIn("deployed").Compat)
 				default:
 					t.Errorf("FAIL: %s", r.Detail)
 				}
@@ -337,7 +339,7 @@ type twFunc func(dir, stdin string, args ...string) (string, string, time.Durati
 func runProject(t *testing.T, pr *Prepared, tw twFunc, client *nettest.Node) Result {
 	p := pr.P
 	r := Result{ID: p.ID, Source: fmt.Sprintf("%s/%s@%s", p.Repo, p.Dir, p.Commit[:12]), Exercises: p.Exercises,
-		PrepareMS: pr.Dur.Milliseconds(), Workarounds: p.Workarounds}
+		PrepareMS: pr.Dur.Milliseconds(), Workarounds: p.Workarounds, Changes: p.Changes}
 	fail := func(f string, a ...any) Result {
 		r.Outcome, r.Detail = "FAIL", fmt.Sprintf(f, a...)
 		return r
@@ -350,6 +352,20 @@ func runProject(t *testing.T, pr *Prepared, tw twFunc, client *nettest.Node) Res
 			return fail("tw secret put %s: %v %s", name, err, se)
 		}
 	}
+	ex := p.ExpectIn("deployed")
+	refused := func(so, se string) Result {
+		msg := errorLines(se + "\n" + so)
+		if !strings.Contains(strings.ToLower(msg), strings.ToLower(ex.Error)) {
+			return fail("tw deploy refused it, but its error doesn't mention %q: %s", ex.Error, tail(se+so, 1500))
+		}
+		r.Outcome, r.Detail = "XFAIL", "refused as expected: "+tail(msg, 400)
+		return r
+	}
+	if p.OriginVar != "" {
+		if err := resetOriginVar(p, pr.Root); err != nil {
+			return fail("%v", err)
+		}
+	}
 	args := append([]string{"deploy", pr.DeployDir, "--json", "--wait", "4m"}, p.DeployArgs...)
 	so, se, dur, err := tw("", "", args...)
 	r.DeployMS = dur.Milliseconds()
@@ -358,17 +374,13 @@ func runProject(t *testing.T, pr *Prepared, tw twFunc, client *nettest.Node) Res
 			r.Warnings = append(r.Warnings, strings.TrimSpace(l))
 		}
 	}
-	if p.Expect.Kind == ExpectRefused {
+	// With an OriginVar the deploy that counts is the second one, below.
+	if ex.Kind == ExpectRefused && p.OriginVar == "" {
 		if err == nil {
 			r.Outcome, r.Detail = "XPASS", "tw deploy accepted it"
 			return r
 		}
-		msg := errorLines(se + "\n" + so)
-		if !strings.Contains(strings.ToLower(msg), strings.ToLower(p.Expect.Error)) {
-			return fail("tw deploy refused it, but its error doesn't mention %q: %s", p.Expect.Error, tail(se+so, 1500))
-		}
-		r.Outcome, r.Detail = "XFAIL", "refused as expected: "+tail(msg, 400)
-		return r
+		return refused(so, se)
 	}
 	if err != nil {
 		return fail("tw deploy: %v\n%s\n%s", err, tail(se, 3000), tail(so, 1000))
@@ -388,6 +400,22 @@ func runProject(t *testing.T, pr *Prepared, tw twFunc, client *nettest.Node) Res
 		}
 	}
 	ip := cliflow.PeerIP(t, client, dep.Endpoint.MagicDNS, 90*time.Second)
+	if p.OriginVar != "" {
+		// The README's "set it to your deployed URL and deploy again".
+		if err := setOriginVar(p, pr.Root, p.OriginVar, "http://"+ip+"/mcp"); err != nil {
+			return fail("%v", err)
+		}
+		so, se, _, err := tw("", "", args...)
+		switch {
+		case ex.Kind == ExpectRefused && err == nil:
+			r.Outcome, r.Detail = "XPASS", "tw deploy accepted it with "+p.OriginVar+" set"
+			return r
+		case ex.Kind == ExpectRefused:
+			return refused(so, se)
+		case err != nil:
+			return fail("tw deploy (with %s set): %v\n%s", p.OriginVar, err, tail(se, 3000))
+		}
+	}
 	run := &Run{P: p, Base: "http://" + ip, HC: client.HTTPClient(60 * time.Second),
 		Tw: func(args ...string) (string, string, error) {
 			so, se, _, err := tw("", "", args...)
@@ -397,13 +425,16 @@ func runProject(t *testing.T, pr *Prepared, tw twFunc, client *nettest.Node) Res
 	perr := p.Probe(run)
 	r.ProbeMS, r.Steps = time.Since(t0).Milliseconds(), run.Steps
 	switch {
-	case p.Expect.Kind == ExpectProbeFail && perr == nil:
+	case ex.Kind == ExpectProbeFail && perr == nil:
 		r.Outcome, r.Detail = "XPASS", "probe passed"
-	case p.Expect.Kind == ExpectProbeFail:
-		r.Outcome, r.Detail = "XFAIL", "failed as expected ("+p.Expect.Why+"): "+tail(perr.Error(), 300)
+	case ex.Kind == ExpectProbeFail:
+		r.Outcome, r.Detail = "XFAIL", "failed as expected ("+ex.Why+"): "+tail(perr.Error(), 300)
 	case perr != nil:
 		if lo, _, _, err := tw("", "", "logs", p.ID, "--console", "-n", "40"); err == nil {
 			r.Steps = append(r.Steps, "console (tail): "+tail(lo, 2000))
+		}
+		if lo, _, _, err := tw("", "", "logs", p.ID, "-n", "40"); err == nil {
+			r.Steps = append(r.Steps, "request records (tail): "+tail(lo, 4000))
 		}
 		return fail("probe: %v", perr)
 	default:
@@ -442,8 +473,9 @@ func errorLines(out string) string {
 	return strings.Join(keep, " ")
 }
 
-// writeResults writes the JSON results and logs the matrix.
-func writeResults(t *testing.T, path string, res *cliflow.Results, results []Result) {
+// writeRunFile writes the JSON results (the RunFile fields, plus the
+// cliflow results of a deployed run) and logs the matrix.
+func writeRunFile(t *testing.T, path, mode, root string, res *cliflow.Results, results []Result) {
 	sort.Slice(results, func(i, j int) bool { return results[i].ID < results[j].ID })
 	counts := map[string]int{}
 	var tbl strings.Builder
@@ -453,11 +485,16 @@ func writeResults(t *testing.T, path string, res *cliflow.Results, results []Res
 		fmt.Fprintf(&tbl, "| %s | %s | %.1fs | %.1fs | %s |\n", r.ID, r.Outcome, float64(r.DeployMS)/1000, float64(r.ProbeMS)/1000,
 			strings.ReplaceAll(tail(strings.ReplaceAll(r.Detail, "\n", " "), 160), "|", "\\|"))
 	}
+	commit, _ := run(root, nil, "git", "rev-parse", "HEAD")
 	out := struct {
 		*cliflow.Results
+		Mode     string         `json:"mode"`
+		Date     string         `json:"date"`
+		Commit   string         `json:"commit"`
+		Platform string         `json:"platform"`
 		Projects []Result       `json:"projects"`
 		Counts   map[string]int `json:"counts"`
-	}{res, results, counts}
+	}{res, mode, time.Now().UTC().Format("2006-01-02"), strings.TrimSpace(commit), runtime.GOOS + "/" + runtime.GOARCH, results, counts}
 	b, _ := json.MarshalIndent(out, "", "  ")
 	b = []byte(netd.Redact(string(b)))
 	os.MkdirAll(filepath.Dir(path), 0o755)

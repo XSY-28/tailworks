@@ -429,6 +429,7 @@ e2e-public: deps
 ## example projects (cloudflare/templates, create-cloudflare, cloudflare/agents, cloudflare/ai), pinned by
 ## commit and unmodified, deployed with tw deploy to a real tw-hostd host (`tw up --oauth-client-file`) and
 ## called from a tailnet client as their READMEs call them; known gaps must fail as COMPAT.md says.
+## Also the upstream examples of issue #325 (see e2e-compat-dev), deployed the same way.
 ## Needs npm; sources are cached in ~/.cache/tailworks-compat. TW_COMPAT_ONLY=<regexp> runs some.
 ## The only policy write it may make is the tag:tw-wl-compat tagOwner + its grant.
 .PHONY: e2e-compat
@@ -437,6 +438,29 @@ e2e-compat: deps
 		echo "e2e-compat: SKIPPED ($(TS_CREDS)/tailnet1_api.env not found)"; exit 0; fi; \
 	TW_E2E_API_KEY_FILE="$(TS_CREDS)/tailnet1_api.env" TW_E2E_TAILNET="$(TAILNET1)" \
 		$(GO) test -tags e2ecompat -count=1 -v -timeout 60m -run TestE2ECompat ./e2e/compat/...
+
+## e2e-compat-dev: the upstream examples of issue #325 (cloudflare/agents, vercel/mcp-handler and the Vercel AI
+## SDK: the projects with a Section in e2e/compat/upstream.go) under `tw dev`, probed on 127.0.0.1 with the
+## probes e2e-compat uses. No tailnet and no credentials; needs npm and the network (pinned sources are fetched
+## into ~/.cache/tailworks-compat). TW_COMPAT_ONLY=<regexp> runs any e2e-compat project this way.
+.PHONY: e2e-compat-dev
+e2e-compat-dev: deps
+	$(GO) test -tags e2ecompat -count=1 -v -timeout 40m -run TestCompatDev ./e2e/compat/...
+
+## compat-upstream: rewrite the upstream-examples tables of docs/COMPAT.md and e2e/compat/upstream-results.json
+## from run results: DEV=<file> and DEPLOYED=<file>, default the newest e2e/real/results/compat-dev-*.json
+## (make e2e-compat-dev) and compat-2*.json (make e2e-compat). Commit both files.
+.PHONY: compat-upstream
+compat-upstream:
+	$(GO) run ./e2e/compat/compatreport $(if $(DEV),-dev $(DEV)) $(if $(DEPLOYED),-deployed $(DEPLOYED))
+
+## compat-upstream-check: those tables are what the recorded results and e2e/compat's project list render
+## (so no row is edited by hand, and an example isn't added or re-pinned without running it). Part of make lint.
+.PHONY: compat-upstream-check
+compat-upstream-check:
+	$(GO) run ./e2e/compat/compatreport -check
+	$(GO) test -count=1 ./e2e/compat/
+lint: compat-upstream-check
 
 ## e2e-compat-prepare: only fetch, npm install and build the e2e-compat projects (no tailnet).
 .PHONY: e2e-compat-prepare
