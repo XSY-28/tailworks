@@ -639,7 +639,7 @@ func (h *Host) startInstance(w *workload, depID string, app *bundle.App, tier st
 			}
 			vm.Ingress().ServeHTTP(rw, r)
 		})
-		inst.direct = &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		inst.direct = &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{IdleConnTimeout: netd.UpstreamIdleTimeout, DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			vm := inst.currentVM()
 			if vm == nil {
 				return nil, errors.New("microVM is not running")
@@ -663,7 +663,7 @@ func (h *Host) startInstance(w *workload, depID string, app *bundle.App, tier st
 		}
 	} else {
 		inst.ingress = netd.UnixUpstream(res.Sockets.Ingress)
-		inst.direct = &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		inst.direct = &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{IdleConnTimeout: netd.UpstreamIdleTimeout, DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			return (&net.Dialer{}).DialContext(ctx, "unix", res.Sockets.Ingress)
 		}}}
 		if loop != nil {
@@ -1004,6 +1004,7 @@ func (inst *instance) interceptClient() *http.Client {
 		tr := &http.Transport{DisableCompression: true, ResponseHeaderTimeout: 5 * time.Minute}
 		if t, ok := inst.direct.Transport.(*http.Transport); ok {
 			tr.DialContext = t.DialContext
+			tr.IdleConnTimeout = t.IdleConnTimeout // below the server's idle close (#309)
 		}
 		inst.ic = &http.Client{Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	})
