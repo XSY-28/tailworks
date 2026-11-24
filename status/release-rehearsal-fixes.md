@@ -91,3 +91,14 @@ tiers, and e2e-vz with the six new microVM feature tests.
   name).
 - Self-hosted jobs: setup-go `cache: false` (its restore was writing into
   the runner user's own ~/go/pkg/mod; harmless, read-only, but not CI's).
+
+## Rehearsal 5 (run 45300078043)
+
+26 of 27 jobs passed, mac-vz included (pids drain fix; canary clean). The
+hosted tailnet job got to e2e-public's last check: `audit_public_requests`
+wanted ≥12 public_request records and saw 8. Stale test: since H03 (#68,
+2026-11-15) netd rolls not_public/bad_request refusals into a per-minute
+`public_rejected` summary; the test (2026-11-13) counted its 4 refused route
+checks as records (12 − 4 = 8). The check now wants ≥8 public_request
+records and a public_rejected summary with notPublic ≥2 and badRequest ≥1,
+waiting up to 90 s for the window.
