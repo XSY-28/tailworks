@@ -457,6 +457,7 @@ func (h *Host) nodeEgress(inst *instance) http.Handler {
 			return
 		}
 		r.Header.Del("Proxy-Authorization")
+		r.Header.Del(HeaderBindingWire) // a Node app makes no binding calls; the header is hostd's (servicebind.go, #347)
 		wl := inst.w.currentWL()
 		if wl == nil {
 			writeAPIError(w, &apiError{Code: "identity_pending", Detail: "workload node not created yet"})

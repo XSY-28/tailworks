@@ -93,7 +93,10 @@ channel is to be revisited together with ADR-do-split (PR #11).
    `Tailworks-Binding`. The callee's hostd honours it only from a
    tailworks node of the **same tenant** (a node certificate verified
    against the tenant's key), only on a workload's entry node and never on
-   a public request (`binding_forbidden`), and always strips it. The
+   a public request (`binding_forbidden`), and always strips it. On the
+   caller's side the header is hostd's to write: the platform's egress
+   entrypoints and hostd's HTTP egress handlers remove one that tenant
+   code set, so a `fetch()` can't ask for an entrypoint (#347). The
    platform runs the call through `__tw_binding`, an entrypoint hostd
    generates in the tenant main module, which wraps the named entrypoint
    like the default export (guarded env, `ctx.tailnet`, the request's
@@ -111,7 +114,16 @@ channel is to be revisited together with ADR-do-split (PR #11).
    report), so the callee finds the node's certificate.
 8. **Authorization.** Within a tenant, the grant (4) plus the tenant check
    (6) are the authorization. The target does not list its callers: as on
-   Cloudflare, any Worker of the account can bind any other. Each call is
+   Cloudflare, any Worker of the account can bind any other. The caller's
+   `services` declaration is not part of it. The callee sees which node
+   called, not which code on that node wrote `Tailworks-Binding`, and code
+   that speaks HTTP itself on a raw socket to the target (`connect()`,
+   ADR-052; a Node app's tunnel) writes bytes hostd never parses. So a
+   named entrypoint or RPC method is not a boundary between workloads of
+   one tenant that the policy lets reach each other: one that must not be
+   open to all of them checks `getCaller()`. Closing this needs a header
+   the calling hostd can sign and the callee can verify (or the
+   host-to-host channel of (4)); neither is built (#347). Each call is
    an egress span on the caller and an ingress span on the callee
    (ADR-045); a `traceparent` across the hop is not added yet. netd's
    refusals are audited as `deny` on the caller, as for any egress.

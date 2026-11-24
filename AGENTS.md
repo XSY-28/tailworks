@@ -115,6 +115,7 @@ goes red, fixing it comes before landing anything else.
    | how a Cloudflare project runs unmodified: wrangler config or bundling, assets, bindings (D1, KV, R2, Queues, Workflows, Durable Objects), `nodejs_compat`, the runtime wrapper (`hostd/gen`) | `make e2e-compat` |
    | anything `make changes-check` calls upgrade-relevant | `make e2e-upgrade` |
    | `tw upgrade` on a `tw up` machine, or how `tw up` restarts | `make e2e-tw-upgrade` |
+   | the launch demo: `scripts/demo*.sh`, `internal/demogrant`, the `mcp` or `agent` template's routes, `tw ls --json` or `tw status --json` fields | `make demo-test` |
    | `install.sh` / `get.sh` | `make install-test` |
    | the npm CLI packages (`js/cli/tailworks`, `scripts/npm-cli-packages.sh`, `internal/npminstall`) | `make npm-cli-test` |
 

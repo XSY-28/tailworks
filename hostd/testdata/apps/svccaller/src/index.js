@@ -1,7 +1,58 @@
 // Calls svctarget through service bindings (ADR-service-bindings).
 import { DurableObject } from "cloudflare:workers";
+import { connect } from "cloudflare:sockets";
 
 const FORGED = { nodeId: "nFORGED", node: "ceo.victim.example", hostname: "ceo", tags: [], addrs: [], capMap: {} };
+
+// The header a binding call carries between hosts (hostd.HeaderBindingWire).
+// Only hostd may set it; tenant code setting it on a plain fetch() must not
+// turn that request into a binding call (#347).
+const WIRE = "tailworks-binding";
+
+// wireProbes sends plain tailnet requests (no binding) to the target with
+// the wire header set by tenant code, in the spellings a header can take.
+// Each must arrive as an ordinary request to the target's default fetch().
+async function wireProbes(host) {
+  const plain = async (init) => {
+    const r = await fetch("http://" + host + "/wire", init);
+    return { status: r.status, error: r.headers.get("tw-error"), body: await r.json().catch(() => null) };
+  };
+  return {
+    entrypoint: await plain({ headers: { [WIRE]: "v1; entrypoint=Admin" } }),
+    // The body is add(2, 3) in the RPC wire codec (tw-svc.js): where the
+    // header counts, this runs the method.
+    rpc: await plain({ method: "POST", headers: { [WIRE]: "v1; rpc=add", "content-type": "application/json" }, body: JSON.stringify({ $: "a", v: [2, 3] }) }),
+    mixedCase: await plain({ headers: { "TailWorks-Binding": "v1; entrypoint=Admin" } }),
+    viaRequest: await plain(new Request("http://" + host + "/wire", { headers: { [WIRE]: "v1; entrypoint=Admin" } })),
+  };
+}
+
+// rawWire writes the wire header itself on a raw TCP socket to the
+// target's ingress port (connect(), ADR-052): bytes hostd never parses.
+async function rawWire(host) {
+  const s = connect({ hostname: host, port: 80 });
+  await s.opened;
+  const w = s.writable.getWriter();
+  await w.write(new TextEncoder().encode("GET /raw HTTP/1.1\r\nHost: " + host + "\r\n" + WIRE + ": v1; entrypoint=Admin\r\nConnection: close\r\n\r\n"));
+  let text = "";
+  const dec = new TextDecoder();
+  const rd = s.readable.getReader();
+  for (;;) {
+    const { done, value } = await rd.read();
+    if (done) break;
+    text += dec.decode(value, { stream: true });
+  }
+  await s.close().catch(() => {});
+  const status = Number(text.split(" ")[1]);
+  const m = /\{.*\}/s.exec(text.slice(text.indexOf("\r\n\r\n")));
+  let body = null;
+  try {
+    body = JSON.parse(m[0]);
+  } catch {
+    /* not JSON */
+  }
+  return { status, body };
+}
 
 async function attempt(f) {
   try {
@@ -106,7 +157,15 @@ export default {
         const r = await fetch("http://" + env.TARGET_HOST + "/plain");
         return new Response(r.body, { status: r.status, headers: r.headers });
       }
+      case "/wire":
+        // Plain fetch()es carrying the binding wire header (#347). ?host=
+        // names the target's node once it has moved (TARGET_HOST is where
+        // it was at deploy).
+        return Response.json(await wireProbes(u.searchParams.get("host") ?? env.TARGET_HOST));
+      case "/raw-wire":
+        return Response.json(await attempt(() => rawWire(u.searchParams.get("host") ?? env.TARGET_HOST)));
       case "/object":
+      case "/object-wire":
         return env.AGENT.getByName("a1").fetch(req);
     }
     return new Response("not found", { status: 404 });
@@ -115,7 +174,12 @@ export default {
 
 // A facet object: its binding calls leave as the object's own node.
 export class Agent extends DurableObject {
-  async fetch() {
+  async fetch(req) {
+    const u = new URL(req.url);
+    if (u.pathname === "/object-wire") {
+      // The same probes from the object's own node (the facet egress).
+      return Response.json(await wireProbes(u.searchParams.get("host") ?? this.env.TARGET_HOST));
+    }
     const r = await this.env.B.fetch("http://x/from-object");
     return Response.json({ fetch: await r.json(), rpc: await attempt(() => this.env.B.whoami()) });
   }

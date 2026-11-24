@@ -310,6 +310,11 @@ func TestGeneratedWrapperProbe(t *testing.T) {
 		if code != 200 || r["as"] != "workload" || r["url"] != "http://echo/x" {
 			t.Fatalf("%d %v", code, r)
 		}
+		// #347: the Worker can't hand hostd a service binding's wire header.
+		code, _, r = in.get("/egress?wire=1&url=http://echo/x", wl)
+		if h, _ := r["headers"].(map[string]any); code != 200 || r["as"] != "workload" || h == nil || h["Tailworks-Binding"] != nil {
+			t.Fatalf("a tenant-set Tailworks-Binding reached hostd's workload egress: %d %v", code, r)
+		}
 	})
 	t.Run("ObjectRoute", func(t *testing.T) {
 		code, _, r := in.get("/", obj("Probe", "a"))
@@ -340,7 +345,7 @@ func TestGeneratedWrapperProbe(t *testing.T) {
 			t.Fatalf("%d %v", code, r)
 		}
 		h := r["headers"].(map[string]any)
-		if h["X-Tw-Object"] != nil || h["Proxy-Authorization"] != nil || h["X-Tw-Cf"] != nil {
+		if h["X-Tw-Object"] != nil || h["Proxy-Authorization"] != nil || h["X-Tw-Cf"] != nil || h["Tailworks-Binding"] != nil {
 			t.Fatalf("forged headers reached hostd: %v", h)
 		}
 	})

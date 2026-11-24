@@ -568,6 +568,12 @@ compat-check:
 changes-check:
 	sh scripts/check-changes.sh
 
+## demo-test: scripts/demo.sh (the launch demo, docs/demo.md) for real against a throwaway Headscale
+## tailnet in Docker: refusals, a run, a rerun, an interrupted run, --cleanup. Skips without docker.
+.PHONY: demo-test
+demo-test: deps build
+	sh scripts/demo_test.sh
+
 ## install-test: install.sh upgrade keeps .prev, --rollback swaps it back (hermetic, fake releases).
 .PHONY: install-test
 install-test:

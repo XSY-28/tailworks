@@ -251,7 +251,9 @@ func TestHostd(t *testing.T) {
 			t.Fatalf("forged egress: %d %v", code, r)
 		}
 		for k := range r["headers"].(map[string]any) {
-			if lk := strings.ToLower(k); strings.HasPrefix(lk, "x-tw-") || lk == "proxy-authorization" {
+			// tailworks-binding: a service binding's wire header, which only
+			// hostd may put on an egress request (#347).
+			if lk := strings.ToLower(k); strings.HasPrefix(lk, "x-tw-") || lk == "proxy-authorization" || lk == "tailworks-binding" {
 				t.Fatalf("header %s reached echo", k)
 			}
 		}
