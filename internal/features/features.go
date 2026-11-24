@@ -24,6 +24,11 @@ const (
 	// router Worker (ADR-050). An older hostd would load the
 	// bundle's assets/ files as modules, or not serve them.
 	Assets = "assets"
+	// InternetExitNode is a host whose internet path is a tailnet exit
+	// node (-worker-internet=exit-node=…, ADR-054). A bundle
+	// with tailnet.egress.via "exit-node" needs it. It depends on the
+	// host's flags, not its build, so hostd adds it to Host() itself.
+	InternetExitNode = "internet-exit-node"
 	// Queues is queue producers and consumers (ADR-039).
 	Queues = "queues"
 	// ServiceBindings is wrangler "services" (ADR-053). An
@@ -76,6 +81,9 @@ func Required(app *bundle.App) []string {
 	}
 	if len(app.Services) > 0 {
 		out = append(out, ServiceBindings)
+	}
+	if app.EgressVia == bundle.ViaExitNode {
+		out = append(out, InternetExitNode)
 	}
 	slices.Sort(out)
 	return slices.Compact(out)

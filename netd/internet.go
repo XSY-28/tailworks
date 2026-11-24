@@ -154,6 +154,9 @@ func (o *Object) dialInternet(ctx context.Context, d *internetDst) (net.Conn, er
 	} else {
 		as, err := ic.Resolve(ctx, d.host)
 		if err != nil {
+			if e, ok := AsError(err); ok {
+				return nil, o.internetErr(e, d)
+			}
 			return refuse(CodeDialFailed, "resolving "+d.host+": "+err.Error())
 		}
 		addrs = as
@@ -171,6 +174,9 @@ func (o *Object) dialInternet(ctx context.Context, d *internetDst) (net.Conn, er
 		ap := netip.AddrPortFrom(a.Unmap(), d.port)
 		c, err := ic.Dial(ctx, "tcp", ap.String())
 		if err != nil {
+			if e, ok := AsError(err); ok {
+				return nil, o.internetErr(e, d)
+			}
 			last = err
 			continue
 		}
@@ -185,6 +191,18 @@ func (o *Object) dialInternet(ctx context.Context, d *internetDst) (net.Conn, er
 		return f, nil
 	}
 	return nil, last
+}
+
+// internetErr is a typed refusal from the internet path itself (for
+// example exit_node_unavailable), attributed to this object and
+// destination. The path's error is copied, never mutated.
+func (o *Object) internetErr(e *Error, d *internetDst) *Error {
+	c := *e
+	c.Object, c.Destination = o.id, d.hostport()
+	if c.DocURL == "" {
+		c.DocURL = DocBase + c.Code
+	}
+	return &c
 }
 
 // internetOnce dedups per-object, per-destination events (the first flow

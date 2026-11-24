@@ -328,7 +328,7 @@ func (m *agent) ingressProxy() http.Handler {
 			return m.vn.dialGuest(ctx, proto.IngressPort)
 		},
 		MaxIdleConnsPerHost: 64,
-		IdleConnTimeout:     30 * time.Second,
+		IdleConnTimeout:     netd.UpstreamIdleTimeout, // below workerd's idle close (#309)
 	}
 	target := &url.URL{Scheme: "http", Host: "guest"}
 	return &httputil.ReverseProxy{

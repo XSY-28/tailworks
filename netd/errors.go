@@ -31,6 +31,11 @@ const (
 	// Egress to a name that is not on the tailnet (403): Workers have no
 	// internet egress.
 	CodeInternetEgressUnavailable = "internet_egress_unavailable"
+
+	// Internet egress through the host's exit node (503): the exit node is
+	// missing from the netmap, not offered, offline or not answering DNS
+	// (ADR-054).
+	CodeExitNodeUnavailable = "exit_node_unavailable"
 )
 
 // DocBase is the prefix for doc_url in error bodies.
@@ -70,6 +75,8 @@ func (e *Error) Status() int {
 	case CodeKilled, CodeObjectKilled:
 		return http.StatusGone
 	case CodeIdentityPending, CodeUpstreamUnavailable:
+		return http.StatusServiceUnavailable
+	case CodeExitNodeUnavailable:
 		return http.StatusServiceUnavailable
 	case CodeRateLimited:
 		return http.StatusTooManyRequests

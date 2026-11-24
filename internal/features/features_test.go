@@ -40,6 +40,33 @@ func TestRequired(t *testing.T) {
 	}
 }
 
+// TestRequiredExitNode: tailnet.egress.via "exit-node" needs a host whose
+// internet path is an exit node; the feature is a host setting, so the
+// build-static Host() never lists it (hostd adds it).
+func TestRequiredExitNode(t *testing.T) {
+	for tw, want := range map[string]bool{
+		`{"tailnet":{"tags":["tag:app"],"egress":{"via":"exit-node"}}}`:                  true,
+		`{"tailnet":{"tags":["tag:app"],"egress":{"via":"exit-node","internet":false}}}`: true,
+		`{"tailnet":{"tags":["tag:app"],"egress":{"internet":["api.example.com"]}}}`:     false,
+		`{"tailnet":{"tags":["tag:app"]}}`:                                               false,
+	} {
+		b, err := bundle.Pack(map[string][]byte{
+			"wrangler.jsonc":  []byte(`{"name":"app","main":"index.js"}`),
+			"index.js":        []byte(`export default {}`),
+			"tailworks.jsonc": []byte(tw),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := slices.Contains(RequiredByBundle(b), InternetExitNode); got != want {
+			t.Errorf("%s: needs %s = %v, want %v", tw, InternetExitNode, got, want)
+		}
+	}
+	if slices.Contains(Host(), InternetExitNode) {
+		t.Errorf("Host() lists %s; it depends on the host's flags", InternetExitNode)
+	}
+}
+
 // TestRequiredAssets: a bundle with wrangler "assets" needs a host that
 // serves them (an older one would load assets/*.js as modules); without
 // "assets" an assets/ directory needs nothing.

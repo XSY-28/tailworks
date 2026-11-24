@@ -267,6 +267,13 @@ type ContainerInternet struct {
 	Resolve func(ctx context.Context, host string) ([]netip.Addr, error)
 	// HostAddrs are never dialled (nil: the host's interface addresses).
 	HostAddrs []netip.Addr
+	// Mode names the path for status ("": "direct"); Via names it in
+	// audit notes ("": "this host's network"); Problem, when set, says why
+	// the path is unusable right now ("" when it is). An exit-node path
+	// (exitnode.go) sets all three.
+	Mode    string
+	Via     string
+	Problem func() string
 }
 
 // DirectInternet is the host network and resolver (tailworks has no tenant
