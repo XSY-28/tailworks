@@ -1,4 +1,4 @@
-Last update: 2026-11-23 PT. tw policy: defines undefined tag:tw* connects targets; one report for --apply; merged grants; hello without tag:db.
+Last update: 2026-11-23 PT. tw policy: defines undefined tag:tw* connects targets; one report for --apply; merged grants.
 
 # policy-define-connects-tags
 
@@ -39,8 +39,7 @@ See the PR. New: `TestPolicyApplyDefinesConnectsTag`,
   grants by (dst, ip): one grant with every src. Used by mgmt's apply
   snippet, `tw policy`, `tw deploy`'s preflight output and its fix.
 - `tw policy` names what carries each tag when the app has object classes.
-- `hello` template: `connects: []` with a commented example; cliflow adds
-  `tag:db` itself before its preflight-refusal check.
+- `hello`'s `connects: ["tag:db"]` was already removed on master.
 
 ## Not done
 

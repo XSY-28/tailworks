@@ -21,7 +21,5 @@ upgrade: [protocol, config-default]
 - An app whose workload and object tags both need the same grant gets one
   grant with both sources, not one per tag. `tw policy` also names which
   node carries each of the app's tags.
-- The `hello` template no longer declares `connects: ["tag:db"]`, which
-  failed a fresh deploy's preflight on any tailnet without a `tag:db`.
 
 The preflight result has a new `undefinedConnects` field.

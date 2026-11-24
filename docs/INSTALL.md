@@ -3,11 +3,10 @@
 tailworks runs on **macOS (Apple silicon)** and **Linux (arm64 and amd64, glibc
 ≥ 2.35)**. Each has a self-contained release tarball and the same
 `install.sh`; nothing needs root. Windows isn't supported, not even for
-the `tw` CLI alone. Every prerequisite in one table:
-[README › Prerequisites](../README.md#prerequisites).
+the `tw` CLI alone. Every prerequisite is in [one table](#prerequisites).
 
 The path through this page: install on [macOS](#macos) or [Linux](#linux),
-then your first deploy (the [README quick start](../README.md#quick-start-deploy-your-first-durable-object),
+then your first deploy (the [README quick start](../README.md#quick-start),
 and [troubleshooting](troubleshooting.md) if it doesn't answer), then
 [upgrade](#upgrade) and [uninstall](#uninstall) when the time comes. Also
 here: [trying an app without a tailnet](#try-it-without-a-tailnet), how
@@ -15,6 +14,19 @@ workloads are [isolated](#isolation), and [tuning](#tuning-how-fast-a-new-object
 The words (tenant, workload, tier, …) are explained in
 [concepts.md](concepts.md). Where each platform is tested, and what was
 measured there: [install-testing.md](install-testing.md).
+
+## Prerequisites
+
+| To | You need |
+|---|---|
+| Run tailworks (the release) | macOS 14 or later on Apple silicon, or Linux arm64/amd64 with glibc ≥ 2.35; a Tailscale tailnet where you're an admin, or a self-hosted Headscale server ([headscale.md](headscale.md)). No Go and no Node.js. |
+| Scaffold an app and type-check it (`npm create tailworks`) | Node.js ≥ 20 only. |
+| Try an app locally (`tw dev`) | The release only: no tailnet, no credentials. |
+| Build tailworks from source | Go ≥ 1.27 and Node.js ≥ 20. |
+| Run a Node.js app (`"runtime": "node"`, the `node-workflow` template) | Node.js ≥ 24 on each host that runs it, and `npm install` on the deploying machine ([node-tier.md](node-tier.md)). |
+| Use the Linux microVM tier | `/dev/kvm`, cgroups v2, systemd and a one-time sudo setup ([details](#linux-the-microvm-tier-firecracker-kvm)). |
+
+Windows isn't supported, not even as a CLI client.
 
 ## macOS
 
@@ -25,7 +37,7 @@ no Go, no Node.js, no Homebrew packages.
 
 - macOS 14 or later on Apple silicon (arm64). For Linux, see [Linux](#linux).
 - A tailnet you control, where you are an **admin** (`autogroup:admin`).
-- An **OAuth client** (admin console › Settings › OAuth clients; scope
+- An **OAuth client** (admin console › Settings › Trust credentials; scope
   Auth Keys write with tag `tag:tw`) saved in a 0600 file:
   [The OAuth client](#the-oauth-client). No browser login, no Funnel, no
   HTTPS needed.
@@ -166,8 +178,8 @@ Funnel, no HTTPS requirement.**
    // no nodeAttrs: mgmt never uses Funnel
    ```
    `tag:tw` must exist before the console lets you tag a client with it.
-2. **Generate the client** (admin console › Settings › OAuth clients ›
-   Generate OAuth client, <https://login.tailscale.com/admin/settings/oauth>):
+2. **Generate the client** (admin console › Settings › Trust credentials ›
+   **Credential** › **OAuth**). When a scope asks for a tag, pick **`tag:tw`**:
    - **Auth Keys › Write**, tag **`tag:tw`** (required);
    - optionally **Devices › Core › Write**, tag **`tag:tw`**: `tw kill`
      then also deletes the device (without it the kill still holds, the
@@ -184,16 +196,18 @@ Funnel, no HTTPS requirement.**
      a Tailscale Service, i.e. a stable name and VIP
      ([services.md](services.md)). Without it, such a deploy fails with
      `service_api_failed`.
-3. **Save it** where only you can read it (tailworks refuses a looser mode):
+3. **Start tailworks** and paste the **Client Secret** when asked:
    ```sh
-   mkdir -p ~/.config/tailworks
-   printf 'TS_OAUTH_CLIENT_ID=%s\nTS_OAUTH_CLIENT_SECRET=%s\n' '<client id>' '<tskey-client-…>' > ~/.config/tailworks/oauth.env
-   chmod 600 ~/.config/tailworks/oauth.env
+   tw up
    ```
-4. **Start tailworks:**
-   ```sh
-   tw up --oauth-client-file ~/.config/tailworks/oauth.env --service --yes
-   ```
+   It saves the secret to `~/.config/tailworks/oauth.env` (mode 0600; the
+   client ID is part of the secret) and installs a login service (a macOS
+   LaunchAgent or a systemd user unit; `--service=false` skips it). With
+   no terminal (automation), write the file yourself, with the single line
+   `TS_OAUTH_CLIENT_SECRET=tskey-client-…`, or pass
+   `--oauth-client-file <file>`. A file other users can read is tightened
+   to 0600.
+
    Before minting anything, `tw up` exchanges the client for an access
    token (a wrong or revoked secret stops here: `oauth_exchange_failed`),
    reads the tailnet name from the client's devices (or from mgmt's node
@@ -398,7 +412,7 @@ the grants your app declares (`tailnet.connects`), bundles it, and waits
 until the workload node is on your tailnet, then prints its address:
 `http://tw-support-<id>.<tailnet>.ts.net/`. To call it, a grant must let
 you reach the workload's tag on port 80 (the
-[quick start](../README.md#quick-start-deploy-your-first-durable-object)
+[quick start](../README.md#quick-start)
 shows it, and `tw deploy` prints it with the tagOwners for new tags). If
 the first deploy doesn't answer, see [troubleshooting.md](troubleshooting.md).
 Day 2: `tw ls`, `tw logs support`, `tw kill <object> --cascade`,
@@ -444,7 +458,7 @@ Installed with `get.sh`? It doesn't keep the release directory; see
   `tag:tw-host`; add the printed tagOwners and re-run. Nothing was minted.
 - `credential_file_insecure`: `chmod 600` the OAuth client file.
 - `oauth_exchange_failed`: the client secret is wrong or the client was
-  revoked; generate a new one (Settings › OAuth clients).
+  revoked; generate a new one (Settings › Trust credentials).
 - `device_delete_unavailable` on `tw kill`: the kill held, but the OAuth
   client has no Devices › Core scope; generate one with it, overwrite the
   file, `tw up`, revoke the old client; remove leftover devices in the

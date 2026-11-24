@@ -2859,6 +2859,10 @@
               },
               "ms": {
                 "type": "number"
+              },
+              "group": {
+                "type": "string",
+                "description": "the section the human output lists the check under: Install, Tailnet, Storage, Isolation, Linux host or Other"
               }
             },
             "required": [

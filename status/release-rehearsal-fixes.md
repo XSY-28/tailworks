@@ -72,3 +72,55 @@ this time.
   the hits may be another process on that machine, but that is not shown:
   the test now records each hit's source and local address, so a recurrence
   says where it came from. Not loosened.
+
+## Rehearsal 4 (run 45291083895)
+
+Everything passed except two jobs: gates, every hermetic suite, the signed
+build, all three tarballs (node-workflow fix confirmed), both Firecracker
+tiers, and e2e-vz with the six new microVM feature tests.
+
+- mac-vz TestContainerSmoke: canary clean this time. It failed one step
+  later: the limits probe after the pids storm hit pids.max ("failed to
+  create new OS thread … errno=11") because the storm was still draining
+  (slower under Rosetta) after the fixed 4 s sleep. The probe now retries
+  only on EAGAIN, up to 30 s; the assertion is unchanged. 5/5 locally.
+- e2e-public: /slow (a streaming request, not through fetch) got NXDOMAIN
+  for the Funnel name 39 s after it first answered. publicClient now keeps
+  each name's last good public DNS answer and dials it when a later lookup
+  fails (still over the internet to the Funnel edge; TLS still checks the
+  name).
+- Self-hosted jobs: setup-go `cache: false` (its restore was writing into
+  the runner user's own ~/go/pkg/mod; harmless, read-only, but not CI's).
+
+## Rehearsal 5 (run 45300078043)
+
+26 of 27 jobs passed, mac-vz included (pids drain fix; canary clean). The
+hosted tailnet job got to e2e-public's last check: `audit_public_requests`
+wanted ≥12 public_request records and saw 8. Stale test: since H03 (#68,
+2026-11-15) netd rolls not_public/bad_request refusals into a per-minute
+`public_rejected` summary; the test (2026-11-13) counted its 4 refused route
+checks as records (12 − 4 = 8). The check now wants ≥8 public_request
+records and a public_rejected summary with notPublic ≥2 and badRequest ≥1,
+waiting up to 90 s for the window.
+
+## Rehearsal 6 (run 45307109374) and the faster layout
+
+27 of 28 jobs passed, including, for the first time, both real-tailnet
+jobs: every distro row from the tarballs, the microVM tier from the arm64
+tarball with host reboots, e2e-mac, e2e-multi, and all hosted suites.
+
+- microvm-amd64 TestPoolNoCarryOver: the pooled VM exited during its
+  memory dump ("helper connection closed"), so the RAM scan never ran (not
+  a leak). Not reproduced: 20/20 on Firecracker in the runner machine's
+  Lima VM. Ruled out: the jail's memory.max (with hugepages it is only the
+  256 MiB overhead, and the dump's 512 MiB page cache is charged to it), as
+  5/5 still pass at 32 MiB. The test now reports the VM's exit reason and
+  console tail. The same dump backs `tw host vmcheck --keyscan`.
+
+Faster release.yml (the user's ask): tailnet no longer waits for gates
+(#276); `only=` reruns selected jobs (#276); gates is a 5-way matrix;
+mac-tailnet split into mac-linux (arm64 rows, 3 at a time), mac-linuxvm,
+mac-cli (still after tailnet: writes policy); the ubuntu24-amd64 row runs
+natively on a hosted runner (linux-amd64: Lima + qemu on KVM); the Linux
+jobs run alongside tailnet on tailnet 1 (the harness was built for parallel
+rows; they only read policy). Two more runner instances on the Mac (3).

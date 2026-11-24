@@ -28,6 +28,10 @@ the template. The templates are in [`templates/`](templates/):
   that keep increasing across a move to another host, and a copyable client
   (`src/client.ts`: `acquire`, `renew`, `release`, `withLock`). See
   [docs/locks.md](https://github.com/rosskukulinski/tailworks/blob/master/docs/locks.md).
+- `static-site`: wrangler `assets`: the files in `public/` served next to a
+  Worker that answers `/api/*` and checks the caller (`getCaller`) before it
+  serves `/team/`. No build step. See
+  [docs/wrangler.md](https://github.com/rosskukulinski/tailworks/blob/master/docs/wrangler.md#assets).
 - `refund-approval`: a Cloudflare Workflow (`AgentWorkflow`) started by an
   Agent that waits for a person's approval (`waitForApproval`). Tailworks delivers
   the approval only from a tailnet identity holding `github.com/rosskukulinski/tailworks/cap/approve`

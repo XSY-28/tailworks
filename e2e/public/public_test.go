@@ -40,6 +40,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -93,12 +94,43 @@ func approvedOnly(m policy.Snippet) error {
 
 // publicClient fetches like an internet client: public DNS (1.1.1.1),
 // verified TLS, never this machine's tailscaled or MagicDNS.
+// publicDNSGood: host → its last good public DNS answer (publicClient).
+var publicDNSGood sync.Map
+
 func publicClient(timeout time.Duration) *http.Client {
 	r := &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "udp", "1.1.1.1:53")
 	}}
 	d := &net.Dialer{Timeout: 10 * time.Second, Resolver: r}
-	tr := &http.Transport{DialContext: d.DialContext, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+	// Public DNS for a new Funnel name flaps for a while after it first
+	// resolves (an anycast resolver node can still hold the NXDOMAIN from
+	// before it existed), which is not what this suite tests. So a name's
+	// last good addresses are kept, and used when a later lookup fails: the
+	// request still goes over the internet to the Funnel edge.
+	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+		ips, lerr := r.LookupHost(ctx, host)
+		if lerr == nil && len(ips) > 0 {
+			publicDNSGood.Store(host, ips)
+		} else if v, ok := publicDNSGood.Load(host); ok {
+			ips = v.([]string)
+		} else {
+			return nil, lerr
+		}
+		var last error
+		for _, ip := range ips {
+			c, err := d.DialContext(ctx, network, net.JoinHostPort(ip, port))
+			if err == nil {
+				return c, nil
+			}
+			last = err
+		}
+		return nil, last
+	}
+	tr := &http.Transport{DialContext: dial, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 		Proxy: nil, ForceAttemptHTTP2: false, DisableKeepAlives: true}
 	return &http.Client{Timeout: timeout, Transport: tr}
 }
@@ -510,21 +542,32 @@ func TestE2EPublic(t *testing.T) {
 			Detail    json.RawMessage `json:"detail"`
 		} `json:"records"`
 	}
-	var n int
-	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(time.Second) {
+	// One public_request record per request that reached the app (at least
+	// 8 above). Refused ones (the route checks' not_public and bad_request)
+	// are rolled into netd's per-minute public_rejected summary instead
+	// (H03, #68), so wait up to that window for it.
+	var n, notPublic, badRequest int
+	for deadline := time.Now().Add(90 * time.Second); time.Now().Before(deadline); time.Sleep(2 * time.Second) {
 		e.MustJSON(&aud, "audit", pub.ID)
-		n = 0
+		n, notPublic, badRequest = 0, 0, 0
 		for _, it := range aud.Items {
-			if it.Kind == "public_request" {
+			switch it.Kind {
+			case "public_request":
 				n++
+			case "public_rejected":
+				var sum struct{ NotPublic, BadRequest int }
+				json.Unmarshal(it.Detail, &sum)
+				notPublic += sum.NotPublic
+				badRequest += sum.BadRequest
 			}
 		}
-		if n >= 12 {
+		if n >= 8 && notPublic >= 2 && badRequest >= 1 {
 			break
 		}
 	}
 	raw := js(aud)
-	check("audit_public_requests", n >= 12 && !strings.Contains(raw, "secret-value"), fmt.Sprintf("%d public_request records", n))
+	check("audit_public_requests", n >= 8 && !strings.Contains(raw, "secret-value"), fmt.Sprintf("%d public_request records", n))
+	check("audit_public_rejected", notPublic >= 2 && badRequest >= 1, fmt.Sprintf("public_rejected summaries: notPublic %d, badRequest %d (want ≥2, ≥1: the route checks)", notPublic, badRequest))
 
 	// 11. tw doctor probes the public URL.
 	var doc struct {

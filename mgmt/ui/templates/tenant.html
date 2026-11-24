@@ -35,7 +35,7 @@
   <table>
     <thead><tr><th>Workload</th><th>Status</th><th>Address</th><th>Host</th><th>Deployed by</th><th>Deployed</th><th>Deployment ID</th></tr></thead>
     <tbody>{{range .Deployments}}<tr>
-      <td><a href="/ui/deployments/{{.DeploymentID}}"><b>{{.Workload}}</b></a></td>
+      <td><a href="/ui/deployments/{{.DeploymentID}}"><b>{{.Workload}}</b></a> <a class="small" href="/ui/tenants/{{.TenantID}}/workloads/{{.Workload}}/logs">logs</a></td>
       <td>{{template "status" .Status}}</td>
       <td class="mono">{{if .Endpoint.MagicDNS}}<a href="http://{{.Endpoint.MagicDNS}}/" rel="noreferrer">{{.Endpoint.MagicDNS}}</a>{{else}}<span class="muted">—</span>{{end}}</td>
       <td class="mono"><a href="/ui/hosts/{{.Host}}">{{.Host}}</a></td>

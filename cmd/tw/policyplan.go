@@ -124,7 +124,11 @@ func policySnippet(pf mgmt.PreflightResult, caller, svcCaller string) string {
 	if len(pf.Missing) > 0 || caller != "" || svcCaller != "" {
 		b.WriteString("\"grants\": [\n")
 		for _, g := range pf.MissingGrants() {
-			b.WriteString("  " + g.Snippet + ", // tailnet.connects\n")
+			note := ""
+			if !policy.IsTwTag(g.Dst) && strings.HasPrefix(g.Dst, "tag:") {
+				note = " (" + g.Dst + " must already be in tagOwners)"
+			}
+			b.WriteString("  " + g.Snippet + ", // tailnet.connects" + note + "\n")
 		}
 		if caller != "" {
 			b.WriteString("  " + caller + ", // who may call it (not checked: narrow src to a user, group or tag)\n")

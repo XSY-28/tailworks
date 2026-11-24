@@ -15,9 +15,9 @@ takes `--state-dir` (default `$TW_STATE_DIR` or `~/.tailworks`) and `--json`
 start tailworks on this machine
 
 ```text
-tw up: start tailworks on this machine (one process: mgmt + embedded host; --separate-host for the two-node layout); an OAuth client of your tailnet mints every node key (Headscale: its API key)
+tw up: start tailworks on this machine (one process: mgmt + embedded host; --separate-host for the two-node layout); an OAuth client of your tailnet mints every node key (Headscale: its API key); the first tw up asks for the client secret and saves it to ~/.config/tailworks/oauth.env, and installs a login service
 
-usage: tw up --oauth-client-file <file> [--service] [--yes]  |  up --control=headscale --control-url <url> --tailnet <base_domain> --api-key-file <file> [--policy-apply]
+usage: tw up [--oauth-client-file <file>] [--service=false]  |  up --control=headscale --control-url <url> --tailnet <base_domain> --api-key-file <file> [--policy-apply]
 
 flags:
   -allow-sibling-egress
@@ -61,7 +61,7 @@ flags:
   -mgmt-hostname string
     	mgmt's own tailnet node name (default tw-mgmt)
   -oauth-client-file string
-    	mint mode "oauth" (Tailscale): 0600 file with TS_OAUTH_CLIENT_ID=… and TS_OAUTH_CLIENT_SECRET=tskey-client-… (an OAuth client with Auth Keys write, tag tag:tw). No browser, no Funnel
+    	mint mode "oauth" (Tailscale): file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (an OAuth client with Auth Keys write, tag tag:tw; tightened to 0600). Default on the default state dir: ~/.config/tailworks/oauth.env, asked for and saved on the first tw up
   -policy-apply
     	headscale: apply the policy snippet (validated first, written with If-Match); default: print it
   -pool-nodes int
@@ -75,7 +75,7 @@ flags:
   -separate-host
     	run tw-hostd as its own process on its own tag:tw-host tailnet node (the scale-out layout; default: ONE process, the host agent embedded in tw-mgmt, mgmt's node the only infrastructure device). --local-dev implies it
   -service
-    	run the supervisor as a service that starts at login: Linux systemd user unit (~/.config/systemd/user/tw.service), macOS LaunchAgent (~/Library/LaunchAgents/dev.tailworks.up.plist)
+    	run the supervisor as a service that starts at login: Linux systemd user unit (~/.config/systemd/user/tw.service), macOS LaunchAgent (~/Library/LaunchAgents/dev.tailworks.up.plist). Default: on for a new default state dir where available; an existing state dir keeps how it runs (--service=false runs it in the background without a service)
   -setec-url string
     	--custody setec: the setec server URL
   -state-dir string
@@ -89,7 +89,7 @@ flags:
   -workerd string
     	workerd binary
   -yes
-    	non-interactive: don't ask for confirmation
+    	accepted for scripts; tw up no longer asks for confirmation
 ```
 
 ### tw down
@@ -257,6 +257,7 @@ flags:
     	machine-readable output
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -v	print every check with its full detail (default: problems, then one line per group)
 ```
 
 ### tw host
@@ -387,7 +388,7 @@ create an app from a template
 ```text
 tw init: create an app from a template (node-workflow needs Node.js on the deploying machine)
 
-usage: tw init <dir> [--template hello|agent|mcp|ai-agent|lock|refund-approval|node-workflow] [--name <workload>]
+usage: tw init <dir> [--template hello|agent|mcp|ai-agent|lock|static-site|refund-approval|node-workflow] [--name <workload>]
 
 flags:
   -json
@@ -399,7 +400,7 @@ flags:
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -template string
-    	hello | agent | mcp | ai-agent | lock | refund-approval | node-workflow (default "hello")
+    	hello | agent | mcp | ai-agent | lock | static-site | refund-approval | node-workflow (default "hello")
 ```
 
 ### tw dev

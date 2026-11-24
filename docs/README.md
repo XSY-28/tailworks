@@ -8,7 +8,7 @@ in the CLI: `tw docs ls`, `tw docs search <words>`,
 
 - **You write Cloudflare Workers.** Run the app locally first, with no
   tailnet: [Try it without a tailnet](INSTALL.md#try-it-without-a-tailnet).
-  Then the [quick start](../README.md#quick-start-deploy-your-first-durable-object).
+  Then the [quick start](../README.md#quick-start).
   Bringing a wrangler project? Read
   [What's different from Cloudflare, in short](wrangler.md#whats-different-from-cloudflare-in-short),
   then [COMPAT.md](COMPAT.md) for each surface.
@@ -35,15 +35,15 @@ in the CLI: `tw docs ls`, `tw docs search <words>`,
 
 ## Learn: walk-throughs
 
-- [Quick start](../README.md#quick-start-deploy-your-first-durable-object):
-  install, start tailworks, deploy a Durable Object, call it.
+- [Quick start](../README.md#quick-start):
+  install, start tailworks, deploy an app, call it.
 - [Concepts](concepts.md): the words tailworks uses (tenant, workload, object,
   tiers, facet mode, pool nodes, warm keys).
 - [Try it without a tailnet](INSTALL.md#try-it-without-a-tailnet): `tw dev`.
 - Templates: `tw init <dir> --template <name>`. `hello`, `agent`, `mcp`,
   `ai-agent` (a mock model; `src/model.ts` shows how to point it at an LLM
-  gateway on your tailnet), `lock`,
-  `refund-approval` (a Workflow that waits for a person), `node-workflow`.
+  gateway on your tailnet), `lock`, `static-site` (wrangler `assets`: a
+  folder of files next to a Worker), `refund-approval` (a Workflow that waits for a person), `node-workflow`.
   Each has a README.md: what it shows, how to run it, what to change.
 - [Recipes](recipes.md): short, runnable how-tos (internet APIs and LLMs through a tailnet gateway, a Durable Object per user, a signed webhook, cron into KV).
 

@@ -40,6 +40,32 @@ func TestRequired(t *testing.T) {
 	}
 }
 
+// TestRequiredAssets: a bundle with wrangler "assets" needs a host that
+// serves them (an older one would load assets/*.js as modules); without
+// "assets" an assets/ directory needs nothing.
+func TestRequiredAssets(t *testing.T) {
+	for w, want := range map[string]bool{
+		`{"name":"app","main":"index.js","assets":{"directory":"public"}}`: true,
+		`{"name":"app","main":"index.js"}`:                                 false,
+		`{"name":"app","assets":{"directory":"dist"}}`:                     true, // assets-only
+	} {
+		b, err := bundle.Pack(map[string][]byte{
+			"wrangler.jsonc":    []byte(w),
+			"index.js":          []byte(`export default {}`),
+			"assets/index.html": []byte("<h1>hi</h1>"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := slices.Contains(RequiredByBundle(b), Assets); got != want {
+			t.Errorf("%s: requires assets %v, want %v", w, got, want)
+		}
+	}
+	if !slices.Contains(Host(), Assets) {
+		t.Errorf("Host() = %v, lacks %q", Host(), Assets)
+	}
+}
+
 func TestRequiredWorkerInternet(t *testing.T) {
 	// The boolean form of tailnet.egress.internet needs a host that parses
 	// it; the list form (which older hosts read) and absence need nothing.
