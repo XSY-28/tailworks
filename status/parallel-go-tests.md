@@ -1,4 +1,20 @@
-Last update: 2026-11-24 09:05 PT. Top-level tests in hostd, mgmt and cmd/tw run with t.Parallel().
+Last update: 2026-11-24 09:00 PT. First CI run (#367) passed: `test` job 10.0 min (recent median 11.2), CPU-bound on 4 vCPUs.
+
+## CI result (2026-11-24, run 45440262910)
+
+The `test` job passed in 10.0 min, against a median of 11.2 min over the
+last two days. `make test` took 452 s (481–721 s before). Per package (s):
+hostd 426 → 356, mgmt 395 → 345, cmd/tw 381 → 329.
+
+The gain is small because the hosted runner has 4 vCPUs and these tests
+are CPU-bound under `-race`: running them in parallel can't create cores
+that aren't there. On the 18-core Mac the same tree runs `make test` in
+about 3 min. So this change is what lets a larger runner (or more cores
+anywhere) pay off, which it didn't before, when the tests ran serially.
+
+Earlier entry:
+
+Top-level tests in hostd, mgmt and cmd/tw run with t.Parallel().
 
 ## Why
 
@@ -54,8 +70,6 @@ Commands:
 
 ## Gaps / next
 
-- CI runs on 4 vCPUs. That PR run measures the real gain and is the
-  first under-load check on Linux.
 - If a test turns flaky under parallel load, the fix is to remove its
   `t.Parallel()` and add a comment saying why, as for the two tests above.
 - More to gain: hostd's serial workerd restart tests, and cmd/tw's in-process
