@@ -16,6 +16,11 @@ A rerun of the job failed the same way, so the test's dialer changed too:
   own, so a lookup that answers with only the AAAA still reaches the edge
   over IPv4.
 
+A third run failed earlier, at `public_existing_object: 0 map[]`: a request
+that does go through `fetch` got no response for a minute, and the detail
+didn't say why. A request that fails now carries its error in the detail
+(`fetch_error`).
+
 ## Tests
 
 - `make lint`: ok (macOS arm64, Go 1.27.4).

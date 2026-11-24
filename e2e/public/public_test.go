@@ -186,7 +186,8 @@ func fetch(hc *http.Client, method, u string, body io.Reader, hdr ...string) res
 		time.Sleep(2 * time.Second)
 	}
 	if err != nil {
-		return resp{err: err}
+		// In m too, so a failed check's detail (which prints m) says why.
+		return resp{err: err, m: map[string]any{"fetch_error": err.Error()}}
 	}
 	defer r.Body.Close()
 	b, _ := io.ReadAll(r.Body)
