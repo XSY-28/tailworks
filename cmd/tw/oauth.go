@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
@@ -12,6 +13,7 @@ import (
 	"github.com/rosskukulinski/tailworks/internal/tsapi"
 	"github.com/rosskukulinski/tailworks/mgmt"
 	"github.com/rosskukulinski/tailworks/netd"
+	"github.com/tailscale/hujson"
 )
 
 // OAuth mint mode (M12; the only one for Tailscale tailnets): a Tailscale
@@ -46,9 +48,12 @@ func tagOwnersPart() policy.Snippet {
 	return policy.Snippet{TagOwners: operatorSnippet().TagOwners}
 }
 
-// snippetLines renders s indented for the terminal.
+// snippetLines renders s indented for the terminal, led by a HuJSON
+// comment: pasted as is next to an existing "tagOwners" or "grants"
+// section, it would be a second key and the policy would not parse
+// (issue #389).
 func snippetLines(s policy.Snippet) []string {
-	var out []string
+	out := []string{"    // merge into your policy: put each entry inside the existing section of the same name (don't add a second one)"}
 	for _, l := range strings.Split(strings.TrimSpace(s.HuJSON()), "\n") {
 		out = append(out, "    "+l)
 	}
@@ -58,13 +63,47 @@ func snippetLines(s policy.Snippet) []string {
 // policyMissingTagOwners is the typed error for "the control plane refused
 // (or would refuse) to mint keys for tailworks' own tags": before any login URL
 // is minted, with the exact snippet.
-func policyMissingTagOwners(why string, cause error) *cliErr {
+//
+// pol is the tailnet policy when tw could read it (nil otherwise): the fix
+// then names only the entries to add or replace (tagOwnersFix).
+func policyMissingTagOwners(why string, cause error, pol []byte) *cliErr {
 	lines := []string{why}
 	if cause != nil {
 		lines = append(lines, "control plane: "+netd.Redact(cause.Error()))
 	}
-	fix := append([]string{"add to your tailnet policy (admin console › Access controls), then run tw up again (nothing was minted):"}, snippetLines(tagOwnersPart())...)
-	return fail("policy_missing_tag_owners", "the tailnet policy does not let tag:tw own "+mgmt.MgmtTag+" and "+mgmt.HostTag, lines...).withFix(fix...)
+	return fail("policy_missing_tag_owners", "the tailnet policy does not let tag:tw own "+mgmt.MgmtTag+" and "+mgmt.HostTag, lines...).withFix(tagOwnersFix(pol)...)
+}
+
+// tagOwnersFix is the paste-safe fix for missing tag ownership (issue
+// #389). A tailnet with an OAuth client already has a "tagOwners" section
+// (tag:tw must be in it before the client can be created), so a second
+// "tagOwners" block pasted next to it breaks the policy. With the policy
+// known, the fix lists only the entries to add, each with its complete
+// owner list: a tag that is already there keeps its owners and gains
+// tag:tw, so its line is replaced rather than duplicated.
+func tagOwnersFix(pol []byte) []string {
+	const rerun = "then run tw up again (nothing was minted)"
+	var have struct {
+		TagOwners map[string][]string `json:"tagOwners"`
+	}
+	std, err := hujson.Standardize(slices.Clone(pol))
+	if pol == nil || err != nil || json.Unmarshal(std, &have) != nil || len(have.TagOwners) == 0 {
+		return append([]string{"add to your tailnet policy (admin console › Access controls), " + rerun + ":"}, snippetLines(tagOwnersPart())...)
+	}
+	want := tagOwnersPart().TagOwners
+	lines := []string{`in your tailnet policy's existing "tagOwners" section (admin console › Access controls), add these entries (replacing any line for the same tag), ` + rerun + ":"}
+	for _, tag := range slices.Sorted(maps.Keys(want)) {
+		owners := want[tag]
+		if cur, ok := have.TagOwners[tag]; ok {
+			if tag == policy.TwTagPrefix || slices.Contains(cur, policy.TwTagPrefix) {
+				continue
+			}
+			owners = append(slices.Clone(cur), policy.TwTagPrefix)
+		}
+		b, _ := json.Marshal(owners)
+		lines = append(lines, fmt.Sprintf("    %q: %s,", tag, b))
+	}
+	return lines
 }
 
 // mintModeRequired is `tw up` with no credential on a fresh state dir:
@@ -115,7 +154,8 @@ func oauthPreflight(ctx context.Context, api *tsapi.Client, src *tsapi.OAuthSour
 		return tailnet, p, true, fail("bad_request", "can't parse the tailnet policy", merr.Error())
 	}
 	if !miss.Empty() {
-		return tailnet, p, true, policyMissingTagOwners("the policy (read with the OAuth client) lacks tag:tw as an owner of: "+strings.Join(slices.Sorted(maps.Keys(miss.TagOwners)), ", "), nil)
+		return tailnet, p, true, policyMissingTagOwners("the policy (read with the OAuth client) lacks tag:tw as an owner of: "+strings.Join(slices.Sorted(maps.Keys(miss.TagOwners)), ", "), nil, p).
+			withFix("or let tw write it: tw up --apply-policy (needs an OAuth client with the Policy File › Write scope)")
 	}
 	return tailnet, p, true, nil
 }
@@ -126,7 +166,7 @@ func mintNodeKey(ctx context.Context, api controlAPI, tag, desc string) (string,
 	k, err := api.CreateKey(ctx, tsapi.KeyOptions{Tags: []string{tag}, Preauthorized: true, ExpirySeconds: 300, Description: desc})
 	if err != nil {
 		if tsapi.IsTagsNotPermitted(err) {
-			return "", policyMissingTagOwners("the control plane refused a "+tag+" key for the credential's tag", err)
+			return "", policyMissingTagOwners("the control plane refused a "+tag+" key for the credential's tag", err, nil)
 		}
 		return "", fail("bootstrap_failed", "could not mint "+tag+"'s node key", netd.Redact(err.Error()))
 	}

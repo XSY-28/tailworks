@@ -89,7 +89,7 @@ func (s *state) mintHostJoin(ctx context.Context, hostID, tenantID string) error
 				withFix("tw host rm "+hostID+" --drain   (then tw up again)", "or tw up --host-id <another id>")
 		}
 		if me, ok := mgmtapi.AsError(err); ok && me.Code == "policy_missing_tag_owners" {
-			return policyMissingTagOwners("mgmt could not mint the host's "+mgmt.HostTag+" join key: "+me.Message, nil)
+			return policyMissingTagOwners("mgmt could not mint the host's "+mgmt.HostTag+" join key: "+me.Message, nil, nil)
 		}
 		return err
 	}

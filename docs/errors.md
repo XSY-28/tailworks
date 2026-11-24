@@ -320,7 +320,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 409 · mgmt, cli. **When:** `tw policy --apply` / `tw deploy --apply-policy` / `tw up --apply-policy`: the tailnet policy changed between tailworks' read and its `If-Match` write, and again on the one retry. Nothing was written. **Fix:** run it again; if someone keeps editing the policy, wait for them, or add the printed snippet yourself.
 
 ### policy_missing_tag_owners
-403 · mgmt, cli. **When:** the control plane refused to mint a key for tailworks' own tags: `tag:tw` does not own `tag:tw-mgmt` / `tag:tw-host`. Nothing was minted. **Fix:** add the printed `tagOwners` snippet and re-run `tw up`, or run `tw up --apply-policy` to have tailworks write it (the OAuth client needs the Policy File write scope; `tag:tw` itself must already be in `tagOwners`).
+403 · mgmt, cli. **When:** the control plane refused to mint a key for tailworks' own tags: `tag:tw` does not own `tag:tw-mgmt` / `tag:tw-host`. Nothing was minted. **Fix:** add the printed `tagOwners` entries inside the policy's existing `tagOwners` section (replacing any line for the same tag; a second `tagOwners` key makes the policy fail to parse) and re-run `tw up`, or run `tw up --apply-policy` to have tailworks write it (the OAuth client needs the Policy File write scope; `tag:tw` itself must already be in `tagOwners`).
 
 ### policy_unavailable
 503 · mgmt. **When:** mgmt cannot read the tenant policy: the OAuth client has no `policy_file:read`, so spawn checks and deploy preflight cannot run. **Fix:** give the client Policy File › Read; until then `tw deploy` says `preflight skipped`.

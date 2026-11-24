@@ -399,3 +399,50 @@ func TestHeadscaleUpPolicyConfirm(t *testing.T) {
 		t.Fatalf("--yes: %d writes", writes)
 	}
 }
+
+// TestUpApplyPolicyAllowAll (issue #389): on a tailnet whose policy allows
+// all traffic, tw up --apply-policy adds the tagOwners and only the admin
+// console's app grant, not the host ⇄ mgmt network grants.
+func TestUpApplyPolicyAllowAll(t *testing.T) {
+	const allowAll = `{
+  "tagOwners": {"tag:tw": ["autogroup:admin"]},
+  "grants": [{"src": ["*"], "dst": ["*"], "ip": ["*"]}],
+}`
+	e := newUpApplyEnv(t, allowAll)
+	after, applied, out, err := e.run(t, false, "", "--yes")
+	if err != nil || !applied {
+		t.Fatalf("--apply-policy --yes: applied=%v err=%v\n%s", applied, err, out)
+	}
+	if !strings.Contains(after, mgmt.AdminCap) || !strings.Contains(after, `"tag:tw-mgmt"`) {
+		t.Errorf("the admin grant or tag:tw-mgmt owner is missing:\n%s", after)
+	}
+	if strings.Contains(after, `"tcp:7474"`) || strings.Contains(after, `"src":["tag:tw-host"]`) {
+		t.Errorf("host ⇄ mgmt grants written on an allow-all tailnet:\n%s", after)
+	}
+	if miss, err := policy.Missing([]byte(after), operatorSnippetFor([]byte(after))); err != nil || !miss.Empty() {
+		t.Errorf("still missing %s (%v)", miss.HuJSON(), err)
+	}
+}
+
+// TestTagOwnersFixPasteSafe (issue #389): with the policy known, the fix
+// lists only entries to put inside the existing tagOwners section (no
+// second "tagOwners" key, no tag:tw it already has), and an existing tag
+// keeps its owners.
+func TestTagOwnersFixPasteSafe(t *testing.T) {
+	t.Parallel()
+	pol := []byte(`{"tagOwners": {"tag:tw": ["group:ops"], "tag:tw-host": ["group:ops"]}}`)
+	fix := strings.Join(policyMissingTagOwners("why", nil, pol).Fix, "\n")
+	for _, want := range []string{`existing "tagOwners" section`, `"tag:tw-mgmt": ["autogroup:admin","tag:tw"],`, `"tag:tw-host": ["group:ops","tag:tw"],`} {
+		if !strings.Contains(fix, want) {
+			t.Errorf("fix lacks %q:\n%s", want, fix)
+		}
+	}
+	if strings.Contains(fix, `"tagOwners": {`) || strings.Contains(fix, `"tag:tw": [`) {
+		t.Errorf("fix would add a second tagOwners or tag:tw:\n%s", fix)
+	}
+	// Policy unknown: the whole block, with the merge note.
+	fix = strings.Join(policyMissingTagOwners("why", nil, nil).Fix, "\n")
+	if !strings.Contains(fix, `"tagOwners": {`) || !strings.Contains(fix, "don't add a second one") {
+		t.Errorf("fix without a policy:\n%s", fix)
+	}
+}
