@@ -542,7 +542,10 @@ func (e *Env) Run() {
 		}
 	}
 
-	// Preflight refuses hello (tailnet.connects tag:db has no grant).
+	// Preflight refuses hello once it connects to tag:db (no grant).
+	patch(filepath.Join(helloDir, "tailworks.jsonc"), func(b []byte) []byte {
+		return bytes.Replace(b, []byte(`"connects": []`), []byte(`"connects": ["tag:db"]`), 1)
+	})
 	_, se, _, err := e.Tw("deploy", helloDir)
 	if err == nil || !strings.Contains(se, "acl_denied") || !strings.Contains(se, `"dst": ["tag:db"]`) {
 		t.Fatalf("deploy hello should fail preflight with a snippet: %v\n%s", err, se)

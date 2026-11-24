@@ -191,8 +191,8 @@ it can be written. A tenant with its own owner tag (a team) doesn't get
 this: the tag may belong to another team's app, so you define it yourself.
 
 Some lines are never written: a grant to `*` or `autogroup:*`, a grant to a
-tag outside `tag:tw*` that your policy doesn't define (such as the `hello`
-template's `tag:db`, which the control plane would reject), a Service's
+tag outside `tag:tw*` that your policy doesn't define (such as `tag:db`
+before you add it to `tagOwners`, which the control plane would reject), a Service's
 `autoApprovers`, and the grant that lets people call the app. `tw policy`
 lists them for you to add yourself.
 

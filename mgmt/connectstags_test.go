@@ -53,3 +53,21 @@ func TestUndefinedConnectsTags(t *testing.T) {
 		t.Fatalf("team tenant: %q", got)
 	}
 }
+
+func TestMissingGrantsMerge(t *testing.T) {
+	pf := PreflightResult{Missing: []PreflightMissing{
+		{Src: "tag:a", Dst: "tag:db", Snippet: `{ "src": ["tag:a"], "dst": ["tag:db"], "ip": ["tcp:5432"] }`},
+		{Src: "tag:b", Dst: "tag:x", Snippet: `{ "src": ["tag:b"], "dst": ["tag:x"], "ip": ["tcp:80"] }`},
+		{Src: "tag:b", Dst: "tag:db", Snippet: `{ "src": ["tag:b"], "dst": ["tag:db"], "ip": ["tcp:5432"] }`},
+	}}
+	got := pf.MissingGrants()
+	if len(got) != 2 || !slices.Equal(got[0].Srcs, []string{"tag:a", "tag:b"}) || got[0].IP != "tcp:5432" || got[1].Dst != "tag:x" {
+		t.Fatalf("%+v", got)
+	}
+	if got[0].Snippet != `{ "src": ["tag:a", "tag:b"], "dst": ["tag:db"], "ip": ["tcp:5432"] }` {
+		t.Fatalf("snippet %s", got[0].Snippet)
+	}
+	if l := grantLabel(map[string]any{"src": []any{"tag:a", "tag:b"}, "dst": []any{"tag:db"}, "ip": []any{"tcp:80"}}); l != "tag:a, tag:b → tag:db tcp:80" {
+		t.Fatalf("label %q", l)
+	}
+}

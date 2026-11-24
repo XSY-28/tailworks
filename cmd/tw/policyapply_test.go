@@ -77,8 +77,12 @@ func TestCLIPolicyApply(t *testing.T) {
 	}
 
 	out, err = e.call(t, cmdPolicy, d, "--apply", "--yes")
-	if err != nil || !strings.Contains(out, "✓ policy     applied") || !strings.Contains(out, "The policy has everything tailworks checks") {
+	if err != nil || !strings.Contains(out, "✓ policy     applied") || !strings.Contains(out, "The policy now has everything tailworks checks") {
 		t.Fatalf("--apply --yes: %v\n%s", err, out)
+	}
+	// One report: the header and checks once, no ETags.
+	if strings.Count(out, "tw policy: what support needs") != 1 || strings.Count(out, "? callers") != 1 || strings.Contains(out, "If-Match") {
+		t.Fatalf("--apply --yes repeats itself:\n%s", out)
 	}
 	t.Logf("tw policy --apply --yes:\n%s", out)
 	after, n := e.policyNow()

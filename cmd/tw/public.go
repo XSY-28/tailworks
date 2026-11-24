@@ -108,8 +108,8 @@ func preflightFailure(pf mgmt.PreflightResult) *cliErr {
 	}
 	if len(pf.Missing) > 0 {
 		e.Fix = append(e.Fix, `add to "grants" in your tailnet policy:`)
-		for _, m := range pf.Missing {
-			e.Fix = append(e.Fix, "  "+m.Snippet)
+		for _, g := range pf.MissingGrants() {
+			e.Fix = append(e.Fix, "  "+g.Snippet)
 		}
 	}
 	if len(pf.MissingNodeAttrs) > 0 {

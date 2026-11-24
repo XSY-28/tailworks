@@ -123,8 +123,8 @@ func policySnippet(pf mgmt.PreflightResult, caller, svcCaller string) string {
 	}
 	if len(pf.Missing) > 0 || caller != "" || svcCaller != "" {
 		b.WriteString("\"grants\": [\n")
-		for _, m := range pf.Missing {
-			b.WriteString("  " + m.Snippet + ", // tailnet.connects\n")
+		for _, g := range pf.MissingGrants() {
+			b.WriteString("  " + g.Snippet + ", // tailnet.connects\n")
 		}
 		if caller != "" {
 			b.WriteString("  " + caller + ", // who may call it (not checked: narrow src to a user, group or tag)\n")
@@ -143,22 +143,59 @@ func policySnippet(pf mgmt.PreflightResult, caller, svcCaller string) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
+// printPolicyHeader is the report's first lines: what is checked, and the
+// app's tags (an object class with its own nodes has a tag of its own).
+func printPolicyHeader(a *app, res policyResult) {
+	fmt.Printf("tw policy: what %s needs in tenant %s's tailnet policy (nothing is deployed)\n", a.Name, res.Tenant)
+	if d := describeTags(a); d != "" {
+		fmt.Printf("  tags       %s\n", d)
+	}
+}
+
+// describeTags names what carries each of the app's tags, when it has more
+// than its workload node's ("" otherwise).
+func describeTags(a *app) string {
+	cls := a.Cfg.Classes()
+	if len(cls) < 2 {
+		return ""
+	}
+	var parts []string
+	for _, c := range cls {
+		what := "the " + c.Class + " objects' nodes"
+		if c.Class == mgmt.WorkloadNamespace {
+			what = "the workload node"
+		}
+		for _, t := range c.Tags {
+			parts = append(parts, t+" ("+what+")")
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
 func printPolicyPlan(a *app, res policyResult) {
 	pf := res.Preflight
-	fmt.Printf("tw policy: what %s needs in tenant %s's tailnet policy (nothing was deployed)\n", a.Name, res.Tenant)
-	if !res.Checked {
-		fmt.Printf("? checked    no: mgmt can't read the tailnet policy (give the OAuth client the Policy File › Read scope)\n")
-		fmt.Printf("  tags       %s (each needs a tagOwners entry that tag:tw may use)\n", strings.Join(a.srcTags(), ", "))
-	} else {
-		printPolicyChecks(a, pf)
+	applied := res.Applied != nil // policyApplyStep printed the header and checks
+	if !applied {
+		printPolicyHeader(a, res)
+		if !res.Checked {
+			fmt.Printf("? checked    no: mgmt can't read the tailnet policy (give the OAuth client the Policy File › Read scope)\n")
+			fmt.Printf("  tags       %s (each needs a tagOwners entry that tag:tw may use)\n", strings.Join(a.srcTags(), ", "))
+		} else {
+			printPolicyChecks(a, pf)
+		}
 	}
 	if res.Snippet == "" {
 		return
 	}
-	if res.OK {
+	switch {
+	case res.OK && applied:
+		fmt.Printf("\nThe policy now has everything tailworks checks; run tw deploy. If people should call %s, make sure a grant like this exists (tailworks never writes who may call an app):\n\n", a.Name)
+	case res.OK:
 		fmt.Printf("\nThe policy has everything tailworks checks. If people should call %s, make sure a grant like this exists:\n\n", a.Name)
-	} else {
-		fmt.Printf("\nAdd to your tailnet policy (admin console › Access controls), then run tw deploy:\n\n")
+	case applied:
+		fmt.Printf("\nStill missing. Add to your tailnet policy (admin console › Access controls), then run tw deploy:\n\n")
+	default:
+		fmt.Printf("\nAdd to your tailnet policy (admin console › Access controls), then run tw deploy (or let tailworks add its part: tw policy --apply):\n\n")
 	}
 	for _, l := range strings.Split(res.Snippet, "\n") {
 		fmt.Fprintf(os.Stdout, "  %s\n", l)
@@ -176,9 +213,9 @@ func printPolicyChecks(a *app, pf mgmt.PreflightResult) {
 		fmt.Printf("✗ tagOwners  %s: missing (no app with this tag is deployed yet; tailworks can define it)\n", t)
 	}
 	missing := map[string]bool{}
-	for _, m := range pf.Missing {
-		missing[m.Dst] = true
-		fmt.Printf("✗ connects   %s → %s tcp:80: no grant\n", m.Src, m.Dst)
+	for _, g := range pf.MissingGrants() {
+		missing[g.Dst] = true
+		fmt.Printf("✗ connects   %s → %s %s: no grant\n", strings.Join(g.Srcs, ", "), g.Dst, g.IP)
 	}
 	for _, dst := range a.Cfg.Tailnet.Connects {
 		switch {
@@ -215,7 +252,7 @@ func policyFailure(res policyResult, withSnippet bool) *cliErr {
 	e := preflightFailure(res.Preflight) // public.go: acl_denied or funnel_required
 	e.Message = strings.Replace(e.Message, "preflight failed", "tw policy", 1)
 	if !withSnippet {
-		e.Fix = []string{"add the snippet above to your tailnet policy, then run tw policy again, or tw deploy"}
+		e.Fix = []string{"add the snippet above to your tailnet policy, then run tw deploy"}
 		return e
 	}
 	e.Fix = []string{"add to your tailnet policy (admin console › Access controls):"}

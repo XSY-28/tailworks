@@ -590,7 +590,9 @@ func printPreflight(a *app, pf mgmt.PreflightResult) {
 	missing := map[string]bool{}
 	for _, m := range pf.Missing {
 		missing[m.Src+"→"+m.Dst] = true
-		fmt.Printf("› preflight: %s → %s tcp:80 … ✗ no grant\n", m.Src, m.Dst)
+	}
+	for _, g := range pf.MissingGrants() {
+		fmt.Printf("› preflight: %s → %s %s … ✗ no grant\n", strings.Join(g.Srcs, ", "), g.Dst, g.IP)
 	}
 	for _, dst := range a.Cfg.Tailnet.Connects {
 		if slices.Contains(pf.Unchecked, dst) {
@@ -616,8 +618,8 @@ func printPreflight(a *app, pf mgmt.PreflightResult) {
 		}
 		if len(pf.Missing) > 0 {
 			fmt.Printf("  add to \"grants\" in your tailnet policy:\n")
-			for _, m := range pf.Missing {
-				fmt.Printf("    %s\n", m.Snippet)
+			for _, g := range pf.MissingGrants() {
+				fmt.Printf("    %s\n", g.Snippet)
 			}
 		}
 	}

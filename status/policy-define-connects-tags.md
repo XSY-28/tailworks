@@ -1,4 +1,4 @@
-Last update: 2026-11-23 PT. tw policy defines undefined tag:tw* connects targets.
+Last update: 2026-11-23 PT. tw policy: defines undefined tag:tw* connects targets; one report for --apply; merged grants; hello without tag:db.
 
 # policy-define-connects-tags
 
@@ -26,12 +26,24 @@ See the PR. New: `TestPolicyApplyDefinesConnectsTag`,
 `TestUndefinedConnectsTags` (mgmt), `TestPolicySnippetDefinesConnectsTag`
 (cmd/tw).
 
-## Not done (from the tw policy UX review)
+## Also (tw policy UX review)
 
-- `--apply` reprints the whole report after applying and exits
-  `acl_denied` even when only unchecked callers remain.
-- Manual lines are printed twice in two formats; ETags in text output.
-- No `--callers <src>` to write the caller grant.
-- Grants from several src tags to one dst aren't merged.
-- The `hello` template's placeholder `connects: ["tag:db"]` fails a fresh
-  deploy's preflight.
+- `--apply` prints the header and checks once (`printPolicyHeader`), then the
+  plan, then one result: "now has everything … run tw deploy" or "Still
+  missing" with only what's left. No ETags in text output (still in
+  `--json` and the audit record).
+- mgmt's `manual` lines read `grant <src> → <dst> <ip>: not written: <why>`
+  (`grantLabel`, `checkReason`); the CLI lists them once and they stay in
+  the snippet.
+- `PreflightResult.MissingGrants()` (mgmt/preflightgrants.go) merges missing
+  grants by (dst, ip): one grant with every src. Used by mgmt's apply
+  snippet, `tw policy`, `tw deploy`'s preflight output and its fix.
+- `tw policy` names what carries each tag when the app has object classes.
+- `hello` template: `connects: []` with a commented example; cliflow adds
+  `tag:db` itself before its preflight-refusal check.
+
+## Not done
+
+- `--callers <src>` to write the caller grant: RT-06 (`policy.Check`)
+  refuses grants with user, group or `autogroup:*` sources by design.
+  Writing one is a security-model change, so it needs a decision first.

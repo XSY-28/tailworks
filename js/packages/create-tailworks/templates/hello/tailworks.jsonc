@@ -4,7 +4,8 @@
   "tailnet": {
     // the workload node's tags (your policy must let tag:tw own them)
     "tags": ["tag:tw-wl-hello"],
-    // declared dependencies; `tw deploy` preflights these grants
-    "connects": ["tag:db"]
+    // what it calls on your tailnet, by tag (e.g. ["tag:db"]); `tw deploy`
+    // checks your policy grants them, and `tw policy --apply` adds the grants
+    "connects": []
   }
 }

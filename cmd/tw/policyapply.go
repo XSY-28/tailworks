@@ -64,7 +64,7 @@ func applyAppPolicy(ctx context.Context, mc *mgmtapi.Client, f *flags, tenantID,
 	}
 	if !*f.json {
 		if res.Changed {
-			fmt.Printf("✓ policy     applied (validated, If-Match %s → %s; audited as policy_apply)\n", res.OldETag, res.NewETag)
+			fmt.Printf("✓ policy     applied (validated by the control plane; tw audit --all shows it as policy_apply)\n")
 		} else {
 			fmt.Printf("✓ policy     nothing to write: the policy already has it\n")
 		}
@@ -83,6 +83,7 @@ func policyApplyStep(ctx context.Context, s *state, f *flags, a *app, tn TenantR
 		return nil
 	}
 	if !*f.json {
+		printPolicyHeader(a, *res)
 		printPolicyChecks(a, res.Preflight)
 		fmt.Println()
 	}
@@ -94,9 +95,6 @@ func policyApplyStep(ctx context.Context, s *state, f *flags, a *app, tn TenantR
 	res.OK = res.Preflight.OK
 	res.ServiceCallerGrant = serviceCallerGrant(res.Preflight.Service)
 	res.Snippet = policySnippet(res.Preflight, res.CallerGrant, res.ServiceCallerGrant)
-	if !*f.json {
-		fmt.Println()
-	}
 	return nil
 }
 
@@ -110,9 +108,9 @@ func printPolicyAdditions(plan mgmt.PolicyApplyResult) {
 		}
 	}
 	if len(plan.Manual) > 0 {
-		fmt.Printf("› policy     not written by tailworks; add it in the admin console:\n")
+		fmt.Printf("› policy     tailworks won't write these (they stay in the snippet for you to add):\n")
 		for _, m := range plan.Manual {
-			fmt.Printf("    %s\n", m)
+			fmt.Printf("    - %s\n", m)
 		}
 	}
 }
