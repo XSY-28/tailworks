@@ -128,15 +128,20 @@ Responses API calls with a scripted stream. That is listed as a change.
 
 ### What the upstream run found (2026-11-24)
 
-1. **Open ([#354](https://github.com/rosskukulinski/tailworks/issues/354)): a pre-built Worker that imports `cloudflare:email` can't start.**
-   The Agents playground does, for its email demos, so none of it runs.
+1. **Fixed ([#354](https://github.com/rosskukulinski/tailworks/issues/354)): a pre-built Worker that imports `cloudflare:email` couldn't start.**
+   The Agents playground does, for its email demos. It starts now, and 8
+   of the probe's 9 demo families pass; `SupervisorAgent.createChild`
+   (agent-to-agent Durable Object RPC) fails with `Could not serialize
+   object of type "RpcPromise"`, not yet narrowed down.
 2. **Open ([#355](https://github.com/rosskukulinski/tailworks/issues/355)): agents reached through the imported env are not created.**
    `cross-domain` and `mcp-elicitation` pass
    `import { env } from "cloudflare:workers"` to the Agents SDK and get
    `create_not_admitted`.
-3. **Open ([#356](https://github.com/rosskukulinski/tailworks/issues/356)): the built-in bundler and CommonJS `require()` of a Node builtin.**
-   A Worker with `dotenv` in it bundles and then can't start. The three AI
-   SDK examples bundle with `--wrangler`.
+3. **Fixed ([#356](https://github.com/rosskukulinski/tailworks/issues/356)): the built-in bundler and CommonJS `require()` of a Node builtin.**
+   A Worker with `dotenv` in it bundled and then couldn't start. With
+   `nodejs_compat` the built-in bundler now turns such a `require()` into
+   an import, as wrangler does, and the three AI SDK examples use it
+   instead of `--wrangler`.
 4. **Fixed ([#359](https://github.com/rosskukulinski/tailworks/issues/359)): an `AgentWorkflow` started with `runWorkflow` stayed queued on a deployed host.**
    The Agent's class wasn't in `tailnet.objects`, so mgmt refused its node,
    and the Workflow was refused the Agent. The `workflows` example now

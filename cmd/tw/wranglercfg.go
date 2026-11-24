@@ -360,6 +360,7 @@ func esbuildWranglerOptions(w map[string]any, o *esbundle.Options) error {
 	if ts, _ := w["tsconfig"].(string); ts != "" {
 		o.Tsconfig = ts
 	}
+	o.NodeCompat = nodeCompat(w) // requirebuiltins.go
 	return nil
 }
 
