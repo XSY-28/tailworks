@@ -259,6 +259,9 @@ func cmdTenantAdd(args []string) error {
 	if hs {
 		cred, mode = absKey, mgmt.MintHeadscale
 	}
+	if err := checkSandboxLayout([]procsb.LayoutPath{{What: "credential file", Path: cred}}); err != nil { // sandbox_layout.go (#342)
+		return err
+	}
 	tid := tenantIDFor(tailnet)
 	if *namePrefix != "" {
 		tid += "-" + *namePrefix // a second team's tenant on the same tailnet
@@ -559,6 +562,9 @@ func cmdTenantSet(args []string) error {
 				return fail("credential_file_insecure", absOAuth+" is readable by other users", err.Error()).withFix("chmod 600 " + absOAuth)
 			}
 			return fail("bad_request", "can't read the OAuth client from "+absOAuth, netd.Redact(err.Error()))
+		}
+		if err := checkSandboxLayout([]procsb.LayoutPath{{What: "credential file", Path: absOAuth}}); err != nil { // sandbox_layout.go (#342)
+			return err
 		}
 		patch["mintMode"], patch["oauthClientFile"], patch["oauthClientID"] = mgmt.MintOAuth, absOAuth, nil
 	}
