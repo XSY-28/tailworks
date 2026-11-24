@@ -20,6 +20,7 @@ import (
 // coding agent or CI timeout sends) must not leave its workerd running or
 // its /tmp/tw-dev-* dir behind.
 func TestDevSIGKILL(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("short")
 	}

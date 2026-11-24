@@ -17,6 +17,7 @@ import (
 // with public routes, one node per object of a class with tags, and none
 // for a "node": false class.
 func TestEstimateAppNodes(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, cfg string
 		preview   bool
@@ -66,6 +67,7 @@ func TestEstimateAppNodes(t *testing.T) {
 // TestCountNodes: live objects are nodes, sorted by namespace; terminal
 // ones are not counted.
 func TestCountNodes(t *testing.T) {
+	t.Parallel()
 	objs := []mgmt.Object{
 		{Namespace: mgmt.WorkloadNamespace, Status: mgmt.StatusReady},
 		{Namespace: mgmt.WorkloadNamespace, Status: mgmt.StatusReady},
@@ -97,6 +99,7 @@ func TestCountNodes(t *testing.T) {
 // maxObjects, and of the hosts' node capacity (by the tenant's count or the
 // hosts' own, whichever is higher).
 func TestNodeWarnings(t *testing.T) {
+	t.Parallel()
 	if w := nodeWarnings("t.ts.net", nil, &nodeCapacity{Hosts: 1, CapacityNodes: 1}); len(w) != 0 || w == nil {
 		t.Errorf("no count: %q (want an empty, non-nil list)", w)
 	}
@@ -126,6 +129,7 @@ func TestNodeWarnings(t *testing.T) {
 }
 
 func TestNodeBudgetFact(t *testing.T) {
+	t.Parallel()
 	if m := metaOf("node_budget"); m.group != "Tailnet" || m.fact == nil {
 		t.Errorf("tw doctor's node_budget check has no group or fact: %+v", m)
 	}

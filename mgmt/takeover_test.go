@@ -15,6 +15,7 @@ import (
 // confirms the takeover. Stateless workloads and `"fence": "never"` classes
 // move freely. Moving away from a live holder stays refused (lease_held).
 func TestMM_F4_GuardedTakeover(t *testing.T) {
+	t.Parallel()
 	const (
 		stateful  = `{ "tailnet": { "objects": { "SupportAgent": { "tags": ["tag:tw-agent-support"], "agent": true } } } }`
 		stateless = `{ "tailnet": { "tags": ["tag:tw-web"] } }`
@@ -129,6 +130,7 @@ func TestMM_F4_GuardedTakeover(t *testing.T) {
 }
 
 func TestBundleStateful(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		files map[string]string
@@ -152,6 +154,7 @@ func TestBundleStateful(t *testing.T) {
 // TestMM_F9_AssignmentFence: deployments record whether the host must fence
 // them (BundleStateful) and assignments carry it (ADR-028 §3).
 func TestMM_F9_AssignmentFence(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dir := t.TempDir()
 	st, err := OpenStore(ctx, filepath.Join(dir, "m.db"))
@@ -202,6 +205,7 @@ func TestMM_F9_AssignmentFence(t *testing.T) {
 // by-ID hit for the same identity is a concurrent create (idempotent), but a
 // different identity holding the ID is still refused.
 func TestMM_F12_IdentityConflictStillRefused(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dir := t.TempDir()
 	st, _ := OpenStore(ctx, filepath.Join(dir, "m.db"))
@@ -237,6 +241,7 @@ func TestMM_F12_IdentityConflictStillRefused(t *testing.T) {
 // stored, so every replica reports the latest one, including after the host
 // alternated between replicas (a per-replica cache must not skip the write).
 func TestMM_F13_DeploymentStatusShared(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dir := t.TempDir()
 	st, _ := OpenStore(ctx, filepath.Join(dir, "m.db"))

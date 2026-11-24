@@ -150,6 +150,7 @@ func TestTypesTemplates(t *testing.T) {
 // than merges with) the global one `tw types` generates, and the generated
 // binding types would go unused (issue #41).
 func TestTemplatesUseGeneratedEnv(t *testing.T) {
+	t.Parallel()
 	ct, err := createTailworksDir()
 	if err != nil {
 		t.Skip("create-tailworks not found:", err)
@@ -176,6 +177,7 @@ func TestTemplatesUseGeneratedEnv(t *testing.T) {
 // them are at VERSION (scripts/npm-versions.mjs; the release publishes
 // them at the tag's version).
 func TestNPMVersions(t *testing.T) {
+	t.Parallel()
 	ct, err := createTailworksDir()
 	if err != nil {
 		t.Skip("create-tailworks not found:", err)

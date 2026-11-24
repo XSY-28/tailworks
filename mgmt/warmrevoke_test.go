@@ -12,6 +12,7 @@ import (
 // keys took 3.2 s one by one; the budget (1.6 s) leaves room for a slow
 // runner while failing a sequential revoke.
 func TestWarmKeysRevokedOnCloseInParallel(t *testing.T) {
+	t.Parallel()
 	e := newPoolEnv(t, 0, func(c *Config) { c.WarmKeys, c.RevokeWarmKeysOnClose = 0, true })
 	ctx := context.Background()
 	const n, delay = 16, 200 * time.Millisecond

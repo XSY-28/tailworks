@@ -81,7 +81,10 @@ func (c d1Client) qErr(body map[string]any) string {
 // admin op), journal-first writes (one append per write, none per read),
 // and recovery of the whole database from mgmt's journal after the host
 // was fenced and lost its DO storage.
-func TestD1(t *testing.T) { testD1(t, hostdtest.BackendFake) }
+func TestD1(t *testing.T) {
+	t.Parallel()
+	testD1(t, hostdtest.BackendFake)
+}
 
 // testD1 is TestD1 against backend (realmgmt_test.go).
 func testD1(t *testing.T, backend string) {

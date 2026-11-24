@@ -22,6 +22,7 @@ import (
 // locally (ADR-039): a send through env.JOBS on the dev port reaches
 // the app's own queue() handler, through the dev's fake mgmt.
 func TestDevQueues(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("short")
 	}

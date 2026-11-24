@@ -96,6 +96,7 @@ func policyApp(t *testing.T, connects string) []byte {
 // TestPolicyApply: plan, refuse without the write scope, write additively
 // with If-Match, audit, then nothing more to do.
 func TestPolicyApply(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	e.ts.policy = operatorOnly
 	tn := v1Tenant(t, e, "t.ts.net", nil)
@@ -156,6 +157,7 @@ func TestPolicyApply(t *testing.T) {
 // TestPolicyApplyConflict: a 412 is retried once from a fresh read; a
 // second one is 409 policy_conflict with nothing written.
 func TestPolicyApplyConflict(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		conflicts, writes int
 		code              string
@@ -193,6 +195,7 @@ func TestPolicyApplyConflict(t *testing.T) {
 // grant to "*" or the internet gets the tw-owned part written and the rest
 // reported as manual; validation failures write nothing.
 func TestPolicyApplyHostile(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	e.ts.policy = operatorOnly
 	grantPolicyWrite(e)
@@ -247,6 +250,7 @@ func TestPolicyApplyHostile(t *testing.T) {
 // TestPolicyApplyAdminOnly: tenant admins may deploy, but the tailnet
 // policy is the tailnet admins'.
 func TestPolicyApplyAdminOnly(t *testing.T) {
+	t.Parallel()
 	e := newTenantEnv(t)
 	body := map[string]any{"bundle": policyApp(t, `["tag:db"]`)}
 	for _, q := range []string{"", "?dryRun=true"} {

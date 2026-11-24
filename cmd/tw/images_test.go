@@ -64,11 +64,10 @@ func TestCLIImages(t *testing.T) {
 	if err := exec.Command("docker", "buildx", "version").Run(); err != nil {
 		t.Skip("docker buildx unavailable:", err)
 	}
-	wd, err := nettest.WorkerdBinary()
+	_, err := nettest.WorkerdBinary()
 	if err != nil || !hostdtest.HasNode() {
 		t.Skip("needs workerd and node (make deps)")
 	}
-	t.Setenv("TW_WORKERD", wd)
 	ctl, err := nettest.StartControl()
 	if err != nil {
 		t.Fatal(err)

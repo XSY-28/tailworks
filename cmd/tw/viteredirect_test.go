@@ -116,6 +116,7 @@ func TestViteRedirectErrors(t *testing.T) {
 }
 
 func TestRebaseWranglerPaths(t *testing.T) {
+	t.Parallel()
 	cfg := map[string]any{
 		"main": "index.js", "tsconfig": "/abs/tsconfig.json",
 		"containers": []any{
@@ -134,6 +135,7 @@ func TestRebaseWranglerPaths(t *testing.T) {
 }
 
 func TestPrebuiltNoBundle(t *testing.T) {
+	t.Parallel()
 	esm := func(globs ...any) map[string]any { return map[string]any{"type": "ESModule", "globs": globs} }
 	for _, c := range []struct {
 		name string

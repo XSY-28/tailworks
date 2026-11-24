@@ -26,14 +26,14 @@ import (
 // tag, one warning per ignored key, then it serves over the tailnet,
 // top level and `--env staging` side by side.
 func TestCLIDeployWranglerTOML(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("short")
 	}
-	wd, err := nettest.WorkerdBinary()
+	_, err := nettest.WorkerdBinary()
 	if err != nil || !hostdtest.HasNode() {
 		t.Skip("needs workerd and node (make deps)")
 	}
-	t.Setenv("TW_WORKERD", wd)
 	ctl, err := nettest.StartControl()
 	if err != nil {
 		t.Fatal(err)

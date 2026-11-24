@@ -61,6 +61,7 @@ func dnsStubAnswer(t *testing.T, q []byte, table map[string][]netip.Addr) []byte
 // with exit_node_unavailable, never touching anything else, when the exit
 // node is missing, not offered, offline or refuses DNS.
 func TestExitNodeInternet(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	table := map[string][]netip.Addr{
 		"api.example.com":  {netip.MustParseAddr("203.0.113.5"), netip.MustParseAddr("2001:db8::5")},
@@ -274,6 +275,7 @@ func TestExitNodeInternet(t *testing.T) {
 }
 
 func TestMatchExitNode(t *testing.T) {
+	t.Parallel()
 	p := &ipnstate.PeerStatus{ID: "nABC", DNSName: "Exit-FRA.corp.example.", HostName: "exit-fra-box", TailscaleIPs: []netip.Addr{netip.MustParseAddr("100.64.0.9")}}
 	for node, want := range map[string]bool{
 		"nABC": true, "exit-fra": true, "EXIT-FRA.corp.example": true, "exit-fra-box": true, "100.64.0.9": true,
@@ -289,6 +291,7 @@ func TestMatchExitNode(t *testing.T) {
 }
 
 func TestParseExitNodeSpec(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string]string{
 		"exit-fra":                    "exit-fra",
 		"exit-fra,dns=1.1.1.1":        "exit-fra,dns=1.1.1.1:53",

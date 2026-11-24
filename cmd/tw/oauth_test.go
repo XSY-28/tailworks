@@ -16,6 +16,7 @@ import (
 // the allowance for autogroup:admin, and merges additively into a
 // policy that already has rules (existing owners kept, nothing removed).
 func TestOperatorSnippet(t *testing.T) {
+	t.Parallel()
 	s := operatorSnippet()
 	wantOwners := map[string][]string{
 		"tag:tw":      {"autogroup:admin"},
@@ -83,6 +84,7 @@ var adminSrcOptions = policy.Options{AllowSrcs: []string{"autogroup:admin"}}
 // client (no removed mode offered); policy_missing_tag_owners carries the
 // exact tagOwners snippet.
 func TestModeChoiceAndTypedErrors(t *testing.T) {
+	t.Parallel()
 	e := mintModeRequired()
 	text := strings.Join(e.Lines, "\n")
 	if e.Code != "mint_mode_required" || !strings.Contains(text, "--oauth-client-file") || !strings.Contains(text, "Auth Keys") || !strings.Contains(text, "tag:tw") ||

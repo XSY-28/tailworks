@@ -12,6 +12,7 @@ import (
 // whichever arrives first; nearest start wins; unmatched records are still
 // written after JoinWait.
 func TestEntrySpansJoinRecords(t *testing.T) {
+	t.Parallel()
 	h, w := telHost(t, TelemetryOptions{JoinWait: 200 * time.Millisecond})
 	inst := w.active
 	tr, sp1, sp2, parent := obs.NewTraceID(), obs.NewSpanID(), obs.NewSpanID(), obs.NewSpanID()

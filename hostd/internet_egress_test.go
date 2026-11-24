@@ -26,6 +26,7 @@ import (
 // other.example.com resolve to a documentation address the dialer sends to
 // a local server; private.example.com resolves to a private address.
 func TestWorkerInternetEgress(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("x-tw-object") != "" || r.Header.Get("tailscale-user-login") != "" {
 			http.Error(w, "identity header leaked", 500)

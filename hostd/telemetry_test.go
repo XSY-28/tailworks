@@ -137,6 +137,7 @@ func hasLog(r obs.Record, msg string) bool {
 // traceparent across a DO call and an egress fetch, /metrics, the logs
 // API, and OTLP export from the workload's own node.
 func TestTelemetry(t *testing.T) {
+	t.Parallel()
 	s := startSuiteCapsOpts(t, fakemgmt.Config{}, tailcfg.PeerCapMap{nettest.TestCap: []tailcfg.RawMessage{nettest.TestCapValue}}, func(o *hostdtest.Options) {
 		o.Telemetry = hostd.TelemetryOptions{JoinWait: time.Second, ExportEvery: 200 * time.Millisecond, MetricsEvery: 300 * time.Millisecond, RefreshEvery: 500 * time.Millisecond}
 	})

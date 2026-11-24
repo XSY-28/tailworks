@@ -31,6 +31,7 @@ func stubNPMSelf(t *testing.T, in npminstall.Install, ok bool) {
 // An npm platform package has VERSION and share/tailworks like a tarball
 // install, but npm owns it: tw upgrade must not take it for a prefix.
 func TestNPMPackageIsNotAnInstallPrefix(t *testing.T) {
+	t.Parallel()
 	pkg := mkNPMPackage(t, filepath.Join(t.TempDir(), "node_modules", "@tailworks", "cli-linux-arm64"))
 	if isInstallPrefix(pkg) {
 		t.Fatal("an npm platform package is an install.sh prefix")
@@ -44,6 +45,7 @@ func TestNPMPackageIsNotAnInstallPrefix(t *testing.T) {
 }
 
 func TestNPMUpgradeErr(t *testing.T) {
+	t.Parallel()
 	var ce *cliErr
 	e := npmUpgradeErr(npminstall.Install{Dir: "/g/lib/node_modules/tailworks/node_modules/@tailworks/cli-linux-arm64", Package: "@tailworks/cli-linux-arm64", Version: "0.5.0"})
 	if !errors.As(e, &ce) || ce.Code != "npm_install" || !strings.Contains(strings.Join(ce.Fix, "\n"), "npm install -g tailworks@latest") {

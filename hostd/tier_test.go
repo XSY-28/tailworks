@@ -24,6 +24,7 @@ func (fakeBackend) Name() string                                           { ret
 // tier_unavailable; it is never downgraded to the process tier (ADR-032
 // D5b). Only ForceProcessTier (tw dev) runs it in the process tier.
 func TestTierFor(t *testing.T) {
+	t.Parallel()
 	ten := func(tier string) *tenant { return &tenant{info: mgmtapi.Tenant{Tier: tier}} }
 	const refused = "refused"
 	cases := []struct {
@@ -72,6 +73,7 @@ func TestTierFor(t *testing.T) {
 // A host whose default tier is microvm but has no backend can't start (it
 // would refuse every deployment that names no tier).
 func TestDefaultMicroVMNeedsBackend(t *testing.T) {
+	t.Parallel()
 	mc, _ := mgmtapi.NewClient("unix:///nonexistent")
 	_, err := New(Config{HostID: "h", Mgmt: mc, DataDir: t.TempDir(), WorkerdBin: "/bin/true", DefaultTier: "microvm"})
 	if err == nil || !strings.Contains(err.Error(), "microVM backend") {
@@ -83,6 +85,7 @@ func TestDefaultMicroVMNeedsBackend(t *testing.T) {
 // with a usable container backend and image store (they run in microVMs);
 // ForceProcessTier advertises neither.
 func TestHostTiers(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		vm, ctr, force bool
 		want           string

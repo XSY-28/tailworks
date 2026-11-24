@@ -537,6 +537,7 @@ func (e *testEnv) asHost(id string) *apiClient {
 // object goes back to pending, a new key is minted under the SAME hostname,
 // the credential is released again, and /ready records the new node ID.
 func TestRemintAfterRejectedRejoin(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 	var tn struct{ TenantID string }
@@ -593,6 +594,7 @@ func TestRemintAfterRejectedRejoin(t *testing.T) {
 }
 
 func TestAPIEndToEnd(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 
@@ -813,6 +815,7 @@ func TestAPIEndToEnd(t *testing.T) {
 }
 
 func TestAPIThrottleBackoffAndTTLReaper(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 	var tn struct{ TenantID string }
@@ -857,6 +860,7 @@ func TestAPIThrottleBackoffAndTTLReaper(t *testing.T) {
 }
 
 func TestAPIHostAuditChain(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	h1 := e.asHost("h1")
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
@@ -908,6 +912,7 @@ func TestAPIHostAuditChain(t *testing.T) {
 }
 
 func TestTailnetAuth(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	srv := &Server{M: e.m, Admins: []string{"ross@example.com"}, Self: SelfInfo{DNSName: "tw-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
 	whois := func(ctx context.Context, addr string) (WhoIsInfo, error) {
@@ -1054,6 +1059,7 @@ func TestTailnetAuth(t *testing.T) {
 }
 
 func TestKillWhileJoining(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 	var tn struct{ TenantID string }
@@ -1088,6 +1094,7 @@ func TestKillWhileJoining(t *testing.T) {
 // them; a create of the same name is then a new pending object, and the
 // deployment's endpoint no longer reads "killed". Live objects stay.
 func TestPurgeAfterKill(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 	var tn struct{ TenantID string }
@@ -1159,6 +1166,7 @@ func TestPurgeAfterKill(t *testing.T) {
 // TestAPIVolumeKey: the DO volume data key (L3) is created in custody once,
 // returned stably, and only to the lease holder at the lease's epoch.
 func TestAPIVolumeKey(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	c, h1, h2 := e.c, e.asHost("h1"), e.asHost("h2")
 	var tn struct{ TenantID string }

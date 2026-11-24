@@ -26,6 +26,7 @@ import (
 // host fenced the workload and lost its DO storage (a move to a new host,
 // as far as the store can tell).
 func TestPlatformStore(t *testing.T) {
+	t.Parallel()
 	hostdtest.RegisterProbeStore()
 	const fenceAfter = time.Second
 	s := startSuiteCapsOpts(t, fakemgmt.Config{}, tailcfg.PeerCapMap{nettest.TestCap: []tailcfg.RawMessage{nettest.TestCapValue}}, func(o *hostdtest.Options) {

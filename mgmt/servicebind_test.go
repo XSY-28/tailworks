@@ -10,6 +10,7 @@ import (
 // node, only for a binding its latest deployment declares, and only for a
 // workload of the same tenant.
 func TestServiceBindingTarget(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	c, h1 := e.c, e.asHost("h1")
 	var tn struct{ TenantID string }

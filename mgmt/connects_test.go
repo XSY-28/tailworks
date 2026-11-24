@@ -6,6 +6,7 @@ import (
 )
 
 func TestSplitConnect(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string][2]string{
 		"tag:db":                 {"tag:db", ""},
 		"tag:db:5432":            {"tag:db", "tcp:5432"},
@@ -24,6 +25,7 @@ func TestSplitConnect(t *testing.T) {
 }
 
 func TestHasIPGrantPort(t *testing.T) {
+	t.Parallel()
 	pol, err := ParsePolicy([]byte(`{"grants": [
 		{"src": ["tag:a"], "dst": ["tag:db"], "ip": ["tcp:5432"]},
 		{"src": ["tag:b"], "dst": ["tag:db"], "ip": ["tcp:80"]},
@@ -48,6 +50,7 @@ func TestHasIPGrantPort(t *testing.T) {
 // TestPreflightConnectsPort: a connects entry with a port is checked
 // against that port, and the missing grant's snippet names it.
 func TestPreflightConnectsPort(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	e.ts.policy = `{"tagOwners": {"tag:tw-wl-app": ["autogroup:admin"]}, "grants": [
 		{"src": ["tag:tw-wl-app"], "dst": ["tag:db"], "ip": ["tcp:80"]}]}`

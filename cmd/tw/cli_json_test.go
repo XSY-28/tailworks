@@ -117,6 +117,7 @@ var cliSurface = []struct {
 // docs/errors.md, and nothing on stdout. It also fails when a command or
 // subcommand has no schema, or the schema describes one that's gone.
 func TestCLIJSONContract(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("short")
 	}
@@ -288,14 +289,14 @@ func helpCommands(help string) []string {
 // stdout: ready, reload after an edit, stopping on SIGINT; every line
 // matches $defs/dev.event.
 func TestDevJSONEvents(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("short")
 	}
-	wd, err := nettest.WorkerdBinary()
+	_, err := nettest.WorkerdBinary()
 	if err != nil || !hostdtest.HasNode() {
 		t.Skip("needs workerd and node (make deps)")
 	}
-	t.Setenv("TW_WORKERD", wd)
 	bin := cliflow.BuildBinaries(t)
 	work := t.TempDir()
 	app := filepath.Join(work, "hello")

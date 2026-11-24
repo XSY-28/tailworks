@@ -17,6 +17,7 @@ import (
 // else, that tools run the /v1 handlers (their errors and data), and the
 // JSON-RPC edges.
 func TestMCPServer(t *testing.T) {
+	t.Parallel()
 	e := newTestEnv(t)
 	srv := &Server{M: e.m, Version: "v-test", Self: SelfInfo{DNSName: "tw-mgmt.t.ts.net", Tailnet: "t.ts.net"}}
 	tn := v1Tenant(t, e, "op.ts.net", nil)

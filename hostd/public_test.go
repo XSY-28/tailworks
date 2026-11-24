@@ -77,6 +77,7 @@ func publicStatus(e *hostdtest.Env, workload string) *hostd.PublicStatus {
 // whose Funnel listener delivers to the workload's default export with an
 // unforgeable {kind:"public"} requester, never a tailnet caller.
 func TestPublicIngress(t *testing.T) {
+	t.Parallel()
 	ff := &fakeFunnel{addrs: map[string]string{}, src: netip.MustParseAddrPort("203.0.113.7:40000")}
 	s := startSuiteCapsOpts(t, fakemgmt.Config{}, nil, func(o *hostdtest.Options) { o.PublicListen = ff.listen })
 	e := s.e

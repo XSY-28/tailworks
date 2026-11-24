@@ -17,6 +17,7 @@ import (
 // The README also has the one line to paste before tw up --apply-policy
 // writes the rest (issue #320): tag:tw alone, as operatorSnippet has it.
 func TestDocPolicySnippetsMatchCode(t *testing.T) {
+	t.Parallel()
 	block := regexp.MustCompile("(?s)```jsonc\n(.*?)```")
 	n, first := 0, 0
 	for _, f := range []string{"../../README.md", "../../docs/INSTALL.md"} {
