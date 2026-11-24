@@ -623,7 +623,7 @@ flags:
   -allow-missing-grants
     	deploy even if tailnet.connects grants are missing
   -apply-policy
-    	when the preflight finds tagOwners, grants or funnel nodeAttrs missing, write them to the tailnet policy first (as tw policy --apply)
+    	when the preflight finds tagOwners, grants, funnel nodeAttrs or Service auto-approval missing, write them to the tailnet policy first (as tw policy --apply)
   -env string
     	wrangler environment: use env.<name> from the wrangler config, as 'wrangler --env' does (the workload is named <name>-<env> unless the env sets a name)
   -force-takeover
@@ -673,7 +673,7 @@ usage: tw policy [dir] [--tenant <tailnet>] [--name <workload>] [--env <name>] [
 
 flags:
   -apply
-    	write the missing tagOwners, grants and funnel nodeAttrs to the tailnet policy (additive, tag:tw* only, If-Match; needs Policy File write)
+    	write the missing tagOwners, grants, funnel nodeAttrs and Service auto-approval to the tailnet policy (additive, tag:tw* only, If-Match; needs Policy File write)
   -env string
     	wrangler environment: use env.<name> from the wrangler config, as 'wrangler --env' does (the workload is named <name>-<env> unless the env sets a name)
   -from-wrangler-out string
