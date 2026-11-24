@@ -116,7 +116,10 @@ func TestTCPEgress(t *testing.T) {
 		for _, c := range []struct{ dst, code string }{
 			{"127.0.0.1:5432", "forbidden_destination"},
 			{"169.254.169.254:80", "forbidden_destination"},
-			{net.JoinHostPort(f1.IP, "80"), "forbidden_destination"}, // a same-host sibling
+			// A same-host sibling is reached in process (netd/samehost.go),
+			// on its ingress port only: another port is refused like a
+			// closed one.
+			{net.JoinHostPort(f1.IP, "5432"), "dial_failed"},
 			{"100.100.99.99:5432", "peer_not_visible"},
 			{"no-such-node.ttest.ts.net:5432", "peer_not_visible"},
 		} {

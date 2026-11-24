@@ -73,6 +73,12 @@ Last update: 2026-11-23 PT. Issue #293: service bindings (`services`, WorkerEntr
   052 is tcp-egress): `make e2e-local`, `make lint`, `go test ./netd/
   ./mgmt/`, `go test ./hostd/ -run 'TestServiceBindings|TestLockTemplate'`
   — ok.
+- Second CI run: `hostd:TestTCPEgress/Refusals` (from master's tcp-egress)
+  expected a raw `connect()` to a same-host sibling's port 80 to be
+  refused; the hop now delivers it, so the case dials a port nothing
+  listens on (`dial_failed`). `e2e/real` SelfSSRF's sibling cases now
+  accept the hop or `peer_not_visible` (not run: needs credentials).
+  `go test ./hostd/...` and `make lint` — ok.
 - `go test ./mgmt/ -run TestServiceBindingTarget` — ok (lease fence,
   undeclared binding, target never deployed, pending entry node, the
   answer, another tenant's same-named workload is not a target).
