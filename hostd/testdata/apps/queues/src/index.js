@@ -7,6 +7,7 @@
 //   fail           retry() every time (max_retries 1: then the DLQ)
 //   throw-once     throw on attempt 1 (the whole batch is retried)
 //   hang-once      hang on attempt 1 (the test kills workerd)
+//   slow-once      take 4 s on attempt 1 (the test stalls hostd's heartbeat)
 //   ack-explicit   msg.ack(), then throw (the ack holds)
 import { DurableObject } from "cloudflare:workers";
 
@@ -94,6 +95,7 @@ export default {
     const recs = [];
     let throwIt = false;
     let hang = false;
+    let slow = false;
     for (const m of batch.messages) {
       const b = m.body;
       const d = describe(b);
@@ -115,6 +117,9 @@ export default {
         case "hang-once":
           if (m.attempts === 1) hang = true;
           break;
+        case "slow-once":
+          if (m.attempts === 1) slow = true;
+          break;
         case "ack-explicit":
           m.ack();
           throwIt = true;
@@ -122,6 +127,9 @@ export default {
       }
       recs.push(rec);
     }
+    // A slow run records only when done, like a handler whose work came
+    // before its log line: cancelled mid-way, it leaves no record.
+    if (slow) await new Promise((r) => setTimeout(r, 4_000));
     await env.LOG.getByName("log").add(recs);
     if (hang) await new Promise((r) => setTimeout(r, 120_000));
     if (throwIt) throw new Error("boom from queue()");

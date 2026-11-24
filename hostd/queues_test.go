@@ -35,7 +35,8 @@ type queueRec struct {
 // export's queue() with workerd's MessageBatch: batching by size and by
 // max_batch_timeout, retry() with a delay, max_retries landing in the
 // dead-letter queue, a throw retrying the batch but not an explicit ack,
-// queue() creating a Durable Object (the batch's create ticket), a
+// queue() creating a Durable Object (the batch's create ticket), a slow
+// heartbeat cancelling a run and the batch handed back uncounted, a
 // workerd crash mid-batch losing nothing, and a fenced host consuming
 // nothing until it is back.
 func TestQueues(t *testing.T) {
@@ -215,6 +216,25 @@ func testQueues(t *testing.T, backend string) {
 		}
 		if m := call("/big"); !strings.Contains(fmt.Sprint(m["error"]), "queue_limit") {
 			t.Fatalf("a 130 KB message: %v", m)
+		}
+	})
+
+	t.Run("SlowHeartbeatReleasesBatch", func(t *testing.T) {
+		// A heartbeat later than FenceAfter (1 s here: a loaded host, a slow
+		// mgmt) makes the host's lease stale, and its consumer loops stop
+		// until the next good one. The run they were in is cancelled; hostd
+		// hands the batch back uncounted, so the message comes again as
+		// attempt 1. (#387: it was retried as attempt 2, and a wait for
+		// attempt 1 never ended.)
+		call("/send", "k", "sh1", "do", "slow-once") // attempt 1 takes 4 s
+		time.Sleep(1500 * time.Millisecond)          // past max_batch_timeout: queue() is running
+		e.Hooks.DelayHeartbeat(2 * time.Second)      // stale 1 s in, fresh again at 2 s
+		wait("sh1", 1, 20*time.Second)
+		time.Sleep(time.Second)
+		for _, r := range recs() {
+			if r.K == "sh1" && r.Attempts != 1 {
+				t.Fatalf("a delivery hostd cancelled counted as an attempt: %+v", r)
+			}
 		}
 	})
 
