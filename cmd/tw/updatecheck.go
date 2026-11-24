@@ -14,6 +14,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/rosskukulinski/tailworks/internal/catalog"
 	"github.com/rosskukulinski/tailworks/internal/esbundle"
 	twversion "github.com/rosskukulinski/tailworks/internal/version"
 )
@@ -39,6 +40,10 @@ type versionCheck struct {
 	UpdateAvailable bool           `json:"updateAvailable"`
 	Upgrade         string         `json:"upgrade,omitempty"` // the command that installs it
 	Daemons         *daemonVersion `json:"daemons"`           // null: no tw up running on this machine
+
+	// Security: the latest release's notes have a Security section (a
+	// `security` fragment shipped in it; issue #338).
+	Security bool `json:"securityRelease"`
 }
 
 // daemonVersion is what the running tw up reports (GET /v1/status).
@@ -51,6 +56,10 @@ type daemonVersion struct {
 type latestRelease struct {
 	Tag string `json:"tag_name"`
 	URL string `json:"html_url"`
+
+	// Body is the release notes (scripts/release-notes.sh); a Security
+	// section in it marks a security release (catalog.HasSecurityNotes).
+	Body string `json:"body"`
 }
 
 func releaseRepo() string {
@@ -163,7 +172,7 @@ func cmdVersionCheck(f *flags) error {
 		return err
 	}
 	latest := strings.TrimPrefix(rel.Tag, "v")
-	res := versionCheck{Latest: latest, URL: rel.URL}
+	res := versionCheck{Latest: latest, URL: rel.URL, Security: catalog.HasSecurityNotes(rel.Body)}
 	cur, lv := parseSemver(version), parseSemver(latest)
 	// A build from source (dev, 0.2.0-dev) isn't compared: it may be ahead
 	// of the latest release or behind it.
@@ -174,9 +183,9 @@ func cmdVersionCheck(f *flags) error {
 	}
 	s, _ := openState(*f.stateDir)
 	res.Daemons = runningDaemons(ctx, s)
-	saveUpdateCache(s, latest)
+	saveUpdateCache(s, latest, res.Security)
 	emit(f, map[string]any{"tw": version, "go": runtime.Version(), "os": runtime.GOOS + "/" + runtime.GOARCH, "workerdPin": workerdPin, "esbuild": esbundle.Version,
-		"latest": res.Latest, "url": res.URL, "updateAvailable": res.UpdateAvailable,
+		"latest": res.Latest, "url": res.URL, "updateAvailable": res.UpdateAvailable, "securityRelease": res.Security,
 		"upgrade": res.Upgrade, "daemons": res.Daemons, "updateCheck": updateCheckOn()}, func() { printVersionCheck(res, release) })
 	return nil
 }
@@ -186,7 +195,7 @@ func printVersionCheck(r versionCheck, release bool) {
 	case !release:
 		fmt.Printf("this tailworks (%s) is a development build; the latest release is %s\n", version, r.Latest)
 	case r.UpdateAvailable:
-		fmt.Printf("tw %s is out (this is %s): %s\n", r.Latest, version, r.URL)
+		fmt.Printf("tw %s is out (this is %s)%s: %s\n", r.Latest, version, securityReleaseTag(r.Security), r.URL)
 		fmt.Printf("  upgrade: %s\n", r.Upgrade)
 	default:
 		fmt.Printf("✓ tw %s is the latest release\n", version)
@@ -207,6 +216,9 @@ type updateCache struct {
 	CheckedAt  time.Time `json:"checkedAt"`
 	Latest     string    `json:"latest"`
 	NotifiedAt time.Time `json:"notifiedAt,omitempty"`
+
+	// Security: Latest's notes have a Security section (issue #338).
+	Security bool `json:"securityRelease,omitempty"`
 }
 
 const updateEvery = 24 * time.Hour
@@ -229,12 +241,12 @@ func (c updateCache) save(dir string) {
 	os.WriteFile(updateCachePath(dir), b, 0o600)
 }
 
-func saveUpdateCache(s *state, latest string) {
+func saveUpdateCache(s *state, latest string, security bool) {
 	if s == nil {
 		return
 	}
 	c := loadUpdateCache(s.Dir)
-	c.CheckedAt, c.Latest = time.Now(), latest
+	c.CheckedAt, c.Latest, c.Security = time.Now(), latest, security
 	c.save(s.Dir)
 }
 
@@ -291,6 +303,7 @@ func updateNotice(cmd string, stderr io.Writer) {
 		c.CheckedAt = now // a failed check waits a day too
 		if err == nil {
 			c.Latest = strings.TrimPrefix(rel.Tag, "v")
+			c.Security = catalog.HasSecurityNotes(rel.Body)
 		}
 	}
 	if msg := updateNoticeLine(c, now); msg != "" {
@@ -306,5 +319,5 @@ func updateNoticeLine(c updateCache, now time.Time) string {
 	if !lv.ok || !cur.ok || !lv.newerThan(cur) || now.Sub(c.NotifiedAt) < updateEvery {
 		return ""
 	}
-	return fmt.Sprintf("› tw %s is out (this is %s): %s · details: tw version --check · TW_NO_UPDATE_CHECK=1 turns this notice off", c.Latest, version, upgradeCommand())
+	return fmt.Sprintf("› tw %s is out (this is %s)%s: %s · details: tw version --check · TW_NO_UPDATE_CHECK=1 turns this notice off", c.Latest, version, securityReleaseTag(c.Security), upgradeCommand())
 }

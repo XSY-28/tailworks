@@ -15,6 +15,11 @@
 #   report   on a scheduled run with a failure, comments on (or opens) the
 #            "nightly suites failing" issue so a red night is not missed;
 #            a green scheduled run closes that issue ("passing again").
+#   v8-check `make v8-check` (issue #338): the pinned workerd's V8 against
+#            the V8 in Chrome's stable channel. Behind: opens or updates the
+#            `security` issue "workerd pin is behind Chrome stable's V8",
+#            which starts the clock in docs/RELEASING.md ("Upstream
+#            advisories"); caught up: closes it. The job itself stays green.
 #
 # A suite that fails on master for a real reason gets an issue and
 # `allow_failure: <issue URL>` on its matrix entry (continue-on-error) until
@@ -157,6 +162,33 @@ jobs:
       - name: full test-pg log
         if: failure()
         run: cat "$RUNNER_TEMP/tw-test-pg.log"
+
+  v8-check:
+    # The pinned workerd's V8 against Chrome stable's (scripts/v8-check.sh).
+    # Not in report's needs: the security issue it files is the signal, and
+    # a pin that is behind is not a failing suite.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+      - name: make v8-check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          V8_CHECK_ISSUE: "1"
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: make v8-check
 
   report:
     if: always() && github.event_name == 'schedule'

@@ -507,6 +507,11 @@ func TestDoctor(t *testing.T) {
 		t.Fatalf("doctor: data_disk = %q: %v", st, r.Checks)
 	}
 	delete(got, "data_disk")
+	// workerd_age depends on today's date: ok while the pin is under 30 days old, warn after (doctor_workerdage.go).
+	if st := got["workerd_age"]; st != "ok" && st != "warn" {
+		t.Fatalf("doctor: workerd_age = %q: %v", st, r.Checks)
+	}
+	delete(got, "workerd_age")
 	if runtime.GOOS == "linux" {
 		want["host_sockets"] = "ok"
 		if hs := procsb.ScanHostSockets(); len(hs.Hard) > 0 {

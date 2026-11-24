@@ -129,6 +129,8 @@ func cmdDoctor(args []string) error {
 		return "ok", wd + ": " + v + " (pinned " + workerdPin + ")", ""
 	})
 
+	run("workerd_age", func() (string, string, string) { return workerdAgeCheck(workerdPin, time.Now()) }) // doctor_workerdage.go
+
 	run("bundler", func() (string, string, string) {
 		ct, err := createTailworksDir()
 		if err != nil {

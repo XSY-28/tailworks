@@ -676,6 +676,13 @@ staticcheck: lint-tools
 vulncheck: lint-tools
 	bin/lint/govulncheck ./...
 
+## v8-check: is the pinned workerd's V8 behind the V8 in Chrome's stable channel (issue #338)? Prints
+## both versions; exit 10 when behind. nightly.yml runs it with V8_CHECK_ISSUE=1, which opens, updates
+## or closes the "workerd pin is behind Chrome stable's V8" issue (docs/RELEASING.md "Upstream advisories").
+.PHONY: v8-check
+v8-check: $(WORKERD)
+	sh scripts/v8-check.sh
+
 .PHONY: hooks
 hooks:
 	sh scripts/install-hooks.sh

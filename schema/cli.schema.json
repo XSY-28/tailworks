@@ -760,6 +760,10 @@
           "type": "string",
           "description": "--check, when updateAvailable: the command that installs it"
         },
+        "securityRelease": {
+          "type": "boolean",
+          "description": "--check: the latest release's notes have a Security section (it shipped a `security` release-note fragment), so an upgrade is urgent"
+        },
         "daemons": {
           "type": [
             "object",
