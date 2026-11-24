@@ -6,8 +6,6 @@ tailnet node with its own name, tags and grants. Callers are identified by
 their tailnet identity, not tokens; your tailnet policy decides who can call
 what, and what each object can reach.
 
-[![The launch demo in a terminal: an MCP server and an agent are deployed, a tool call is allowed, one grant is narrowed and the call is denied, the agent is killed and leaves the tailnet](docs/assets/demo/demo.gif)](docs/demo.md)
-
 It runs your code on [workerd](https://github.com/cloudflare/workerd) on
 macOS (Apple silicon) or Linux. Agents SDK agents, MCP servers and Vercel AI
 SDK agents run unmodified.

@@ -1,4 +1,4 @@
-Last update: 2026-11-24 08:20 PT. `scripts/demo.sh` (issue #323, the scriptable part), a throwaway Headscale tailnet to run it on, and a recorded GIF at the top of the README.
+Last update: 2026-11-24 08:20 PT. `scripts/demo.sh` (issue #323, the scriptable part), a throwaway Headscale tailnet to run it on, and a recorded GIF (not in the README yet: it is from the Headscale run).
 
 # demo-323-script: the reproducible launch demo
 
@@ -95,6 +95,6 @@ All real runs were against the throwaway Headscale tailnet
   ffmpeg line was run once on the committed GIF and works).
 - The second recording, "Claude Code builds an MCP server" (issue item 4).
 - The committed GIF is from the Headscale tailnet: it says `mint mode
-  headscale` and calls from `docker exec laptop curl`. If the README should
-  show a Tailscale tailnet, re-record as `docs/demo.md` says and replace the
-  two files.
+  headscale` and calls from `docker exec laptop curl`. So the README
+  line was taken out before merge; re-record on a Tailscale tailnet as
+  `docs/demo.md` says, replace the two files and add the line.

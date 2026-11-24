@@ -6,9 +6,10 @@ to call a tool, one grant is narrowed and the same call is denied, the grant
 is put back, and the agent is killed and leaves the tailnet. This page says
 how to run it, how to record it, and where the recordings go.
 
-The recording at the top of the [README](../README.md) is
-[`assets/demo/demo.gif`](assets/demo/demo.gif), made as described under
-[Record it](#record-it).
+The current recording is [`assets/demo/demo.gif`](assets/demo/demo.gif),
+made as described under [Record it](#record-it). It is from the throwaway
+Headscale tailnet, so the README doesn't show it yet: the README recording
+should come from a Tailscale tailnet.
 
 ## What it shows
 
@@ -183,6 +184,11 @@ is why step 1 says `mint mode headscale`, the caller is
 strings in the cast were replaced afterwards: the host name in the audit
 line (`demo@host`) and the recorded command in the header. To replace the
 recording with one from a Tailscale tailnet, follow the steps above and
-commit the two files; the README needs no change.
+commit the two files, then add it to the README directly under the
+one-line description:
+
+```md
+[![The launch demo in a terminal](docs/assets/demo/demo.gif)](docs/demo.md)
+```
 
 The screenshots and the MP4 are not in the repo yet.
