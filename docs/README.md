@@ -16,7 +16,8 @@ in the CLI: `tw docs ls`, `tw docs search <words>`,
   or [Linux](INSTALL.md#linux), then [upgrading.md](upgrading.md),
   [back up and restore](INSTALL.md#back-up-and-restore) and
   [troubleshooting](INSTALL.md#troubleshooting). Where each platform is
-  tested: [install-testing.md](install-testing.md).
+  tested: [install-testing.md](install-testing.md). Everything `tw up` runs,
+  listens on and writes, on one page: [footprint.md](footprint.md).
 - **You review security.** Start with the one-page [security model](security-model.md); report a vulnerability through [SECURITY.md](../SECURITY.md).
   How callers are identified:
   [COMPAT.md#identity](COMPAT.md#identity). How isolated an app is:
