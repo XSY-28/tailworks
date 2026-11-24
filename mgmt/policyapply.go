@@ -146,12 +146,12 @@ func preflightSnippet(pf PreflightResult, o policy.Options, defined func(tag str
 		s.NodeAttrs = append(s.NodeAttrs, p.NodeAttrs...)
 		return nil
 	}
-	if len(pf.MissingTagOwners) > 0 && pf.TagOwnersSnippet != "" {
+	if pf.TagOwnersSnippet != "" && (len(pf.MissingTagOwners) > 0 || len(pf.UndefinedConnects) > 0) {
 		if err := add(pf.TagOwnersSnippet); err != nil {
 			return s, nil, err
 		}
 	}
-	for _, g := range pf.Missing {
+	for _, g := range pf.MissingGrants() {
 		if err := add(`"grants": [` + g.Snippet + `]`); err != nil {
 			return s, nil, err
 		}
@@ -181,13 +181,11 @@ func preflightSnippet(pf PreflightResult, o policy.Options, defined func(tag str
 	}
 	for _, g := range s.Grants {
 		if err := policy.Check(policy.Snippet{Grants: []map[string]any{g}}, o); err != nil {
-			b, _ := json.Marshal(g)
-			manual = append(manual, fmt.Sprintf("grant %s (not written: %v)", b, err))
+			manual = append(manual, fmt.Sprintf("grant %s: not written: %s", grantLabel(g), checkReason(err)))
 			continue
 		}
 		if u := undefinedDst(g, keep, defined); u != "" {
-			b, _ := json.Marshal(g)
-			manual = append(manual, fmt.Sprintf("grant %s (not written: %s has no tagOwners entry, and the control plane rejects a grant to an undefined tag; define %s, or drop it from tailnet.connects)", b, u, u))
+			manual = append(manual, fmt.Sprintf("grant %s: not written: %s has no tagOwners entry and isn't a tailworks tag (the control plane rejects a grant to an undefined tag); define it in the admin console, or drop it from tailnet.connects", grantLabel(g), u))
 			continue
 		}
 		keep.Grants = append(keep.Grants, g)
@@ -232,4 +230,16 @@ func parseHuJSONObject(part string, v any) error {
 		return err
 	}
 	return json.Unmarshal(std, v)
+}
+
+// checkReason is policy.Check's refusal without its "policy snippet: grant
+// N: " prefix (the manual line names the grant already).
+func checkReason(err error) string {
+	r := strings.TrimPrefix(err.Error(), "policy snippet: ")
+	if rest, ok := strings.CutPrefix(r, "grant "); ok {
+		if i := strings.Index(rest, ": "); i >= 0 {
+			r = rest[i+2:]
+		}
+	}
+	return r
 }
