@@ -468,6 +468,7 @@ compat-upstream-check:
 	$(GO) run ./e2e/compat/compatreport -check
 	$(GO) test -count=1 ./e2e/compat/
 lint: compat-upstream-check
+lint-docs: compat-upstream-check
 
 ## e2e-compat-prepare: only fetch, npm install and build the e2e-compat projects (no tailnet).
 .PHONY: e2e-compat-prepare

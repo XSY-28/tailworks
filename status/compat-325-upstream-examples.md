@@ -111,6 +111,10 @@ on purpose), and the React clients are fetched, not run in a browser.
   run now resets the var to the example's own value first.
 - `make e2e-compat-dev` from an empty cache (as CI will run it): prepared
   20 projects in 1m41s, `--- PASS: TestCompatDev (118.72s)`.
+- After merging `origin/master` (`b5b6d2f5`): `make lint`, `make lint-docs`
+  and `make test-docs` ok, and `make e2e-compat-dev` again
+  `PASS:17 XFAIL:3`. The published results stay the ones from
+  `a7a7393cae68`; the deployed run was not repeated on the merged tree.
 - `make lint`: ok (includes `compat-check`, `compat-upstream-check`,
   `go test ./e2e/compat/`, staticcheck).
 - `make changes-check`: ok (no upgrade-relevant paths).
