@@ -3225,6 +3225,11 @@ type PreflightResult struct {
 	// TagOwnerProblems: for a tenant with its own owner tag, tags owned by
 	// another tenant's owner tag, or not by its own (teams.go). Fail it.
 	TagOwnerProblems []string `json:"tagOwnerProblems,omitempty"`
+
+	// UndefinedConnects: tailnet.connects tags in tag:tw* (another app's,
+	// not deployed yet) with no tagOwners entry; TagOwnersSnippet defines
+	// them too (connectstags.go).
+	UndefinedConnects []string `json:"undefinedConnects,omitempty"`
 }
 
 // Preflight checks the request against the tenant's current policy (read
@@ -3254,6 +3259,10 @@ func (m *Mgmt) Preflight(ctx context.Context, tenantID string, r PreflightReques
 			owners = append(owners, fmt.Sprintf("%q: %s", tag, tagOwnersFor(t)))
 		}
 	}
+	res.UndefinedConnects = undefinedConnectsTags(t, pol, r.Connects, r.SrcTags)
+	for _, tag := range res.UndefinedConnects {
+		owners = append(owners, fmt.Sprintf("%q: %s", tag, tagOwnersFor(t)))
+	}
 	if len(owners) > 0 {
 		res.TagOwnersSnippet = `"tagOwners": { ` + strings.Join(owners, ", ") + ` }`
 	}
@@ -3279,7 +3288,7 @@ func (m *Mgmt) Preflight(ctx context.Context, tenantID string, r PreflightReques
 	res.AccessWarnings = m.accessWarnings(ctx, t, pol) // tenantscope_lint.go
 	// svccaps_lint.go: caps on the workload tags that calls through its Service lose (#155).
 	res.AccessWarnings = append(res.AccessWarnings, serviceCapWarnings(pol, res.Service, r.WorkloadTags)...)
-	res.OK = len(res.Missing) == 0 && len(res.MissingTagOwners) == 0 && len(res.MissingNodeAttrs) == 0 && !res.ServiceUnapproved && len(res.TagOwnerProblems) == 0
+	res.OK = len(res.Missing) == 0 && len(res.MissingTagOwners) == 0 && len(res.UndefinedConnects) == 0 && len(res.MissingNodeAttrs) == 0 && !res.ServiceUnapproved && len(res.TagOwnerProblems) == 0
 	return res, nil
 }
 

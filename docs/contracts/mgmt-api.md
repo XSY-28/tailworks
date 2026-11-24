@@ -669,8 +669,8 @@ tenant's tailnet policy:
 `manual` what is missing that tailworks never writes (the
 `autoApprovers.services` entry of a Tailscale Service, tag
 ownership problems of a team tenant, grants it refuses, and grants
-to a tag the policy doesn't define, which the control plane would
-reject); add those
+to a tag outside `tag:tw*` that the policy doesn't define, which the
+control plane would reject); add those
 in the admin console. `dryRun=true` writes nothing and needs only
 Policy File › Read; the write needs the tenant's OAuth client to
 hold Policy File write (`403 policy_write_denied` otherwise).
@@ -4416,6 +4416,7 @@ Why a deployment is on its host (smart placement, ADR-033).
 | `tagOwnerProblems` | array of string | no | For a tenant with its own `ownerTag`, the tags its owner tag doesn't own, or that another tenant's owner tag on the tailnet owns. Makes `ok` false. |
 | `tagOwnersSnippet` | string | no |  |
 | `unchecked` | array of string | no | `tailnet.connects` entries that are names, not tags. |
+| `undefinedConnects` | array of string | no | `tailnet.connects` tags in `tag:tw*` (another tailworks app's, not deployed yet) that have no `tagOwners` entry; the control plane rejects a grant to them. `tagOwnersSnippet` defines them too, so `tw policy --apply` writes them with the grants. Never set for a tenant with its own `ownerTag`. Makes `ok` false. |
 
 #### `Preview`
 
