@@ -41,6 +41,7 @@ func keepSavedUpFlags(fs *flag.FlagSet, c Config) {
 	keep("custody", c.Custody)
 	keep("setec-url", c.SetecURL)
 	keepSavedRetention(keep, c) // up_retention.go
+	keep("worker-internet", c.WorkerInternet)
 	if c.PushPort != 0 {
 		keep("push-port", strconv.Itoa(c.PushPort))
 	}

@@ -13,6 +13,15 @@ import (
 // off or limit it to an allowlist; Config.WorkerInternet nil turns it off
 // for the whole host.
 
+// workerInternetMode names Config.WorkerInternet for StatusView: "direct"
+// (set) or "off" (nil).
+func workerInternetMode(wi *ContainerInternet) string {
+	if wi == nil {
+		return "off"
+	}
+	return "direct"
+}
+
 // internetConfig is the tenant registry's internet path, or nil when this
 // host has none.
 func (h *Host) internetConfig() *netd.InternetConfig {

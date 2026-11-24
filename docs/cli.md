@@ -86,6 +86,8 @@ flags:
     	Tailscale API base URL (testing)
   -warm-keys int
     	pre-minted single-use keys kept per (tenant, tag set), so a new object skips the key-API call; sized from the recent create rate, capped here (0 = off) (default 5)
+  -worker-internet string
+    	how Workers' fetch() reaches internet hosts, subject to each workload's tailnet.egress.internet: direct (this host's network, public addresses only) or off (refused on this host) (default "direct")
   -workerd string
     	workerd binary
   -yes
