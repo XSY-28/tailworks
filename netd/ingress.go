@@ -196,7 +196,7 @@ func UnixUpstream(path string) http.Handler {
 	}
 	target := &url.URL{Scheme: "http", Host: "workerd"}
 	return &httputil.ReverseProxy{
-		Transport:     tr,
+		Transport:     KeepEarlyAnswer(tr), // upstream_early.go (#288)
 		FlushInterval: -1,
 		ErrorLog:      log.New(io.Discard, "", 0), // errors are reported via ErrorHandler
 		Rewrite: func(pr *httputil.ProxyRequest) {
