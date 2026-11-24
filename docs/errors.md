@@ -277,6 +277,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### not_up
 409 · cli. **When:** this state dir has no tailworks config or tenant yet. **Fix:** `tw up …` on the host, or `tw link <mgmt>` on a developer machine.
 
+### npm_install
+1 · cli. **When:** `tw upgrade` ran from a tailworks that npm installed (`npm install -g tailworks` or `npx tailworks`): npm owns the binaries' directory, so `tw upgrade` won't replace it; or `tw up --service` ran from npx's cache, which npm may clear at any time, so a login service can't point there. **Fix:** upgrade with npm: `tw down && npm install -g tailworks@latest && tw up` (`tw backup` first; [upgrading.md](upgrading.md#installed-with-npm)); for a service, install globally (`npm install -g tailworks`), or run `tw up --service=false`. For `tw upgrade` itself, install the release tarball (`scripts/get.sh`).
+
 ### oauth_exchange_failed
 401 · cli. **When:** Tailscale refused the OAuth client in `--oauth-client-file` (wrong secret, revoked client). **Fix:** generate a new client (Settings › Trust credentials), overwrite the file (0600), `tw up`.
 

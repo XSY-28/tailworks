@@ -205,7 +205,26 @@ scripts/release-notes.sh v0.1.0 v0.2.0
    `.github/workflows/npm-publish.yml`. It runs `scripts/npm-publish.sh`
    from the tag, which publishes `@tailworks/tailnet`, `@tailworks/node`, `@tailworks/mcp`
    and `create-tailworks` at the release's version (a prerelease goes to the
-   `next` dist-tag), with provenance.
+   `next` dist-tag), with provenance. It then publishes the tw CLI (issue
+   #240):
+   - The workflow downloads the release's tarballs, `SHA256SUMS` and
+     `SHA256SUMS.sig` from the GitHub release. `scripts/npm-cli-packages.sh`
+     checks the signature against the pinned keys and each tarball against
+     `SHA256SUMS`. It then makes one platform package per target:
+     `@tailworks/cli-darwin-arm64`, `@tailworks/cli-linux-arm64` and
+     `@tailworks/cli-linux-amd64`. Each is the extracted tarball without
+     `install.sh`, the checksums and the microVM guest, with `os`/`cpu`/`libc`
+     set. They go out first, and `tailworks` (`js/cli/tailworks`, the shim
+     whose `optionalDependencies` name them) goes out last, so it is never
+     on npm without them.
+   - Each platform package is about 120 MB to download and 400 MB unpacked,
+     most of it workerd. The npm registry's size limit isn't documented, so
+     if a publish fails with `413`, that is the cause.
+   - The same packages were already installed and run on each platform
+     before the draft existed: release.yml's tarball jobs run
+     `scripts/ci-npm-cli-check.sh` (npm install -g, `tw doctor`,
+     `tw init`, `tw dev --once`, `tw upgrade` refusing). The `ready` gate
+     runs `make npm-cli-test`.
    - Auth is npm [trusted publishing](https://docs.npmjs.com/trusted-publishers)
      (OIDC): npm trusts this repository's `npm-publish.yml` for each
      package, and the job (`id-token: write`, npm >= 11.5.1) publishes with
@@ -215,14 +234,28 @@ scripts/release-notes.sh v0.1.0 v0.2.0
    - Packages already on npm at that version are skipped, so after a partial
      failure re-run it: `gh workflow run npm-publish.yml -f tag=v0.2.0`.
    - By hand, from a checkout of the tag after `npm ci` and `npm login`:
-     `sh scripts/npm-publish.sh 0.2.0` (`--dry-run` to check first;
-     release.yml's gates already ran one).
+     `gh release download v0.2.0 --dir /tmp/rel --pattern 'tailworks-*.tar.gz' --pattern 'SHA256SUMS*'`,
+     then `sh scripts/npm-publish.sh 0.2.0 --cli-dist /tmp/rel`
+     (`--dry-run` to check first; release.yml's gates already ran one,
+     without `--cli-dist`).
+   - Check it: `npm view tailworks version` and
+     `npm view @tailworks/cli-linux-amd64 version` show the release, and on a
+     clean machine with Node.js,
+     `npx tailworks@<VERSION> init hello && cd hello && npx tailworks@<VERSION> dev --once`
+     answers. `npx tailworks@<VERSION> doctor` says
+     `installed by (npm)`.
    - Before the first publish, check the templates against the packed
      packages: `make templates-typecheck` (every template's
      `tw init && npm install && npx tsc --noEmit`, with `@tailworks/*` from
      `npm pack` tarballs).
    - Trusted publishing setup (each package: `@tailworks/tailnet`,
-     `@tailworks/node`, `@tailworks/mcp`, `create-tailworks`):
+     `@tailworks/node`, `@tailworks/mcp`, `create-tailworks`, `tailworks`,
+     `@tailworks/cli-darwin-arm64`, `@tailworks/cli-linux-arm64`,
+     `@tailworks/cli-linux-amd64`). npm adds a trusted publisher only to a
+     package that exists. So the first release of `tailworks` and the three
+     `@tailworks/cli-*` packages is published by hand, with `npm login` (see
+     "By hand" above). Then set up trusted publishing for them like the
+     others:
      1. Configure it just before a release: a new trusted publisher must be
         used by a publish within 2 days or it expires (then delete it and
         add it again).
