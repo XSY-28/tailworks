@@ -59,7 +59,16 @@ Last update: 2026-11-23 PT. Issue #293: service bindings (`services`, WorkerEntr
   refusal to a pass).
 - `make templates-typecheck` — ok.
 - `make e2e-locks` — ok.
-- `make test` (mbp runner, `mbp-test.sh test`) — see the PR.
+- `make test` on the mbp runner (`mbp-test.sh test`, after the first merge
+  of master): every package passed except `mgmt:TestTenantRolesConsistent`
+  (the new host-only route needed its `tenantOperatorRoutes` entry). Fixed;
+  `go test ./mgmt/` then passed, and `make test-js` passed (42 tests).
+- After merging master again: `make lint`, `go test ./netd/ ./mgmt/`,
+  `go test ./hostd/ -run 'TestServiceBindings|TestLockTemplate'` and
+  `go test ./cmd/tw -run 'TestCLIReferenceUpToDate|TestTypes'` — ok.
+- `go test ./mgmt/ -run TestServiceBindingTarget` — ok (lease fence,
+  undeclared binding, target never deployed, pending entry node, the
+  answer, another tenant's same-named workload is not a target).
 
 Not run: `make test-pg` (no store or migration change), the
 credential/KVM/VZ suites.
