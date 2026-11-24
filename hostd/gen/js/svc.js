@@ -21,7 +21,9 @@
 // runs it in the tenant isolate, wrapped like the default export.
 import { WorkerEntrypoint, RpcStub, RpcTarget } from "cloudflare:workers";
 
-const DOC = "https://github.com/rosskukulinski/tailworks/blob/main/docs/errors.md#";
+// DOC prefixes every error's doc_url. platform.js imports it; it must equal
+// netd.DocBase (TestDocBaseMatchesNetd).
+export const DOC = "https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#";
 // hostd rewrites this host to the target's MagicDNS name.
 const SVC_HOST = "tw-binding.invalid";
 // An RPC call's encoded arguments or result (docs/limits.md).
