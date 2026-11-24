@@ -1,4 +1,4 @@
-Last update: 2026-11-24 12:00 PT. Deflaked `hostd.TestRealMgmtStores/Queues` (#387): a queue delivery hostd cancels is handed back uncounted.
+Last update: 2026-11-24 11:50 PT. Deflaked `hostd.TestRealMgmtStores/Queues` (#387): a queue delivery hostd cancels is handed back uncounted.
 
 # deflake-387-queues
 
@@ -89,13 +89,28 @@ on an 18-core Mac; the Queues test pinned to few procs, as on CI.
 | `make lint` | ok |
 | `make changes-check` | ok (no upgrade-relevant paths changed; no fragment) |
 | `make e2e-queues` | ok, 23 s |
-| `make test` on mbp (`sh ~/.claude/scratch/mbp-test.sh test`) | see below |
+| `make test` on mbp (`sh ~/.claude/scratch/mbp-test.sh test`, pre-merge tree) | 3 unrelated load failures, see below; the rest ok |
+| Merged `origin/master` (clean), then `make lint` | ok |
+| After the merge: `go test ./hostd -race -run 'TestQueues\|TestRealMgmtStores/Queues\|TestInvokeErr'` | ok, 82 s |
+| After the merge: `make test` locally | ok (exit 0; hostd 181 s, mgmt 88 s, cmd/tw 82 s, netd 96 s) |
 
 Not run: nothing else in the AGENTS.md table applies (no mgmt store,
 placement, locks, observability or template change).
 
-Seen while generating load, unrelated to this branch:
-`cmd/tw TestWranglerWarningsStoreKinds` fails under `-count=2` because
+The three failures on the shared mbp runner, none in code this branch
+touches, each passing locally with `-race -count=1`:
+
+- `netd TestService/KillWithdraws`: `sending serve config: ... context
+  deadline exceeded` (LocalAPI under load).
+- `mgmt TestQueuesDelayRetriesDLQ`: "a delayed message was delivered
+  early". The test sends with `delaySeconds: 1` and pulls at once; under
+  load the pull landed after the second had passed, so the message was
+  legitimately visible. A timing assumption in that test, worth its own
+  fix.
+- `hostd TestPublicIngress`: `connection refused` on the public port.
+
+Seen while generating load, also unrelated: `cmd/tw
+TestWranglerWarningsStoreKinds` fails under `-count=2` because
 `hostdtest.RegisterProbeStore()` from the first iteration persists into the
 second, where the "unregistered" assertion can't hold. `make test` uses
 `-count=1`, so CI doesn't see it.
