@@ -118,6 +118,9 @@ func (h *Host) ensureTenant(ctx context.Context, id string) (*tenant, error) {
 		PublicListen:     h.cfg.PublicListen,
 		OnPublicRequest:  h.onPublicRequest,
 		OnPublicRejected: h.onPublicRejected,
+
+		// Tailnet HTTPS (tailnethttps.go).
+		HTTPSCert: h.cfg.TailnetHTTPSCert,
 	})
 	if err != nil {
 		return nil, err

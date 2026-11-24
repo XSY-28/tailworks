@@ -586,11 +586,12 @@ func cmdDeploy(args []string) error {
 	res.Replicas = dr.Replicas
 	res.Status, res.Endpoint, res.Public = v.Status, v.Endpoint, v.Public
 	res.Timings["ready"] = ms(time.Since(ds))
-	ev.emit("ready", map[string]any{"deploymentID": dr.DeploymentID, "host": v.Host, "magicDNS": v.Endpoint.MagicDNS, "url": "http://" + v.Endpoint.MagicDNS + "/"})
+	wurl := workloadURL(a.TwRaw, v.Endpoint.MagicDNS) // tailnethttps.go
+	ev.emit("ready", map[string]any{"deploymentID": dr.DeploymentID, "host": v.Host, "magicDNS": v.Endpoint.MagicDNS, "url": wurl})
 	if !*f.json {
-		fmt.Printf("✓ deployed   %s@%s · node %s · http://%s/  (deploy → ready %.1fs)\n", orName(res.Preview, a.Name), v.Host, v.Endpoint.Node, v.Endpoint.MagicDNS, res.Timings["ready"]/1000)
+		fmt.Printf("✓ deployed   %s@%s · node %s · %s  (deploy → ready %.1fs)\n", orName(res.Preview, a.Name), v.Host, v.Endpoint.Node, wurl, res.Timings["ready"]/1000)
 		if res.Preview != "" {
-			fmt.Print(previewNotice(a.Name, res.Preview, "http://"+v.Endpoint.MagicDNS+"/"))
+			fmt.Print(previewNotice(a.Name, res.Preview, wurl))
 		}
 		if len(dr.Replicas) > 1 {
 			parts := make([]string, 0, len(dr.Replicas))
@@ -603,7 +604,7 @@ func cmdDeploy(args []string) error {
 			fmt.Printf("✓ service    %s · http://%s/  (stable across redeploys and host moves; callers need a grant to %s)\n", sv.Name, sv.MagicDNS, sv.Name)
 		}
 		printPublic(v.Public)
-		printDeployNext(a.Name, "http://"+v.Endpoint.MagicDNS+"/") // deploy_next.go
+		printDeployNext(a.Name, wurl) // deploy_next.go
 	}
 	if p := v.Public; *waitPublic > 0 && p != nil && p.Allowed && p.Exposed {
 		last := ""

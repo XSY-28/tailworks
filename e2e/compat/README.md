@@ -146,10 +146,13 @@ Responses API calls with a scripted stream. That is listed as a change.
    The Agent's class wasn't in `tailnet.objects`, so mgmt refused its node,
    and the Workflow was refused the Agent. The `workflows` example now
    passes deployed too.
-5. **Open ([#360](https://github.com/rosskukulinski/tailworks/issues/360)): no HTTPS origin on the tailnet.**
-   workers-oauth-provider refuses an `http://` resource URL, so
-   `mcp-worker-authenticated` passes under `tw dev` (loopback) and can't be
-   configured for a tailnet URL.
+5. **Fixed ([#360](https://github.com/rosskukulinski/tailworks/issues/360)): no HTTPS origin on the tailnet.**
+   workers-oauth-provider refuses an `http://` resource URL. With
+   `"tailnet": {"https": true}` the workload is also served on its
+   `https://` tailnet URL, and the deployed run of
+   `mcp-worker-authenticated` sets that (`Project.TailnetHTTPS`) and calls
+   it there. It passes under `tw dev` (loopback); the deployed run hasn't
+   been recorded since.
 6. Upstream quirks: `@hono/node-server` replaces the global `Request` and
    `Response`, which no Workers runtime survives (stock `wrangler dev`
    fails the same way), so the Hono example's `serve()` is aliased to a

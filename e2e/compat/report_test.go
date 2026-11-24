@@ -103,7 +103,7 @@ func TestUpdateDoc(t *testing.T) {
 	}
 	got := string(out)
 	for _, want := range []string{"before", "between", "| [`route.ts`](https://github.com/vercel/mcp-handler/blob/" + mcpHandlerCommit + "/examples/route.ts)",
-		"**fail** deployed (pass with change under `tw dev`)", "run 2026-01-02 on test/arch, tailworks `0123456789ab`", "Not run:"} {
+		"**pass with change**", "run 2026-01-02 on test/arch, tailworks `0123456789ab`", "Not run:"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the updated doc lacks %q", want)
 		}

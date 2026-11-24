@@ -34,6 +34,15 @@ const STATUS = {
 function isPublic(req) {
   return req?.cf?.tailscale?.requester?.kind === "public";
 }
+// httpsRequest is req with an https:// URL (tailnet.https). A port that is
+// http's default drops out with the scheme change (443 is https's).
+function httpsRequest(req) {
+  const u = new URL(req.url);
+  if (u.protocol !== "http:") return req;
+  u.protocol = "https:";
+  if (u.port === "80") u.port = "";
+  return new Request(u, req);
+}
 function errBody(code, message, extra = {}) {
   return { code, message, doc_url: DOC + code, ...extra };
 }
@@ -195,6 +204,10 @@ export default {
         // A service binding call to a named entrypoint or an RPC method
         // (hostd admitted it: cf.tw.binding; tw-svc.js).
         if (t.binding) return bindingCallee(req, env, t);
+        // tailnet.https: the request reached the workload node on :443
+        // (hostd sets cf.tw.https only then), so the Worker sees the
+        // https:// URL it was called at, as on Cloudflare.
+        if (t.https === true) req = httpsRequest(req);
         // /_tw/o/<Class>/<name>/... on the workload node reaches an object
         // before (or instead of) its own node.
         const u = new URL(req.url);
