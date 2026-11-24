@@ -110,6 +110,9 @@ func (p *Profile) Apply() error {
 	if err != nil || abi < 1 {
 		return fmt.Errorf("landlock unavailable: %v", err)
 	}
+	if err := p.checkLayout(); err != nil { // layout_linux.go (#342)
+		return err
+	}
 	for _, o := range p.Own {
 		if err := os.MkdirAll(o, 0o700); err != nil {
 			return err
