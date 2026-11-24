@@ -86,6 +86,8 @@ flags:
     	Tailscale API base URL (testing)
   -warm-keys int
     	pre-minted single-use keys kept per (tenant, tag set), so a new object skips the key-API call; sized from the recent create rate, capped here (0 = off) (default 5)
+  -worker-internet string
+    	how Workers' fetch() reaches internet hosts, subject to each workload's tailnet.egress.internet: direct (this host's network, public addresses only) or off (refused on this host) (default "direct")
   -workerd string
     	workerd binary
   -yes
@@ -623,7 +625,7 @@ flags:
   -allow-missing-grants
     	deploy even if tailnet.connects grants are missing
   -apply-policy
-    	when the preflight finds tagOwners, grants or funnel nodeAttrs missing, write them to the tailnet policy first (as tw policy --apply)
+    	when the preflight finds tagOwners, grants, funnel nodeAttrs or Service auto-approval missing, write them to the tailnet policy first (as tw policy --apply)
   -env string
     	wrangler environment: use env.<name> from the wrangler config, as 'wrangler --env' does (the workload is named <name>-<env> unless the env sets a name)
   -force-takeover
@@ -673,7 +675,7 @@ usage: tw policy [dir] [--tenant <tailnet>] [--name <workload>] [--env <name>] [
 
 flags:
   -apply
-    	write the missing tagOwners, grants and funnel nodeAttrs to the tailnet policy (additive, tag:tw* only, If-Match; needs Policy File write)
+    	write the missing tagOwners, grants, funnel nodeAttrs and Service auto-approval to the tailnet policy (additive, tag:tw* only, If-Match; needs Policy File write)
   -env string
     	wrangler environment: use env.<name> from the wrangler config, as 'wrangler --env' does (the workload is named <name>-<env> unless the env sets a name)
   -from-wrangler-out string
@@ -2142,6 +2144,44 @@ flags:
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -yes
     	delete without asking (needed without a terminal, and with --json)
+```
+
+### tw custody
+
+move file custody to setec (tailworks stopped)
+
+```text
+tw custody: move this install's secrets and store keys from file custody to setec, so it can run several mgmt replicas: every entry is mapped to its name (refused if one can't be), copied, read back, and tw.json switched; run with tailworks stopped
+
+usage: tw custody migrate --to setec --setec-url <url> [--dry-run]
+
+flags:
+  -dry-run
+    	migrate: map every entry and check setec, but write nothing
+  -json
+    	machine-readable output
+  -setec-url string
+    	migrate --to setec: the setec server URL (what tw up --setec-url would take)
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -to string
+    	migrate: the custody to move to (setec)
+```
+
+#### tw custody migrate
+
+```text
+flags:
+  -dry-run
+    	migrate: map every entry and check setec, but write nothing
+  -json
+    	machine-readable output
+  -setec-url string
+    	migrate --to setec: the setec server URL (what tw up --setec-url would take)
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -to string
+    	migrate: the custody to move to (setec)
 ```
 
 ### tw upgrade

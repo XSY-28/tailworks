@@ -100,6 +100,10 @@ type Config struct {
 	AuditMaxRecords  int64  `json:"auditMaxRecords,omitempty"`
 	RequestLogMaxAge string `json:"requestLogMaxAge,omitempty"`
 
+	// WorkerInternet (up_workerinternet.go): "direct" or "off"
+	// (tw-hostd -worker-internet); empty = direct.
+	WorkerInternet string `json:"workerInternet,omitempty"`
+
 	// Tenants are the tenants added with `tw tenant add` (the operator
 	// tenant above is the default for every command).
 	Tenants []TenantRef `json:"tenants,omitempty"`

@@ -240,6 +240,8 @@ func wranglerKeyNote(k string, v any, builder string) string {
 		return "ignored: there is no Cloudflare zone or workers.dev; the workload answers at its MagicDNS name (tailworks.jsonc \"public\" for the internet)"
 	case "assets":
 		return "" // assets.go: served by a generated router Worker
+	case "pages_build_output_dir":
+		return "" // pages.go: a Cloudflare Pages project's assets directory
 	case "site":
 		return "not supported: Workers Sites is deprecated; use \"assets\" (docs/wrangler.md#assets)"
 	case "kv_namespaces", "r2_buckets", "services", "ai", "browser", "vectorize",

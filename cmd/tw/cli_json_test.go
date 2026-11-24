@@ -100,6 +100,7 @@ var cliSurface = []struct {
 	{"release import", []string{"release", "import", "/nonexistent/tailworks-0.0.0-linux-amd64.tar.gz"}},
 	{"backup", []string{"backup"}},
 	{"restore", []string{"restore", "/nonexistent/backup", "--yes"}},
+	{"custody migrate", []string{"custody", "migrate", "--to", "setec", "--setec-url", "https://secrets.example.ts.net"}},
 	{"upgrade", []string{"upgrade", "--plan", "--from", "/nonexistent"}},
 	{"host setup", []string{"host", "setup"}},
 	{"host vmcheck", []string{"host", "vmcheck", "app"}},
