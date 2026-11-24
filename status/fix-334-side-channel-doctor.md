@@ -88,7 +88,30 @@ worktree rsynced to `~/tw-fix-334/`, built with `go build ./cmd/tw`):
   fixed afterwards and the fixture test pins "is".) `--json` has the same
   detail with `"status": "warn"`, `"group": "Isolation"`.
 
-Lint and the full suite: see below (filled in after they ran).
+- `go test ./cmd/tw/ -run '^TestDoctor$' -count=1 -v` on the guest (after
+  `make deps` there): PASS (228 s; `side_channels` is `warn` on that host,
+  which the test allows on Linux: ok or warn, never fail).
+
+Lint and the full suite:
+
+- `make lint`: exit 0, before and after merging `origin/master`
+  (`69c15e4a`, the demo re-recording; no overlap).
+- `make test` offloaded to mbp (`sh ~/.claude/scratch/mbp-test.sh test`),
+  first run: `cmd/tw.TestDoctor` failed, as it should have: its
+  expected-checks map didn't know `side_channels`. Fixed in
+  `cmd/tw/cli_test.go` (skip off Linux; ok or warn on Linux).
+  `hostd.TestRealMgmtStores/Queues/FromFacet` also failed there (no
+  delivery within 15 s; the runner was at load average 50+ with another
+  session's suite in the other slot); unrelated to this change. A second
+  mbp run was killed with the ssh session (same load), so the suite was
+  rerun locally.
+- `make test` locally (darwin/arm64, this worktree, after `make deps`):
+  every package ok, including `cmd/tw` (128 s, `TestDoctor` with workerd),
+  except two load-sensitive tests: `netd.TestKeepEarlyAnswerNoAnswer`
+  ("POST 0 took 12.087s") and `mgmt.TestAPIRateLimitBehindTailnetHandler`
+  ("status 200, want 429"). Both pass alone (`go test -race -count=1 -run
+  … ./netd/` 1.3 s, `./mgmt/` 2.3 s). Neither touches doctor, docs or the
+  files in this branch.
 
 Not run: nothing else in the AGENTS.md table applies (no API, store,
 template, wrangler or runtime-wrapper change).
