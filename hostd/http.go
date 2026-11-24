@@ -142,6 +142,10 @@ func (s *statusRecorder) Flush() {
 // and hand the request to netd, which dials from the object's own node.
 func (h *Host) egressObjHandler(inst *instance) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodConnect {
+			h.serveConnect(w, r, inst, h.connectAsFacet(inst)) // connect.go
+			return
+		}
 		cls, name, ok := gen.VerifyEgressOnce(inst.res.MACKey, r.Header, r.Method, r.RequestURI, time.Now(), &inst.nonces)
 		if !ok {
 			writeAPIError(w, &apiError{Code: "unknown_object", Detail: "egress request failed platform authentication"})
@@ -173,6 +177,10 @@ func (h *Host) egressObjHandler(inst *instance) http.Handler {
 // plain-DO objects): it leaves as the workload node.
 func (h *Host) egressWLHandler(inst *instance) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodConnect {
+			h.serveConnect(w, r, inst, h.connectAsWorkload(inst)) // connect.go
+			return
+		}
 		gen.StripPlatformHeaders(r.Header)
 		inst.w.mu.Lock()
 		o := inst.w.wl

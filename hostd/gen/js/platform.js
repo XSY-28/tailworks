@@ -6,6 +6,7 @@
 //   EGRESS_WL    hostd's workload egress socket (the tenant service's identity)
 //   HOSTD        hostd's local host API socket (ensure/spawn/ready/kill/audit)
 //   MAC_KEY      per-process root key; per-object egress MAC keys are derived from it (RT-04)
+//   LOCAL_TOKEN  hostd's loopback token (Landlock sandbox only), sent in connect() tunnels
 //   TENANT       the tenant service (the app's default export)
 //   NS_<Class>   plain-DO namespaces (classes with "egress": "workload")
 //
@@ -517,6 +518,11 @@ export class Egress extends WorkerEntrypoint {
     h.set("host", new URL(request.url).host);
     return this.env.NETD_EGRESS.fetch(new Request(request.url, { method: request.method, headers: h, body: request.body, redirect: "manual" }));
   }
+  // Stock connect() from a facet: as the object's own node.
+  async connect(socket) {
+    const { class: cls, name } = this.ctx.props;
+    await tcpServe(socket, (dst) => tcpDial(this.env, this.env.NETD_EGRESS, dst, { class: cls, name }, false));
+  }
 }
 
 // WorkloadEgress is the tenant service's globalOutbound: the Worker and
@@ -528,6 +534,130 @@ export class WorkloadEgress extends WorkerEntrypoint {
     h.set("host", new URL(request.url).host);
     return this.env.EGRESS_WL.fetch(new Request(request.url, { method: request.method, headers: h, body: request.body, redirect: "manual" }));
   }
+  // Stock connect() from the Worker or a plain-DO object (RFC §4.8: as
+  // the workload node).
+  async connect(socket) {
+    await tcpServe(socket, (dst) => tcpDial(this.env, this.env.EGRESS_WL, dst, null, false));
+  }
+}
+
+// ---- raw TCP egress (ADR-052) ----
+//
+// A tenant's connect() reaches its globalOutbound's connect() handler.
+// The handler opens a CONNECT tunnel to hostd (workerd sends it with no
+// headers), writes one preamble line (gen.ConnectPreamble: the loopback
+// token, a facet's MAC'd identity), and reads hostd's status line
+// (gen.ConnectStatus) before any of the flow's bytes. Refusals reach stock
+// connect() only as a lost connection (workerd has no way to fail a
+// handler's socket with a reason); ctx.tailnet.connect() gets them typed
+// (TailnetApi.tcpConnect).
+
+const MAX_DST = 512;
+const NL = 10;
+
+class TcpRefused extends Error {
+  constructor(code, message) {
+    super("[" + code + "] " + message);
+    this.code = code;
+    this.detail = message;
+  }
+}
+
+function checkDst(dst) {
+  if (typeof dst !== "string" || !dst || dst.length > MAX_DST || /[\s\/@]/.test(dst) || !/:\d{1,5}$/.test(dst)) {
+    throw new TcpRefused("bad_request", "connect() needs host:port");
+  }
+  return dst;
+}
+
+// tcpDial opens an authenticated tunnel for dst through binding and returns
+// { readable, writable, close } once hostd has dialled, or throws TcpRefused.
+// ident is a facet's { class, name } (MAC'd), null for the workload.
+async function tcpDial(env, binding, dst, ident, tls) {
+  checkDst(dst);
+  const up = binding.connect(dst);
+  const pre = { v: 1 };
+  if (env.LOCAL_TOKEN) pre.token = env.LOCAL_TOKEN;
+  if (ident) {
+    const ts = String(Date.now());
+    const nonce = crypto.randomUUID();
+    Object.assign(pre, {
+      class: ident.class,
+      name: encodeURIComponent(ident.name),
+      ts,
+      nonce,
+      mac: await mac(env, ident.class, ident.name, [ident.class, ident.name, "CONNECT", dst, ts, nonce].join("\n")),
+    });
+  }
+  if (tls) pre.tls = true;
+  const r = up.readable.getReader();
+  let buf = new Uint8Array(0);
+  let st;
+  try {
+    const w = up.writable.getWriter();
+    await w.write(enc.encode(JSON.stringify(pre) + "\n"));
+    w.releaseLock();
+    for (;;) {
+      const i = buf.indexOf(NL);
+      if (i >= 0) {
+        st = JSON.parse(new TextDecoder().decode(buf.subarray(0, i)));
+        buf = buf.subarray(i + 1);
+        break;
+      }
+      if (buf.length > 4096) throw new Error("status line too long");
+      const { value, done } = await r.read();
+      if (done) throw new Error("hostd closed the tunnel");
+      const b = new Uint8Array(buf.length + value.length);
+      b.set(buf);
+      b.set(value, buf.length);
+      buf = b;
+    }
+  } catch (e) {
+    up.close().catch(() => {});
+    throw new TcpRefused("hostd_unavailable", "egress tunnel: " + String(e?.message ?? e));
+  }
+  if (!st || st.ok !== true) {
+    up.close().catch(() => {});
+    throw new TcpRefused(String(st?.code || "dial_failed"), String(st?.message || "refused"));
+  }
+  // The destination may speak first (MySQL, Redis greetings): bytes read
+  // past the status line come first.
+  let rest = buf.length ? buf : null;
+  const readable = new ReadableStream({
+    async pull(c) {
+      if (rest) {
+        c.enqueue(rest);
+        rest = null;
+        return;
+      }
+      const { value, done } = await r.read();
+      if (done) c.close();
+      else c.enqueue(value);
+    },
+    cancel(reason) {
+      return r.cancel(reason);
+    },
+  });
+  return { readable, writable: up.writable, close: () => up.close() };
+}
+
+// tcpServe answers a connect() handler's socket with dial(dst)'s tunnel.
+async function tcpServe(socket, dial) {
+  let dst, up;
+  try {
+    const info = await socket.opened;
+    dst = info?.localAddress ?? info?.remoteAddress;
+    up = await dial(dst);
+  } catch (e) {
+    console.warn("tw: connect(" + String(dst) + ") refused: " + String(e?.message ?? e));
+    await socket.close().catch(() => {});
+    return;
+  }
+  await Promise.allSettled([
+    socket.readable.pipeTo(up.writable),
+    up.readable.pipeTo(socket.writable),
+  ]);
+  await Promise.allSettled([socket.close(), up.close()]);
 }
 
 // attestedAs is who a TailnetApi call acts for: the facet object named by
@@ -555,6 +685,24 @@ function containerAs(props, args) {
 // tenant service, which may act as a plain-DO object it hosts (args.as) but
 // never as a facet object.
 export class TailnetApi extends WorkerEntrypoint {
+  // ctx.tailnet.connect(): the socket's streams, or a typed refusal. A
+  // facet connects as its own node; the Worker as the workload node. A
+  // plain-DO object has no node of its own to connect from (WD-3), so it
+  // is refused rather than silently given the workload's identity.
+  async tcpConnect(args = {}) {
+    const p = this.ctx.props ?? {};
+    const tls = args.tls === "netd";
+    try {
+      let s;
+      if (p.kind === "object") s = await tcpDial(this.env, this.env.NETD_EGRESS, args.address, { class: p.class, name: p.name }, tls);
+      else if (args.as) throw new TcpRefused("not_supported", "ctx.tailnet.connect() in a plain-DO object (\"egress\": \"workload\") has no per-object identity; use connect() from cloudflare:sockets (egresses as the workload node) or facet mode");
+      else s = await tcpDial(this.env, this.env.EGRESS_WL, args.address, null, tls);
+      return { ok: true, value: { readable: s.readable, writable: s.writable } };
+    } catch (e) {
+      if (e instanceof TcpRefused) return { ok: false, error: errBody(e.code, e.detail) };
+      return { ok: false, error: errBody("dial_failed", String(e?.message ?? e)) };
+    }
+  }
   // ctx.container ops (JSON): status, start, destroy, signal, monitor,
   // setInactivityTimeout, inspect, intercept, exec-signal, exec-resize.
   async ctr(op, args = {}) {

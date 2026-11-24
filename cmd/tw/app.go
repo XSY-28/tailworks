@@ -658,8 +658,9 @@ func printPreflight(a *app, pf mgmt.PreflightResult) {
 			continue
 		}
 		var ok []string
+		target, _ := mgmt.SplitConnect(dst) // "tag:db:5432"
 		for _, src := range a.srcTags() {
-			if !missing[src+"→"+dst] {
+			if !missing[src+"→"+target] {
 				ok = append(ok, src)
 			}
 		}

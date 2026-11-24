@@ -115,6 +115,12 @@ PG_PORT ?=
 test-pg:
 	sh scripts/test-pg.sh "$(PG_CTX)" "$(PG_PORT)"
 
+## e2e-pg-socket: postgres.js from a Worker and a facet object over connect() (raw TCP egress,
+## ADR-052) to Postgres 17 on the hermetic tailnet (docker context PG_CTX, as test-pg).
+.PHONY: e2e-pg-socket
+e2e-pg-socket: deps
+	sh scripts/e2e-pg-socket.sh "$(PG_CTX)"
+
 ## e2e-upgrade: the upgrade release gate (ADR-041 §9), hermetic: the previous
 ## release's tw-mgmt + tw-hostd (TW_UPGRADE_FROM: a git ref, default the newest published
 ## GitHub release (scripts/upgrade-from.sh), built in a temporary worktree; "self", the default

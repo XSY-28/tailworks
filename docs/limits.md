@@ -79,6 +79,9 @@ See [Limits that don't exist](#limits-that-dont-exist) for duration, body and CP
 | Wait for an object's node (`identity_pending` after) | 30 s | no | `hostd/host.go:ReadyTimeout` |
 | `Retry-After` on `identity_pending` | 1 s | no | `mgmt/server.go:#identity-pending-retry-after` |
 | Node-tier caller header clock skew | 60 s | `maxSkewMs` in `@tailworks/node` | `js/packages/node/src/index.ts:DEFAULT_MAX_SKEW_MS` |
+| Open `connect()` sockets per object (the workload node counts as one, for the Worker and plain-DO objects), per instance | 256, then `socket_limit` | no | `hostd/connect.go:maxSocketsPerObject` |
+| Time for the platform to authenticate a `connect()` tunnel | 10 s | no | `hostd/connect.go:connectPreambleTimeout` |
+| `connect()` dial (and `tls: "netd"` handshake) | 30 s, as an object's node wait | no | `hostd/host.go:ReadyTimeout` |
 
 ## Process tier
 

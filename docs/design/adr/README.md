@@ -65,3 +65,4 @@ has no row below.
 | [049](049-worker-internet-egress.md) | Workers have internet egress by default, from the host's network through netd's SSRF guard; `tailnet.egress.internet` turns it off or limits it, for Workers and containers alike | 2026-11-21 | Accepted |
 | [050](050-static-assets.md) | wrangler `assets` are served by a generated router Worker in front of the app, from files in the bundle, with `_redirects`, `_headers` and assets-only projects | 2026-11-23 | Accepted |
 | [051](051-pages-functions.md) | Cloudflare Pages projects (`functions/`, `_worker.js`, `_routes.json`) are compiled by `tw` onto Workers with static assets | 2026-11-23 | Accepted |
+| [052](052-tcp-egress.md) | Raw TCP egress: `connect()` handlers on the platform's egress entrypoints, CONNECT tunnels to hostd authenticated in band, dialled with netd's `DialEgress` | 2026-11-23 | Accepted |

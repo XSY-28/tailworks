@@ -115,6 +115,10 @@ func fmtAny(v any) string {
 
 func (f *fakeHost) egressObj() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodConnect {
+			f.connect(w, r, true) // connect_test.go
+			return
+		}
 		cls, name, ok := gen.VerifyEgress(f.key, r.Header, r.Method, r.RequestURI, time.Now())
 		if !ok {
 			w.Header().Set("tw-error", "unknown_object")
@@ -131,6 +135,10 @@ func (f *fakeHost) egressObj() http.Handler {
 
 func (f *fakeHost) egressWL() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodConnect {
+			f.connect(w, r, false) // connect_test.go
+			return
+		}
 		if egressRedirect(w, r) { // egress_sink_test.go
 			return
 		}

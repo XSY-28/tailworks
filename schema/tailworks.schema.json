@@ -83,7 +83,7 @@
         "connects": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Declared dependencies (tags or names). tw deploy preflights these grants."
+          "description": "Declared dependencies (tags or names), optionally with the TCP port the workload dials (\"tag:db:5432\"; default tcp:80). tw deploy preflights these grants."
         },
         "egress": {
           "type": "object",

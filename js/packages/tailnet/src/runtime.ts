@@ -78,6 +78,32 @@ function entryInfo(obj: any, cls: string, plain: boolean): EntryInfo {
 /** The platform's TailnetApi stub (RPC). */
 export interface TailnetApiStub {
   call(op: string, args: Record<string, unknown>): Promise<{ ok: true; value: any } | { ok: false; error: Record<string, any> }>;
+  /** ctx.tailnet.connect(): the socket's streams (platform.js). */
+  tcpConnect?(args: Record<string, unknown>): Promise<{ ok: true; value: { readable: ReadableStream; writable: WritableStream } } | { ok: false; error: Record<string, any> }>;
+}
+
+/** A TCP destination: "host:port", or { hostname, port } as in cloudflare:sockets. */
+export type SocketAddress = string | { hostname: string; port: number };
+
+export interface TailnetSocketOptions {
+  /**
+   * "off" (the default) only: the flow is plaintext from the Worker. On the
+   * tailnet WireGuard already encrypts it; for TLS to the destination use
+   * `tls: "netd"`.
+   */
+  secureTransport?: "off";
+  /** "netd": the host originates TLS to the destination (system roots, SNI = hostname). */
+  tls?: "netd";
+}
+
+/** The socket ctx.tailnet.connect() returns (the cloudflare:sockets Socket shape). */
+export interface TailnetSocket {
+  readonly readable: ReadableStream<Uint8Array>;
+  readonly writable: WritableStream<Uint8Array>;
+  /** Resolves once the platform has dialled; rejects with a TailnetError (peer_not_visible, forbidden_destination, …). */
+  readonly opened: Promise<{ remoteAddress: string }>;
+  readonly closed: Promise<void>;
+  close(): Promise<void>;
 }
 
 export interface SpawnOptions {
@@ -112,7 +138,14 @@ export interface TailnetContext {
    * (fencing tokens, docs/locks.md).
    */
   self(): Promise<{ objectId: string; hostname: string; magicDNS?: string; status: string; kind: string; epoch: number }>;
-  connect(): never;
+  /**
+   * A raw TCP socket from this object's own node (facet mode) or, in the
+   * Worker, the workload node, under the same policy as fetch(). Refusals
+   * reject `opened` with a TailnetError. In a plain-DO object it throws
+   * not_supported (no per-object identity; stock connect() leaves as the
+   * workload node).
+   */
+  connect(address: SocketAddress, options?: TailnetSocketOptions): TailnetSocket;
 }
 
 export type BindingMap = Record<string, string>; // env binding name -> DO class
@@ -193,11 +226,67 @@ export function createTailnetContext(tw: TailnetApiStub, env: Record<string, any
     self() {
       return op("self", {});
     },
-    connect(): never {
-      throw new TailnetError("plan_feature_missing", "ctx.tailnet.connect() is not implemented yet (raw TCP egress)");
+    connect(address: SocketAddress, options: TailnetSocketOptions = {}) {
+      return tailnetSocket(tw, socketAddress(address), options, self);
     },
   };
   return Object.freeze(tn);
+}
+
+/** socketAddress is address as "host:port" (IPv6 hosts bracketed). */
+export function socketAddress(address: SocketAddress): string {
+  if (typeof address === "string") return address;
+  if (!address || typeof address.hostname !== "string" || !Number.isInteger(address.port)) {
+    throw new TailnetError("bad_request", "connect: address must be \"host:port\" or { hostname, port }");
+  }
+  const h = address.hostname.includes(":") && !address.hostname.startsWith("[") ? "[" + address.hostname + "]" : address.hostname;
+  return h + ":" + address.port;
+}
+
+// tailnetSocket returns a Socket at once (as cloudflare:sockets does) and
+// wires its streams to the platform's once the dial succeeds.
+function tailnetSocket(tw: TailnetApiStub, address: string, options: TailnetSocketOptions, self?: Self): TailnetSocket {
+  if (options.secureTransport && options.secureTransport !== "off") {
+    throw new TailnetError("not_supported", 'ctx.tailnet.connect: secureTransport "' + String(options.secureTransport) + '" is not supported; use { tls: "netd" }');
+  }
+  if (options.tls !== undefined && options.tls !== "netd") throw new TailnetError("bad_request", 'ctx.tailnet.connect: tls must be "netd"');
+  if (typeof tw.tcpConnect !== "function") throw new TailnetError("not_supported", "ctx.tailnet.connect() needs a newer tailworks host");
+  const toUp = new TransformStream<Uint8Array, Uint8Array>();
+  const fromUp = new TransformStream<Uint8Array, Uint8Array>();
+  let closeUp: () => Promise<void> = async () => {};
+  const opened = (async () => {
+    const args: Record<string, unknown> = { address };
+    if (options.tls) args.tls = options.tls;
+    if (self) args.as = self;
+    const r = await tw.tcpConnect!(args);
+    if (!r || !r.ok) throw TailnetError.from((r as any)?.error);
+    return r.value;
+  })();
+  const closed = opened.then(
+    async (up) => {
+      const a = new AbortController();
+      closeUp = async () => a.abort();
+      await Promise.allSettled([
+        toUp.readable.pipeTo(up.writable, { signal: a.signal }),
+        up.readable.pipeTo(fromUp.writable, { signal: a.signal }),
+      ]);
+    },
+    async (e) => {
+      await Promise.allSettled([toUp.readable.cancel(e), fromUp.writable.abort(e)]);
+      throw e;
+    },
+  );
+  closed.catch(() => {});
+  return {
+    readable: fromUp.readable,
+    writable: toUp.writable,
+    opened: opened.then(() => ({ remoteAddress: address })),
+    closed,
+    async close() {
+      await closeUp();
+      await Promise.allSettled([toUp.writable.abort(), fromUp.readable.cancel()]);
+    },
+  };
 }
 
 function define(ctx: any, tn: TailnetContext) {

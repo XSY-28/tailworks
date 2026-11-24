@@ -116,7 +116,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 403 · mgmt, cli. **When:** a kill held (node closed, tombstoned) but the device could not be deleted: the tenant's OAuth client lacks the `devices:core` scope. **Fix:** generate an OAuth client with Auth Keys (write) and Devices › Core (write), overwrite the file, `tw up`; remove leftover devices in the admin console.
 
 ### dial_failed
-502 · netd. **When:** the tailnet dial to a visible peer failed (connection refused, timeout). **Fix:** is the destination up and listening on that port? Try again; check `tw logs`.
+502 · netd, hostd. **When:** the tailnet dial to a visible peer failed (connection refused, timeout), or the TLS handshake of `ctx.tailnet.connect(addr, { tls: "netd" })` failed. **Fix:** is the destination up and listening on that port, with a certificate for that name? Try again; check `tw logs`.
 
 ### doctor_failed
 1 · cli. **When:** `tw doctor` had at least one failing check. **Fix:** each failing line prints its own `fix:`.
@@ -278,7 +278,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 409 · cli. **When:** tailworks is set up in this state dir but its supervisor is not running. **Fix:** `tw up` (or `systemctl --user start tw`).
 
 ### not_supported
-501 · cli, hostd. **When:** a command or call tailworks doesn't build yet: `tw r2 object get|put` (object bytes live in the hosts' R2 backend, which mgmt can't reach), container preview URLs, or `tw dev`/`tw deploy` of a Python Worker (`main: *.py` or the `python_workers` flag). **Fix:** go through the workload (its `env.BUCKET` binding); run Python in a [container](containers.md); see [COMPAT.md](COMPAT.md).
+501 · cli, hostd, SDK. **When:** a command or call tailworks doesn't build yet: `tw r2 object get|put` (object bytes live in the hosts' R2 backend, which mgmt can't reach), container preview URLs, or `tw dev`/`tw deploy` of a Python Worker (`main: *.py` or the `python_workers` flag); `ctx.tailnet.connect()` in a plain-DO object (`"egress": "workload"`: it has no node of its own to connect from) or with `secureTransport` other than `"off"`. **Fix:** go through the workload (its `env.BUCKET` binding); run Python in a [container](containers.md); for sockets, use facet mode or stock `connect()` (which leaves as the workload node), and `{ tls: "netd" }` for TLS; see [COMPAT.md](COMPAT.md#connect).
 
 ### not_up
 409 · cli. **When:** this state dir has no tailworks config or tenant yet. **Fix:** `tw up …` on the host, or `tw link <mgmt>` on a developer machine.
@@ -296,7 +296,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 403 · netd. **When:** the destination is a tailnet name or address that is not in this node's netmap: a grant is missing, or the name does not exist (also how one tenant's objects see another tenant's nodes). A tailnet name is never looked up in host DNS. An internet name goes out the internet path instead ([`internet_egress_unavailable`](#internet_egress_unavailable) when that is off). **Fix:** add a grant from the object's tag to the destination's tag (`tw deploy` prints it), or check the name.
 
 ### plan_feature_missing
-501 · netd (SDK). **When:** the tailnet's plan or control server lacks a feature tailworks would use; also `ctx.tailnet.connect()` (raw TCP egress), which is not implemented yet. **Fix:** use `fetch()`; see STATUS.md for what is built.
+501 · netd (SDK). **When:** the tailnet's plan or control server lacks a feature tailworks would use. **Fix:** see the message for the feature; [COMPAT.md](COMPAT.md) lists what is built.
 
 ### policy_apply_failed
 500 · mgmt, cli. **When:** `--policy-apply` could not write the policy snippet (validation failed, or the ETag changed); or `tw policy --apply` / `tw deploy --apply-policy`: the control plane rejected the merged policy (for example a grant to a tag no `tagOwners` entry defines), or tailworks refused the snippet (RT-06). Nothing was written. **Fix:** add the printed snippet in the admin console, after fixing what the message names.
@@ -390,6 +390,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### shared_owner_tag
 409 · mgmt, cli. **When:** a tenant was created (or its owner tag changed) on a tailnet where another tenant uses `tag:tw` as its owner tag, or the same owner tag: either tenant's OAuth client could mint the other's tags. **Fix:** give each tenant on the tailnet its own owner tag: `tw tenant set <existing> --owner-tag tag:tw-t-<team> --oauth-client-file <a client scoped to it>`, then `tw tenant add … --owner-tag …` ([teams.md](teams.md)).
+
+### socket_limit
+429 · hostd. **When:** an object (or, for the Worker and plain-DO objects, the workload node) already has 256 open `connect()` sockets on this host; the new one is refused (stock `connect()` sees a lost connection, `ctx.tailnet.connect()` this code). **Fix:** close sockets you're done with, and reuse connections: a driver pool with a small `max`, or one connection kept in a Durable Object ([limits.md](limits.md)).
 
 ### spawn_budget_exceeded
 429 · mgmt, netd (SDK). **When:** too many live descendants (`maxLive`) or too deep a chain (`maxDepth`) under `tailnet.spawn` in `tailworks.jsonc`. **Fix:** kill finished sub-agents (`ttl` helps), or raise the budget.
