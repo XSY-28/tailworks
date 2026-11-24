@@ -56,6 +56,9 @@ func checkHeadscale(s Snippet) error {
 	if len(s.NodeAttrs) > 0 {
 		return fmt.Errorf("policy snippet: the Headscale profile sets no nodeAttrs (Headscale has no funnel; caps go in grants)")
 	}
+	if len(s.AutoApprovers.Services) > 0 {
+		return fmt.Errorf("policy snippet: Headscale has no Tailscale Services (autoApprovers.services)")
+	}
 	for _, t := range slices.Sorted(maps.Keys(s.TagOwners)) {
 		for _, o := range s.TagOwners[t] {
 			if strings.HasPrefix(o, "autogroup:") {
