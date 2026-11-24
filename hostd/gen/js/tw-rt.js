@@ -1088,6 +1088,53 @@ function traceGate(obj, info) {
   });
 }
 
+// js/packages/tailnet/src/facetns.ts
+var BY_NAME = "tw objects must be addressed by name (getByName/idFromName)";
+var FacetId = class _FacetId {
+  name;
+  constructor(name) {
+    this.name = name;
+  }
+  // Not workerd's hex id (only the platform can derive that); unique per
+  // class, as the name is.
+  toString() {
+    return this.name;
+  }
+  equals(other) {
+    return other instanceof _FacetId && other.name === this.name;
+  }
+};
+function facetNamespace(ns) {
+  return Object.freeze({
+    getByName(name) {
+      return ns.getByName(String(name));
+    },
+    idFromName(name) {
+      return new FacetId(String(name));
+    },
+    idFromString(_s) {
+      throw new TailnetError("bad_request", `idFromString: ${BY_NAME}`);
+    },
+    newUniqueId(_opts) {
+      throw new TailnetError("bad_request", `newUniqueId: ${BY_NAME}; newUniqueId() is not supported yet`);
+    },
+    get(id, _opts) {
+      const n = id?.name;
+      if (!(id instanceof FacetId) || typeof n !== "string" || !n) throw new TailnetError("bad_request", `get: ${BY_NAME}`);
+      return ns.getByName(n);
+    },
+    jurisdiction(_j) {
+      throw new Error("Jurisdiction restrictions are not implemented in workerd.");
+    }
+  });
+}
+function facetNamespaces(env, bindings) {
+  if (!env || typeof env !== "object") return env;
+  const out = { ...env };
+  for (const k of Object.keys(bindings)) if (env[k]) out[k] = facetNamespace(env[k]);
+  return out;
+}
+
 // js/packages/tailnet/src/runtime.ts
 installFetchPropagation();
 function spanFlusher(tw, ctx, as) {
@@ -1295,7 +1342,7 @@ function wrapFacetClass(C, name, bindings, opts = {}) {
     [name]: class extends C {
       constructor(ctx, env) {
         const tw = env?.__TW;
-        const e = guardEnv(env, bindings, "tailnet", admitter(tw, {}));
+        const e = guardEnv(facetNamespaces(env, bindings), bindings, "tailnet", admitter(tw, {}));
         for (const k of Object.keys(opts.workflows ?? {})) if (e?.[k]) e[k] = workflowClient(e[k]);
         define(ctx, createTailnetContext(tw, e, bindings));
         installAlarmShim(ctx, tw);

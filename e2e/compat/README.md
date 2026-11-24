@@ -130,9 +130,13 @@ Responses API calls with a scripted stream. That is listed as a change.
 
 1. **Fixed ([#354](https://github.com/rosskukulinski/tailworks/issues/354)): a pre-built Worker that imports `cloudflare:email` couldn't start.**
    The Agents playground does, for its email demos. It starts now, and 8
-   of the probe's 9 demo families pass; `SupervisorAgent.createChild`
-   (agent-to-agent Durable Object RPC) fails with `Could not serialize
-   object of type "RpcPromise"`, not yet narrowed down.
+   of the probe's 9 demo families pass. The ninth,
+   `SupervisorAgent.createChild` (agent-to-agent Durable Object RPC),
+   failed with `Could not serialize object of type "RpcPromise"` until
+   [#391](https://github.com/rosskukulinski/tailworks/issues/391): inside
+   an object, `env.X` had only `getByName`, so `getAgentByName`'s
+   `env.X.get(env.X.idFromName(name))` passed a pending RPC result to
+   `get()`. All 9 pass now.
 2. **Open ([#355](https://github.com/rosskukulinski/tailworks/issues/355)): agents reached through the imported env are not created.**
    `cross-domain` and `mcp-elicitation` pass
    `import { env } from "cloudflare:workers"` to the Agents SDK and get
