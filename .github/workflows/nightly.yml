@@ -60,9 +60,12 @@ jobs:
           - target: e2e-coldid
             timeout: 30
             allow_failure: ""
+          # node 24: one upstream example asks for it, and npm 10 (Node 22)
+          # can't install that example's dependencies.
           - target: e2e-compat-dev
             timeout: 45
             allow_failure: ""
+            node: "24"
           - target: e2e-headscale
             timeout: 45
             allow_failure: ""
@@ -97,7 +100,7 @@ jobs:
           go-version-file: go.mod
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "22"
+          node-version: ${{ matrix.node || '22' }}
           cache: npm
       - name: make deps
         run: make deps

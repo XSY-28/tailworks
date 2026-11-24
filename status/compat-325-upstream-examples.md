@@ -38,7 +38,7 @@ Last update: 2026-11-24 PT. Issue #325: the upstream examples of cloudflare/agen
 - `mcp-agent` no longer uses the Vite redirect workaround (#301 is fixed);
   it deploys plainly, as the new Vite-built examples do.
 
-## Results (2026-11-24, darwin/arm64, tailworks `a7a7393cae68`)
+## Results (2026-11-24, darwin/arm64, tailworks `c97a6175a081`)
 
 | Upstream | Examples | pass | pass with change | fail | not run |
 |---|---|---|---|---|---|
@@ -97,33 +97,36 @@ on purpose), and the React clients are fetched, not run in a browser.
 
 ## Tests
 
-- `make e2e-compat-dev`: `--- PASS: TestCompatDev`, counts
+The published results are from the last two runs below, on this branch
+after merging `origin/master` (`b5b6d2f5`).
+
+- `make e2e-compat-dev`: `--- PASS: TestCompatDev (15.12s)`, counts
   `PASS:17 XFAIL:3`.
 - `TW_COMPAT_ONLY='^(ag-|mcph-|ai-|mcp-server$|mcp-agent$)' make e2e-compat`
-  (tailnet 1): `--- PASS: TestE2ECompat (134.38s)`, counts
+  (tailnet 1): `--- PASS: TestE2ECompat (125.66s)`, counts
   `PASS:15 XFAIL:5`, cleanup `devices_left: 0`, no errors.
-- `make e2e-compat` (all 48 projects, tailnet 1):
-  `--- PASS: TestE2ECompat (213.11s)`, counts `PASS:40 XFAIL:8`, cleanup
-  `devices_left: 0`, no errors. The recorded deployed results are from this
-  run. The full run before it had one FAIL, a harness bug: the prepared
-  copy of `mcp-worker-authenticated` still carried the previous run's
-  `MCP_RESOURCE`, so the first deploy failed instead of the second. The
-  run now resets the var to the example's own value first.
-- `make e2e-compat-dev` from an empty cache (as CI will run it): prepared
-  20 projects in 1m41s, `--- PASS: TestCompatDev (118.72s)`.
-- After merging `origin/master` (`b5b6d2f5`): `make lint`, `make lint-docs`
-  and `make test-docs` ok, and `make e2e-compat-dev` again
-  `PASS:17 XFAIL:3`. The published results stay the ones from
-  `a7a7393cae68`; the deployed run was not repeated on the merged tree.
+- `make e2e-compat` (all 48 projects, tailnet 1), before the merge, on
+  `a7a7393cae68`: `--- PASS: TestE2ECompat (213.11s)`, counts
+  `PASS:40 XFAIL:8`, cleanup `devices_left: 0`. The full run before that
+  one had one FAIL, a harness bug: the prepared copy of
+  `mcp-worker-authenticated` still carried the previous run's
+  `MCP_RESOURCE`, so the first deploy failed instead of the second. The run
+  now resets the var to the example's own value first.
+- `make e2e-compat-dev` from an empty cache: prepared 20 projects in 1m41s,
+  `--- PASS: TestCompatDev (118.72s)`.
+- Linux (`gh workflow run nightly.yml` on this branch, ubuntu-24.04,
+  amd64, Node 22): `PASS:16 XFAIL:3 FAIL:1`. The failure was
+  `ag-webmcp-react`: npm 10 can't install its dependencies (`Cannot read
+  properties of null (reading 'edgesOut')`; reproduced here with
+  `npx npm@10`; `--legacy-peer-deps` installs but leaves out peers the
+  build needs). The example's `engines` asks for Node 24, so the nightly
+  job now runs on Node 24. LINUXRERUN
 - `make lint`: ok (includes `compat-check`, `compat-upstream-check`,
-  `go test ./e2e/compat/`, staticcheck).
+  `go test ./e2e/compat/`, staticcheck). `make lint-docs test-docs`: ok.
 - `make changes-check`: ok (no upgrade-relevant paths).
-- `go test -count=1 ./docs/... ./internal/compatdoc/...`: ok.
 - Not run: `make test` (no Go outside `e2e/compat` changed), and
   `make templates-typecheck test-sdk` (no template, JS package or `e2e/sdk`
   change).
-- Not run on Linux: `make e2e-compat-dev` has only run on this Mac. The
-  nightly workflow runs it on ubuntu-24.04.
 
 ## What remains for #325
 

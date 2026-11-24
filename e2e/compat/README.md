@@ -20,8 +20,9 @@ make e2e-compat-prepare                            # fetch + install + build onl
 make e2e-compat-dev                                # the upstream SDK examples under tw dev: no tailnet, no credentials
 ```
 
-It needs `npm` and the tailnet-1 key file (`make e2e-compat` skips without
-it). `TW_COMPAT_PAR` deploys that many projects at once (default 3).
+It needs `npm` 11 or later (Node 24: with npm 10 the `ag-webmcp-react`
+example's dependencies don't install) and the tailnet-1 key file
+(`make e2e-compat` skips without it). `TW_COMPAT_PAR` deploys that many projects at once (default 3).
 The results go to `e2e/real/results/compat-<time>-<run>.json` (one record
 per project: outcome, timings, every request the probe made, deploy
 warnings, workarounds). The run's log ends with the matrix as a table.

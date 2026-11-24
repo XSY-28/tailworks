@@ -171,6 +171,10 @@ func upstreamProjects() []*Project {
 			p.What = "WebMCP starter: a React SPA (tools run in the browser), Worker only as the 404 fallback"
 			p.Exercises = []string{"assets"}
 			p.Build = viteBuild
+			// Needs npm 11 (Node 24, which the example's "engines" asks for):
+			// npm 10 crashes resolving its peers ("Cannot read properties of
+			// null (reading 'edgesOut')"), and --legacy-peer-deps leaves out
+			// peers the build needs. The nightly job runs on Node 24.
 			p.Probe = func(r *Run) error {
 				res := r.Get("/", "sec-fetch-mode", "navigate")
 				if err := res.Want(200, "<html"); err != nil {
