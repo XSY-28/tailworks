@@ -80,13 +80,38 @@ spec.
 - **`/ui/objects/{id}`**: every field of the object, the lineage up (root
   to parent), the subtree below (this object and its descendants), caps,
   the node certificate when the object has a node, the object's audit
-  records (newest first) with chain status, and the **Kill** form (cascade checkbox,
-  reason). A killed object renders its tombstone / kill record (the
+  records (newest first) with chain status, a **Logs** link, and the
+  **Kill** form (cascade checkbox, reason). A killed object renders its tombstone / kill record (the
   `/v1` 410 body: killed at, by, reason, cascade root, device deletion)
   and offers no kill form.
 - **`/ui/deployments/{id}`**: the deployment, its endpoint, namespaces
-  (class, tags, agent, ttl), the objects of the workload, and
-  **Undeploy** (reason) unless already stopped or superseded.
+  (class, tags, agent, ttl), the objects of the workload, a **Logs**
+  link, and **Undeploy** (reason) unless already stopped or superseded.
+- **`/ui/tenants/{id}/workloads/{workload}/logs`**: the workload's logs,
+  read with `GET /v1/tenants/{id}/workloads/{workload}/logs` from the
+  host (or hosts, for replicas) that runs it. Two tabs:
+  - **Requests** (`source=requests`, the default): the structured request
+    records (ADR-045), newest first. Each row has the time, method and
+    path (or the invocation's event), status and outcome, duration, the
+    node (linking to its logs), the verified caller and the trace (a link
+    that filters to it, and one to the request's audit records); the
+    code's `console.*` lines and exceptions (with the stack) sit under
+    it, and error rows are marked. Filters go to the API, which applies
+    them on the host: node (`object`), status (`404`, `5xx`), caller,
+    trace and errors only.
+  - **Console output** (`source=console`): the raw output (workerd's
+    stdout, the node tier's `app.log`, the microVM console), oldest first,
+    with terminal escapes removed. It is per workload, not per node.
+
+  Both read the last 50, 100 (default), 200 or 500 records or lines; the
+  page refreshes every 5 s like the others, so it follows the log. With
+  replicas, each line or record names its host, and a host that did not
+  answer is shown above the list. A workload that is not running, or has
+  no log yet, is an empty list with the API's reason.
+- **`/ui/objects/{id}/logs`**: a node's logs: its workload's request
+  records filtered to this object (`object=<object ID>`), including a
+  killed object's. The console tab links to the workload's console
+  output.
 - **`/ui/hosts/{id}`**: heartbeat, nodes, tiers, pool, push transport,
   node, the leases it holds, its assignments, the live objects it runs, and
   **Drain & remove** (drain checked by default; without it the API refuses
@@ -95,7 +120,7 @@ spec.
 - **`/ui/tenants/{id}`**: the configuration as the API returns it (mint
   mode, client IDs and file paths, quotas, OBO public key; secrets are
   never returned by the API and so never shown), object counts by status,
-  deployments, objects, and **Delete tenant** (force checkbox).
+  deployments (each with a logs link), objects, and **Delete tenant** (force checkbox).
 - **`/ui/objects`**: every object, newest first, 50 a page (Newer / Older
   links). Filters: tenant, app (workload) and status go to
   `GET /v1/objects` (`tenant`, `workload`, `state`); tag and acting-for
@@ -237,6 +262,11 @@ it), and the Host allowlist closes that gap on both ports.
   and a hostile tenant note), the form posts, the UI's own admission via
   `/v1/whoami`, the public-API contract (`TestUsesOnlyPublicAPI`), the
   static assets and headers, and the tree and formatting helpers.
+  `mgmt/ui/logs_test.go`: the logs pages (records newest first with their
+  lines and exceptions, the console without terminal escapes, replica
+  hosts that did not answer, the filters sent to the API, a node page
+  pinned to its object, `no_logs` / `unknown_workload` /
+  `host_unavailable`, and hostile log output escaped).
 - `mgmt/ui_integration_test.go`: a real `Server` over the SQLite store with
   a fake WhoIs: admission per principal, the `/` redirect, the browser
   guard (cross-site refused, same-origin with `X-Tw-UI` and CLI-style

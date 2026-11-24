@@ -3,6 +3,7 @@
 <p class="crumbs">
   {{.Obj.DisplayNS}} · tenant <a class="mono" href="/ui/tenants/{{.Obj.TenantID}}">{{.Obj.TenantID}}</a>
   {{if .Obj.DeploymentID}} · deployment <a class="mono" href="/ui/deployments/{{.Obj.DeploymentID}}">{{.Obj.DeploymentID}}</a>{{end}}
+  {{if .Obj.Workload}} · <a href="/ui/objects/{{.Obj.ObjectID}}/logs"><b>Logs</b></a>{{end}}
 </p>
 
 {{if .Killed}}
