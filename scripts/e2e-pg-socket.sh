@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs TestTCPEgressPostgres: postgres.js from a Worker and a facet object,
 # over connect() through hostd and netd, to Postgres 17 on the (hermetic)
-# tailnet (ADR-tcp-egress).
+# tailnet (ADR-052).
 #
 # By default it starts a throwaway postgres:17-alpine container (docker
 # context $1, default orbstack) on a free port. With TW_TEST_POSTGRES_DSN

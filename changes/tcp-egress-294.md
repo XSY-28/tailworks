@@ -20,7 +20,7 @@ rejects `opened` with a typed `TailnetError`. `{ tls: "netd" }` has the host
 do TLS to the destination. In a plain-DO object it throws `not_supported`.
 `tailnet.connects` entries can name a port (`"tag:db:5432"`), so `tw deploy`
 checks and prints the grant for that port. Recipe:
-docs/recipes.md#connect-to-postgres-on-your-tailnet. Design: ADR-051.
+docs/recipes.md#connect-to-postgres-on-your-tailnet. Design: ADR-052.
 
 Not yet: `secureTransport: "on"` / `"starttls"` on stock `connect()`
 (workerd can't hand a TLS socket to tailworks' egress). On the tailnet, turn

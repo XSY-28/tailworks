@@ -51,7 +51,7 @@ func serveWhoisTCP(t *testing.T, n *nettest.Node, port string) {
 	}()
 }
 
-// TestTCPEgress (ADR-tcp-egress): stock connect() and ctx.tailnet.connect()
+// TestTCPEgress (ADR-052): stock connect() and ctx.tailnet.connect()
 // end to end through real workerd, hostd and netd to a tailnet TCP
 // service, which verifies the source with WhoIs: the Worker and a plain-DO
 // object leave as the workload node, a facet object as its own node. The

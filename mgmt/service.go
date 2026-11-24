@@ -3230,6 +3230,10 @@ type PreflightResult struct {
 	// not deployed yet) with no tagOwners entry; TagOwnersSnippet defines
 	// them too (connectstags.go).
 	UndefinedConnects []string `json:"undefinedConnects,omitempty"`
+
+	// workloadTags: the tags the workload node is deployed with, the only
+	// ones tw policy --apply lets host its Service (policyapply.go).
+	workloadTags []string
 }
 
 // Preflight checks the request against the tenant's current policy (read

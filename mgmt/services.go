@@ -187,6 +187,7 @@ func (p *Policy) HasServiceGrant(src, name string) bool {
 // workload tags must be auto-approved to host it.
 func servicePreflight(pol *Policy, res *PreflightResult, name string, wlTags []string) {
 	res.Service = name
+	res.workloadTags = slices.Clone(wlTags)
 	if pol.serviceAutoApproved(name, wlTags) {
 		return
 	}

@@ -1,4 +1,4 @@
-Last update: 2026-11-23 21:15 PT. Raw TCP egress (#294, ADR-051): stock `connect()` and `ctx.tailnet.connect()` built.
+Last update: 2026-11-23 21:15 PT. Raw TCP egress (#294, ADR-052): stock `connect()` and `ctx.tailnet.connect()` built.
 
 ## What's built
 
@@ -9,7 +9,7 @@ Last update: 2026-11-23 21:15 PT. Raw TCP egress (#294, ADR-051): stock `connect
   and sends nothing before the 200. Handler refusals reach the tenant only as
   "Network connection lost". `secureTransport: "on"` fails ("Incoming
   CONNECT with TLS not supported"), and so does `startTls()`. Workers RPC
-  carries the socket streams. Recorded in ADR-051.
+  carries the socket streams. Recorded in ADR-052.
 - **platform.js:** `connect()` handlers on `Egress` (facet: as the object)
   and `WorkloadEgress` (Worker and plain-DO: as the workload node).
   `tcpDial` opens the CONNECT tunnel, writes the preamble (loopback token,
@@ -32,7 +32,7 @@ Last update: 2026-11-23 21:15 PT. Raw TCP egress (#294, ADR-051): stock `connect
   checks that port (`HasIPGrantPort`: `*`, `5432`, `tcp:5432`, `tcp:*`,
   ranges) and prints the snippet with it. Placement and tagOwners use the
   target.
-- Docs: ADR-051, COMPAT (`connect` ⚠️, `hyperdrive`), README matrix,
+- Docs: ADR-052, COMPAT (`connect` ⚠️, `hyperdrive`), README matrix,
   errors.md, limits.md, recipes.md (Postgres), egress-modes.md,
   tailworks-jsonc.md, the schema, and the RFC as-built row.
 

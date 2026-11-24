@@ -172,7 +172,9 @@ checks this first and prints the lines to add:
 ```
 
 `tw policy --apply` (or `tw deploy --apply-policy`) writes those lines for
-you, along with the `tailnet.connects` grants and, for `public` routes,
+you, along with the `tailnet.connects` grants, for `tailnet.service` the
+`autoApprovers.services` entry that lets the workload's own tags host its
+Service (only that `svc:` name, only those tags), and, for `public` routes,
 `tag:tw-public` and its funnel `nodeAttrs`. It prints the lines first and
 asks, or takes `--yes` when there's no terminal. mgmt then reads the policy
 with its ETag, merges in only the missing lines (comments kept, nothing
@@ -192,8 +194,8 @@ this: the tag may belong to another team's app, so you define it yourself.
 
 Some lines are never written: a grant to `*` or `autogroup:*`, a grant to a
 tag outside `tag:tw*` that your policy doesn't define (such as `tag:db`
-before you add it to `tagOwners`, which the control plane would reject), a Service's
-`autoApprovers`, and the grant that lets people call the app. `tw policy`
+before you add it to `tagOwners`, which the control plane would reject), and the grant
+that lets people call the app. `tw policy`
 lists them for you to add yourself.
 
 If you'd rather not edit the policy for every app, reuse a small set of tags

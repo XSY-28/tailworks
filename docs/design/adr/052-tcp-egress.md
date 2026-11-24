@@ -1,4 +1,4 @@
-# ADR-051: Raw TCP egress: `connect()` handlers on the platform's egress entrypoints, CONNECT tunnels to hostd authenticated in band, dialled with netd's `DialEgress`
+# ADR-052: Raw TCP egress: `connect()` handlers on the platform's egress entrypoints, CONNECT tunnels to hostd authenticated in band, dialled with netd's `DialEgress`
 
 **Date:** 2026-11-23
 **Status:** Accepted (2026-11-23, issue #294; built on branch

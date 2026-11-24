@@ -204,7 +204,7 @@ object's own node, so the gateway (and its logs) sees which agent called.
 ## Connect to Postgres on your tailnet
 
 Database drivers that run on Workers use `connect()` from
-`cloudflare:sockets`, and so does tailworks (ADR-051): the socket leaves
+`cloudflare:sockets`, and so does tailworks (ADR-052): the socket leaves
 from the workload's node (from the Worker) or the object's own node (from a
 facet-mode Durable Object), under the same grants as `fetch()`. Here
 [postgres.js](https://github.com/porsager/postgres) talks to a Postgres on

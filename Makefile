@@ -116,7 +116,7 @@ test-pg:
 	sh scripts/test-pg.sh "$(PG_CTX)" "$(PG_PORT)"
 
 ## e2e-pg-socket: postgres.js from a Worker and a facet object over connect() (raw TCP egress,
-## ADR-tcp-egress) to Postgres 17 on the hermetic tailnet (docker context PG_CTX, as test-pg).
+## ADR-052) to Postgres 17 on the hermetic tailnet (docker context PG_CTX, as test-pg).
 .PHONY: e2e-pg-socket
 e2e-pg-socket: deps
 	sh scripts/e2e-pg-socket.sh "$(PG_CTX)"

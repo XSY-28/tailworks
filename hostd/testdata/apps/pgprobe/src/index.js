@@ -1,6 +1,6 @@
 // pgprobe: postgres.js (its workerd build, over cloudflare:sockets
 // connect()) from a Worker and from a facet-mode Durable Object to a
-// Postgres on the tailnet (ADR-tcp-egress; docs/recipes.md).
+// Postgres on the tailnet (ADR-052; docs/recipes.md).
 import postgres from "postgres";
 import { DurableObject } from "cloudflare:workers";
 

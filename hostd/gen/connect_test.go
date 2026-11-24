@@ -56,7 +56,7 @@ func (f *fakeHost) connect(w http.ResponseWriter, r *http.Request, facet bool) {
 // TestConnectEgress: connect() from the Worker, a facet-mode and a
 // plain-DO object, and ctx.tailnet.connect(), through the generated
 // platform and stock workerd to the (fake) host's CONNECT tunnel, each
-// with the identity its mode promises (ADR-tcp-egress).
+// with the identity its mode promises (ADR-052).
 func TestConnectEgress(t *testing.T) {
 	in := start(t, hostdtest.Fixture("compat"), nil)
 	cases := []struct {

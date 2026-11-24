@@ -19,7 +19,7 @@ import (
 	"github.com/rosskukulinski/tailworks/netd"
 )
 
-// Raw TCP egress from workerd (ADR-tcp-egress): stock connect() from a
+// Raw TCP egress from workerd (ADR-052): stock connect() from a
 // Worker, a facet-mode or plain-DO object, and ctx.tailnet.connect(). The
 // platform's connect() handlers open a CONNECT tunnel to the same egress
 // endpoints fetch() uses (egress-obj for facets, egress-wl for the tenant

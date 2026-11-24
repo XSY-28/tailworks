@@ -534,7 +534,7 @@ export class WorkloadEgress extends WorkerEntrypoint {
   }
 }
 
-// ---- raw TCP egress (ADR-tcp-egress) ----
+// ---- raw TCP egress (ADR-052) ----
 //
 // A tenant's connect() reaches its globalOutbound's connect() handler.
 // The handler opens a CONNECT tunnel to hostd (workerd sends it with no

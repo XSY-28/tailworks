@@ -17,7 +17,7 @@ import (
 	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
-// TestE2EVMTCPEgress (ADR-051): connect() from a Worker, a facet-mode and a
+// TestE2EVMTCPEgress (ADR-052): connect() from a Worker, a facet-mode and a
 // plain-DO object in a microVM reaches a tailnet TCP service through the
 // guest gateway's egress handlers, with the identity each mode promises
 // (the far side's WhoIs of the source); a refusal is typed for

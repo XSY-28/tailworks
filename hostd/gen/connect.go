@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Raw TCP egress (ADR-tcp-egress). The platform's connect() handlers open
+// Raw TCP egress (ADR-052). The platform's connect() handlers open
 // an HTTP CONNECT tunnel to hostd's egress endpoints for the destination
 // host:port. workerd sends CONNECT with no headers (not even
 // injectRequestHeaders), so the tunnel carries its own authentication: once

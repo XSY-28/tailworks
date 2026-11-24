@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// tailnet.connects entries (ADR-tcp-egress). An entry names a target (a
+// tailnet.connects entries (ADR-052). An entry names a target (a
 // tag, autogroup, "*" or a name) and, optionally, the TCP port the workload
 // dials it on: "tag:db:5432". Without a port the preflight keeps its
 // tcp:80 default (fetch()).
