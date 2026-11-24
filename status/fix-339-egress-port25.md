@@ -66,7 +66,8 @@ Run from this worktree on 2026-11-24.
 | `make gen-js` | regenerated `hostd/gen/js/tw-rt.js` (one line: the `internet_port_refused` catalog entry from `js/packages/tailnet/src/errors.ts`) |
 | `make test-js` | ok (package tests and the npm CLI tests) |
 | `make lint` | ok (gofmt, vet, staticcheck, vulncheck, api-check, compat-check, changes-check, check-secrets) |
-| `sh ~/.claude/scratch/mbp-test.sh test` (`make test` on mbp) | see below |
+| `sh ~/.claude/scratch/mbp-test.sh test` (`make test` on mbp, `-race`, at commit b2f52679) | every package ok except `cmd/tw`: `TestCLISingleProcess` (the full `tw up` CLI flow; tailnet egress only, nothing on the internet path) failed while both mbp slots ran `-race` suites at once; the saved output kept only the hostd log tail |
+| `go test -count=1 -timeout 20m ./cmd/tw` (local, at 9b9b56de) | ok, 58 s: the mbp failure did not reproduce |
 
 Skipped: the suites that need credentials, a real tailnet, Docker or KVM
 (`e2e-real`, `e2e-compat`, `e2e-vm`, …). Nothing in the table of extra
