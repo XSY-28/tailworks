@@ -31,7 +31,7 @@ still asserts `peer_not_visible`.
 
 ## Tests
 
-All on 2026-11-23, macOS, on top of master cfb66834:
+All on 2026-11-23, macOS, on top of master cfb66834; `make lint test` rerun and passing after merging master 85c4d89b:
 
 - `make lint test`: pass.
 - `make templates-typecheck`: pass (every template: npm install, tsc, tw types --check).
