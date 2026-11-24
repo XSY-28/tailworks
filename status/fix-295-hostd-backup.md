@@ -59,3 +59,14 @@ Part of #295, item 1: `tw backup` copies `hostd/` (Durable Object storage,
   a GC hold during the backup (a hostd hook).
 - microVM DO volumes (`do.img`) and Node.js `TW_DATA_DIR`s still need
   `tw down` to copy; other hosts' `hostd/` isn't covered by `tw backup`.
+
+## Results (2026-11-23)
+
+- `make lint`: ok (local, after merging origin/master at 32410fed).
+- `make changes-check`: ok (not upgrade-relevant; fragment added anyway).
+- `make test` on mbp (`mbp-test.sh test`): ok, every package, before the
+  merge of master (#296, #299: unrelated files, clean merge).
+- After the merge, locally: `go test ./cmd/tw -run 'TestCLIReferenceUpToDate|TestBackup'` ok.
+- `TestBackupHostdWhileWriting` locally ×5 with real workerd: ok.
+- `make cli-docs`: docs/cli.md regenerated.
+- No suite in AGENTS.md's table covers `tw backup`; none skipped.
