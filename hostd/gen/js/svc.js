@@ -175,7 +175,7 @@ async function bindingEgress(env, props, request, rpc) {
   const u = new URL(request.url);
   const url = "http://" + SVC_HOST + u.pathname + u.search;
   const h = new Headers(request.headers);
-  for (const k of [...h.keys()]) if (k.startsWith("x-tw-") || k.startsWith("tw-") || k === "proxy-authorization") h.delete(k);
+  for (const k of [...h.keys()]) if (k.startsWith("x-tw-") || k.startsWith("tw-") || k === "proxy-authorization" || k === "tailworks-binding") h.delete(k);
   h.set("host", SVC_HOST);
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
   const init = { method: request.method, headers: h, body: hasBody ? request.body : undefined, redirect: "manual" };

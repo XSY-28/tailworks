@@ -284,6 +284,18 @@ The red team's open items are tracked in
   Worker, so code that rewrites that isolate's JavaScript built-ins can
   defeat any check made there. Facet objects (the default) each get
   their own isolate.
+- **A named entrypoint is not a boundary inside a tenant.** A
+  [service binding](wrangler.md#service-bindings) call to a named
+  entrypoint or an RPC method is authorized by the tailnet grant and by
+  the caller being a tailworks node of the same tenant. The caller's
+  `services` declaration is not checked by the target. tailworks removes
+  the header that marks such a call from a tenant's `fetch()`, so a
+  request that injected input caused can't forge one. Code that opens a
+  raw socket to the target (`connect()`, or a Node app) writes the header
+  itself, and the target honours it. Grant a workload's tags only to the
+  workloads that may call it, and check `getCaller()` in an entrypoint
+  that needs more ([ADR-053](design/adr/053-service-bindings.md), ledger
+  H-binding-wire).
 - **Snapshot-restored microVMs share some kernel secrets.** On Linux,
   microVMs restored from one base snapshot (rebuilt at least hourly) get
   fresh randomness before tenant code runs. They still share the kernel

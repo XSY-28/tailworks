@@ -507,10 +507,12 @@ async function sealedRequest(env, req) {
 // objectEgress sends a request as facet object cls/name: hostd verifies the
 // MAC, maps class+name to the object and its node, and netd dials from that
 // node. extra are platform headers set after tenant x-tw-* are stripped
-// (a service binding's, tw-svc.js).
+// (a service binding's, tw-svc.js). tailworks-binding is the header a
+// binding call carries between hosts: hostd's to set, never the tenant's
+// (#347; hostd strips it again).
 async function objectEgress(env, cls, name, url, init, extra = {}) {
   const h = new Headers(init.headers);
-  for (const k of [...h.keys()]) if (k.startsWith("x-tw-") || k.startsWith("tw-") || k === "proxy-authorization") h.delete(k);
+  for (const k of [...h.keys()]) if (k.startsWith("x-tw-") || k.startsWith("tw-") || k === "proxy-authorization" || k === "tailworks-binding") h.delete(k);
   for (const [k, v] of Object.entries(extra)) h.set(k, v);
   const ts = String(Date.now());
   const nonce = crypto.randomUUID();
@@ -547,7 +549,7 @@ export { ServiceBinding } from "tw-svc.js";
 export class WorkloadEgress extends WorkerEntrypoint {
   async fetch(request) {
     const h = new Headers(request.headers);
-    for (const k of [...h.keys()]) if (k.startsWith("x-tw-") || k.startsWith("tw-") || k === "proxy-authorization") h.delete(k);
+    for (const k of [...h.keys()]) if (k.startsWith("x-tw-") || k.startsWith("tw-") || k === "proxy-authorization" || k === "tailworks-binding") h.delete(k);
     h.set("host", new URL(request.url).host);
     return this.env.EGRESS_WL.fetch(new Request(request.url, { method: request.method, headers: h, body: request.body, redirect: "manual" }));
   }
