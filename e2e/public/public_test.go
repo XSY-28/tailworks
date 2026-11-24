@@ -481,8 +481,19 @@ func TestE2EPublic(t *testing.T) {
 	e.TrackObjectNodes()
 
 	// 9. tw expose off: an in-flight public stream is cut; on reopens.
-	sr, _ := http.NewRequest("GET", base+"/slow", nil)
-	stream, err := publicClient(0).Do(sr)
+	// Like fetch, retry a failure to resolve or connect for up to a minute:
+	// a lookup can return only the edge's IPv6 address, which a runner
+	// without IPv6 can't reach (release run 45346852696).
+	var stream *http.Response
+	for deadline := time.Now().Add(time.Minute); ; time.Sleep(2 * time.Second) {
+		sr, _ := http.NewRequest("GET", base+"/slow", nil)
+		stream, err = publicClient(0).Do(sr)
+		var dnsErr *net.DNSError
+		var opErr *net.OpError
+		if err == nil || time.Now().After(deadline) || !(errors.As(err, &dnsErr) || (errors.As(err, &opErr) && opErr.Op == "dial")) {
+			break
+		}
+	}
 	if err != nil || stream.StatusCode != 200 {
 		t.Fatalf("/slow: %v %v", err, stream)
 	}
