@@ -124,6 +124,9 @@ type Server struct {
 	// leaseLostReady: the next N ready PATCHes fail with lease_lost (readycalls.go).
 	leaseLostReady int
 
+	// readyFault: every ready PATCH is answered late, or 503 (SetReadyFault).
+	readyFault ReadyFault
+
 	// Queues (queues.go): tenant|queue -> queue.
 	queues map[string]*fakeQueue
 	// OTLP export (telemetry.go): tenantID -> config.
@@ -1267,6 +1270,9 @@ func (s *Server) credential(w http.ResponseWriter, r *http.Request) {
 // ready is PATCH /v1/objects/{id} {"status":"ready", …} (the host's
 // merge patch; the admin's {ttl} is not modelled by the fake).
 func (s *Server) ready(w http.ResponseWriter, r *http.Request) {
+	if s.readyFaulted(w) { // readycalls.go
+		return
+	}
 	var req struct {
 		Status string `json:"status"`
 		mgmtapi.ReadyRequest
