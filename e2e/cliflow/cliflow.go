@@ -387,7 +387,8 @@ func (e *Env) upArgs() []string {
 // deploy` on the SAME state dir, after Run and a purging Down: the agent
 // workload must deploy and its node be ready again (it was refused with
 // `bootstrap_failed: the workload node for agent is killed` before the
-// killed objects were forgotten by purge). It ends with another purging
+// killed objects were forgotten by purge). Then it undeploys and deploys
+// the agent again (redeployAfterUndeploy). It ends with another purging
 // `tw down`; the new node IDs are tracked for the leftover check.
 func (e *Env) RedeployAfterPurge() {
 	t, res := e.T, e.Res
@@ -412,6 +413,7 @@ func (e *Env) RedeployAfterPurge() {
 	e.TrackObjectNodes()
 	res.Numbers["redeploy_after_purge_ready_ms"] = dep.Timings["ready"]
 	res.pass("redeploy_after_purge", fmt.Sprintf("agent %s ready again on the same state dir in %v", dep.Endpoint.MagicDNS, d.Round(time.Millisecond)))
+	e.redeployAfterUndeploy() // redeploy.go (#364)
 	var dr struct {
 		Killed []string `json:"killed"`
 		Purged int      `json:"objectsPurged"`

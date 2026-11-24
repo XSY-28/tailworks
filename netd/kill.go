@@ -170,13 +170,7 @@ func (r *Registry) Kill(ctx context.Context, id string, opts KillOptions) (*Kill
 	} else {
 		doDelete()
 		if opts.Tombstone > 0 {
-			keep := opts.KeepState
-			time.AfterFunc(opts.Tombstone, func() {
-				o.teardown()
-				if !keep {
-					os.RemoveAll(o.dir)
-				}
-			})
+			o.tomb.arm(o, opts.KeepState, opts.Tombstone) // tombstone_end.go
 		} else {
 			doClose()
 		}

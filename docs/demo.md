@@ -88,10 +88,8 @@ directories. The `tagOwners` entries stay.
 Run it again as often as you like: it redeploys over the running apps and
 makes a new agent instance each time.
 
-After `--cleanup`, the names `demo` and `demo-agent` can't be deployed again
-on the same host, because tailworks keeps an undeployed workload's node
-killed until `tw down --purge`. The script says so before it changes
-anything. Use another name (`DEMO_NAME=demo2 scripts/demo.sh …`), or purge.
+After `--cleanup`, a run deploys `demo` and `demo-agent` again under the
+same names.
 
 ## Try it on a throwaway tailnet
 
