@@ -75,3 +75,10 @@ which is the part of option 1 that costs nothing.
   (needs: protocol; found in changes/fix-348-r2-group.md)`), `make test`
   PASS, `make e2e-upgrade` PASS (from v0.4.0, the newest published
   release, to this tree).
+- After merging `origin/master` (`c5295e77`, which has #361): `make lint`
+  ok, `make test` PASS.
+
+Not run: `make test-pg` (no Docker on this machine; the store and its
+migrations are untouched, and the `test-pg` job runs on the PR because it
+touches `mgmt/`), `e2e-svc` (real replicas on a real tailnet) and the other
+suites that need a tailnet, its credentials, Docker or a VM.
