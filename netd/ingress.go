@@ -192,7 +192,7 @@ func UnixUpstream(path string) http.Handler {
 			return (&net.Dialer{}).DialContext(ctx, "unix", path)
 		},
 		MaxIdleConnsPerHost: 64,
-		IdleConnTimeout:     60 * time.Second,
+		IdleConnTimeout:     UpstreamIdleTimeout, // below workerd's idle close (#287)
 	}
 	target := &url.URL{Scheme: "http", Host: "workerd"}
 	return &httputil.ReverseProxy{
