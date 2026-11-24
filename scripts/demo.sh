@@ -30,11 +30,8 @@
 #   - --cleanup undeploys both apps, removes the two grants and deletes the
 #     app directories. The tagOwners entries stay (tw never removes policy);
 #     they are harmless and a rerun reuses them.
-#   - After a --cleanup the names `demo` and `demo-agent` cannot be deployed
-#     again on the same host: tailworks keeps an undeployed workload's node
-#     killed until `tw down --purge` (which kills every app's objects). Run
-#     the next demo with DEMO_NAME=demo2, or purge. Reruns WITHOUT --cleanup
-#     need neither: they redeploy over the running apps.
+#   - A rerun after --cleanup deploys the apps again under the same names
+#     (#364); a rerun without it redeploys over the running apps.
 #
 # Pauses, for recording: set DEMO_PAUSE=<seconds> to sleep between steps.
 # Without it the script waits for Enter when stdin is a terminal and does
@@ -51,7 +48,7 @@
 #                           this machine; e.g. "ssh laptop curl")
 #   DEMO_CALLER_SRC         who the caller grant lets in (default autogroup:member)
 #   DEMO_NAME               the MCP app's name (default demo); the agent app is
-#                           <name>-agent. Change it after a --cleanup: see above
+#                           <name>-agent
 #   DEMO_AGENT              the agent instance's name (default demo-<HHMMSS>; a
 #                           killed name stays killed, so each run needs a new one)
 #   DEMO_OAUTH_CLIENT_FILE  Tailscale: OAuth client file with Policy File write
@@ -225,24 +222,8 @@ if [ "$CLEANUP" = 1 ]; then
 	grant remove
 	rm -rf "${WORK:?}/$MCP_APP" "${WORK:?}/$AGENT_APP" "$WORK/.demo-grant" "$GRANT_ARGS"
 	echo "demo: cleaned up. The tagOwners entries for $MCP_TAG, $AGENT_WL_TAG and the agent tags stay in the policy."
-	echo "demo: before the next run on this host, either 'tw down --purge && tw up' (kills every app's objects) or use another name: DEMO_NAME=${NAME}2 (an undeployed workload's node stays killed until a purge)"
 	exit 0
 fi
-
-# A workload that was undeployed cannot be deployed again under the same
-# name on this host until a purge: say so now, not after the policy writes.
-burned() {
-	"$TW" ls --all --json | awk -F'"' -v wl="$1" '
-		/^ *"workload":/ { w = $4 }
-		/^ *"namespace":/ { ns = $4 }
-		/^ *"status":/ { if (ns == "_workload" && w == wl) { if ($4 == "killed") k++; else live++ }; ns = "" }
-		END { exit !(k > 0 && live == 0) }'
-}
-for w in "$MCP_APP" "$AGENT_APP"; do
-	if burned "$w"; then
-		die "workload '$w' was undeployed here before, and tailworks keeps its node killed until a purge: run with DEMO_NAME=${NAME}2 (or another name), or 'tw down --purge && tw up' first"
-	fi
-done
 
 # ---- what will change, and the question ------------------------------------
 
