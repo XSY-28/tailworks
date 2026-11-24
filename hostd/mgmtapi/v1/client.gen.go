@@ -7180,7 +7180,9 @@ type ClientInterface interface {
 	//
 	// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
 	// does, turns what is missing into a policy snippet (the `tagOwners`
-	// of its tags, a grant per `tailnet.connects`, and for public routes
+	// of its tags, a grant per `tailnet.connects`, for `tailnet.service`
+	// the `autoApprovers.services` entry of its own `svc:` name for the
+	// workload node's own tags (issue #295), and for public routes
 	// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
 	// tenant's tailnet policy:
 	//
@@ -7194,8 +7196,8 @@ type ClientInterface interface {
 	//    `409 policy_conflict` and nothing is written.
 	//
 	// `added` is what was (or, with `dryRun`, would be) added, and
-	// `manual` what is missing that tailworks never writes (the
-	// `autoApprovers.services` entry of a Tailscale Service, tag
+	// `manual` what is missing that tailworks never writes (an
+	// `autoApprovers.services` entry wider than that, or on Headscale, tag
 	// ownership problems of a team tenant, grants it refuses, and grants
 	// to a tag outside `tag:tw*` that the policy doesn't define, which the
 	// control plane would reject); add those
@@ -7216,7 +7218,9 @@ type ClientInterface interface {
 	//
 	// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
 	// does, turns what is missing into a policy snippet (the `tagOwners`
-	// of its tags, a grant per `tailnet.connects`, and for public routes
+	// of its tags, a grant per `tailnet.connects`, for `tailnet.service`
+	// the `autoApprovers.services` entry of its own `svc:` name for the
+	// workload node's own tags (issue #295), and for public routes
 	// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
 	// tenant's tailnet policy:
 	//
@@ -7230,8 +7234,8 @@ type ClientInterface interface {
 	//    `409 policy_conflict` and nothing is written.
 	//
 	// `added` is what was (or, with `dryRun`, would be) added, and
-	// `manual` what is missing that tailworks never writes (the
-	// `autoApprovers.services` entry of a Tailscale Service, tag
+	// `manual` what is missing that tailworks never writes (an
+	// `autoApprovers.services` entry wider than that, or on Headscale, tag
 	// ownership problems of a team tenant, grants it refuses, and grants
 	// to a tag outside `tag:tw*` that the policy doesn't define, which the
 	// control plane would reject); add those
@@ -10324,7 +10328,9 @@ func (c *Client) GetWorkloadLogs(ctx context.Context, id TenantID, workload Work
 //
 // Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
 // does, turns what is missing into a policy snippet (the `tagOwners`
-// of its tags, a grant per `tailnet.connects`, and for public routes
+// of its tags, a grant per `tailnet.connects`, for `tailnet.service`
+// the `autoApprovers.services` entry of its own `svc:` name for the
+// workload node's own tags (issue #295), and for public routes
 // `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
 // tenant's tailnet policy:
 //
@@ -10338,8 +10344,8 @@ func (c *Client) GetWorkloadLogs(ctx context.Context, id TenantID, workload Work
 //     `409 policy_conflict` and nothing is written.
 //
 // `added` is what was (or, with `dryRun`, would be) added, and
-// `manual` what is missing that tailworks never writes (the
-// `autoApprovers.services` entry of a Tailscale Service, tag
+// `manual` what is missing that tailworks never writes (an
+// `autoApprovers.services` entry wider than that, or on Headscale, tag
 // ownership problems of a team tenant, grants it refuses, and grants
 // to a tag outside `tag:tw*` that the policy doesn't define, which the
 // control plane would reject); add those
@@ -10370,7 +10376,9 @@ func (c *Client) ApplyWorkloadPolicyWithBody(ctx context.Context, id TenantID, w
 //
 // Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
 // does, turns what is missing into a policy snippet (the `tagOwners`
-// of its tags, a grant per `tailnet.connects`, and for public routes
+// of its tags, a grant per `tailnet.connects`, for `tailnet.service`
+// the `autoApprovers.services` entry of its own `svc:` name for the
+// workload node's own tags (issue #295), and for public routes
 // `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
 // tenant's tailnet policy:
 //
@@ -10384,8 +10392,8 @@ func (c *Client) ApplyWorkloadPolicyWithBody(ctx context.Context, id TenantID, w
 //     `409 policy_conflict` and nothing is written.
 //
 // `added` is what was (or, with `dryRun`, would be) added, and
-// `manual` what is missing that tailworks never writes (the
-// `autoApprovers.services` entry of a Tailscale Service, tag
+// `manual` what is missing that tailworks never writes (an
+// `autoApprovers.services` entry wider than that, or on Headscale, tag
 // ownership problems of a team tenant, grants it refuses, and grants
 // to a tag outside `tag:tw*` that the policy doesn't define, which the
 // control plane would reject); add those
@@ -19223,7 +19231,9 @@ type ClientWithResponsesInterface interface {
 	//
 	// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
 	// does, turns what is missing into a policy snippet (the `tagOwners`
-	// of its tags, a grant per `tailnet.connects`, and for public routes
+	// of its tags, a grant per `tailnet.connects`, for `tailnet.service`
+	// the `autoApprovers.services` entry of its own `svc:` name for the
+	// workload node's own tags (issue #295), and for public routes
 	// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
 	// tenant's tailnet policy:
 	//
@@ -19237,8 +19247,8 @@ type ClientWithResponsesInterface interface {
 	//    `409 policy_conflict` and nothing is written.
 	//
 	// `added` is what was (or, with `dryRun`, would be) added, and
-	// `manual` what is missing that tailworks never writes (the
-	// `autoApprovers.services` entry of a Tailscale Service, tag
+	// `manual` what is missing that tailworks never writes (an
+	// `autoApprovers.services` entry wider than that, or on Headscale, tag
 	// ownership problems of a team tenant, grants it refuses, and grants
 	// to a tag outside `tag:tw*` that the policy doesn't define, which the
 	// control plane would reject); add those
@@ -19259,7 +19269,9 @@ type ClientWithResponsesInterface interface {
 	//
 	// Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
 	// does, turns what is missing into a policy snippet (the `tagOwners`
-	// of its tags, a grant per `tailnet.connects`, and for public routes
+	// of its tags, a grant per `tailnet.connects`, for `tailnet.service`
+	// the `autoApprovers.services` entry of its own `svc:` name for the
+	// workload node's own tags (issue #295), and for public routes
 	// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
 	// tenant's tailnet policy:
 	//
@@ -19273,8 +19285,8 @@ type ClientWithResponsesInterface interface {
 	//    `409 policy_conflict` and nothing is written.
 	//
 	// `added` is what was (or, with `dryRun`, would be) added, and
-	// `manual` what is missing that tailworks never writes (the
-	// `autoApprovers.services` entry of a Tailscale Service, tag
+	// `manual` what is missing that tailworks never writes (an
+	// `autoApprovers.services` entry wider than that, or on Headscale, tag
 	// ownership problems of a team tenant, grants it refuses, and grants
 	// to a tag outside `tag:tw*` that the policy doesn't define, which the
 	// control plane would reject); add those
@@ -32035,7 +32047,9 @@ func (c *ClientWithResponses) GetWorkloadLogsWithResponse(ctx context.Context, i
 //
 // Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
 // does, turns what is missing into a policy snippet (the `tagOwners`
-// of its tags, a grant per `tailnet.connects`, and for public routes
+// of its tags, a grant per `tailnet.connects`, for `tailnet.service`
+// the `autoApprovers.services` entry of its own `svc:` name for the
+// workload node's own tags (issue #295), and for public routes
 // `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
 // tenant's tailnet policy:
 //
@@ -32049,8 +32063,8 @@ func (c *ClientWithResponses) GetWorkloadLogsWithResponse(ctx context.Context, i
 //     `409 policy_conflict` and nothing is written.
 //
 // `added` is what was (or, with `dryRun`, would be) added, and
-// `manual` what is missing that tailworks never writes (the
-// `autoApprovers.services` entry of a Tailscale Service, tag
+// `manual` what is missing that tailworks never writes (an
+// `autoApprovers.services` entry wider than that, or on Headscale, tag
 // ownership problems of a team tenant, grants it refuses, and grants
 // to a tag outside `tag:tw*` that the policy doesn't define, which the
 // control plane would reject); add those
@@ -32077,7 +32091,9 @@ func (c *ClientWithResponses) ApplyWorkloadPolicyWithBodyWithResponse(ctx contex
 //
 // Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
 // does, turns what is missing into a policy snippet (the `tagOwners`
-// of its tags, a grant per `tailnet.connects`, and for public routes
+// of its tags, a grant per `tailnet.connects`, for `tailnet.service`
+// the `autoApprovers.services` entry of its own `svc:` name for the
+// workload node's own tags (issue #295), and for public routes
 // `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
 // tenant's tailnet policy:
 //
@@ -32091,8 +32107,8 @@ func (c *ClientWithResponses) ApplyWorkloadPolicyWithBodyWithResponse(ctx contex
 //     `409 policy_conflict` and nothing is written.
 //
 // `added` is what was (or, with `dryRun`, would be) added, and
-// `manual` what is missing that tailworks never writes (the
-// `autoApprovers.services` entry of a Tailscale Service, tag
+// `manual` what is missing that tailworks never writes (an
+// `autoApprovers.services` entry wider than that, or on Headscale, tag
 // ownership problems of a team tenant, grants it refuses, and grants
 // to a tag outside `tag:tw*` that the policy doesn't define, which the
 // control plane would reject); add those
