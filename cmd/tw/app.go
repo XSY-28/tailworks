@@ -300,6 +300,9 @@ func (a *app) build(vars map[string]string) ([]byte, int, error) {
 		tb, err := a.packWorkerd(map[string][]byte{}, "", nil, vars)
 		return tb, 0, err
 	}
+	if err := pythonWorker(a.WranglerFile, a.Wrangler); err != nil {
+		return nil, 0, err
+	}
 	if a.Opts.builder() == "wrangler" && a.Pages.hasCode() {
 		_, err = a.pagesEntry(out) // pages.go: refuses --wrangler
 		return nil, 0, err
