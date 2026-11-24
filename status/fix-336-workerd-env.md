@@ -1,4 +1,4 @@
-Last update: 2026-11-24 10:00 PT. workerd gets a minimal environment on every process-tier branch (#336, ledger H-workerd-env); regression tests fail on master and pass on the branch on macOS (none, Seatbelt) and Linux (none, Landlock ABI 4).
+Last update: 2026-11-24 10:30 PT. workerd gets a minimal environment on every process-tier branch (#336, ledger H-workerd-env); regression tests fail on master and pass on the branch on macOS (none, Seatbelt) and Linux (none, Landlock ABI 4).
 
 # fix-336-workerd-env: workerd no longer inherits tw-hostd's environment
 
@@ -146,15 +146,47 @@ Suites, with the fix:
   compat-check, changes-check, check-secrets).
 - `make test-node` (macOS): PASS (`e2e/node` 13.8 s).
 - `TW_TEST_SANDBOX=auto go test ./hostd/... -count=1` (macOS, Seatbelt):
-  RESULT_SEATBELT
-- `sh ~/.claude/scratch/mbp-test.sh test` (`make test` on mbp):
-  RESULT_MBP
-- Linux (twd-amd64): `TW_TEST_SANDBOX=auto go test ./hostd/...
-  ./internal/procsb/... -count=1`: RESULT_LINUX_HOSTD; `TW_TEST_SANDBOX=auto
-  make test-node`: RESULT_LINUX_NODE
+  first run FAIL on one test, `TestWorkerdWrapperKilled`, because of this
+  change: its wrapper script read the real workerd path from
+  `$TW_TEST_REAL_WORKERD`, which a workerd no longer inherits. The test now
+  bakes the path into the script (second commit). Re-run of that test and
+  the env test: PASS; every other package in the run was `ok`.
+- `sh ~/.claude/scratch/mbp-test.sh test` (`make test` on mbp): PASS, exit
+  0, 58 Go packages `ok`, no FAIL (synced after the wrapper-test fix).
+- Linux (twd-amd64, 2 vCPU, 5 GB, Ubuntu 24.04, kernel 6.8, Landlock ABI 4):
+  - `TW_TEST_SANDBOX=auto go test ./internal/procsb/... -count=1`: PASS.
+  - `TW_TEST_SANDBOX=auto go test ./hostd -count=1 -timeout 40m`: the
+    package aborts at `TestRealMgmtStores/D1/Delete` (panic in the test:
+    the worker's `/session` answer after the delete has no `steps`; the
+    test asserts on it unguarded). **Pre-existing and not this branch's:**
+    the same subtest fails the same way on an unfixed `origin/master`
+    checkout on the same VM (`~/tw-336-master`, `go test ./hostd -run
+    TestRealMgmtStores/D1`), and passes on macOS and on mbp. Full package
+    with that subtest skipped (`-skip TestRealMgmtStores/D1/Delete`, 326 s):
+    two more failures, both also **pre-existing on the same unfixed master
+    checkout on this VM**, verified by running each there: `TestD1/Delete`
+    (the same nil-`steps` panic, the non-realmgmt variant of the same
+    test) and `TestSharedHostTailscaledUnixListen` (Landlock-only, so it
+    ran nowhere else: "deploy nodeprobe failed: node app did not answer /"
+    after 30 s, identical on master with the Node deps installed). Every
+    other test in the package passed under Landlock, including the
+    multi-tenant Landlock tests, the Node-tier tests and the new
+    `TestWorkerdEnvNotInherited`. (The first attempt with the default 10 m
+    timeout timed out: the VM is ~4x slower than the Macs.)
+  - `TW_TEST_SANDBOX=auto make test-node`: one failure, `TestNodeWorkflow`
+    ("want 3 marks from 3 processes"), while the hostd suite was running
+    on the same 2 vCPUs: the "slept" mark came 2.25 s after "triaged" in
+    the same pid, so the test's kill arrived after the 2 s sleep had run.
+    Timing, not environment (the Node tier's list is unchanged). Alone:
+    PASS (78.7 s).
 
 Skipped: `e2e-vm`/`e2e-vz` (the microVM guest is unchanged), the
 credentialed suites.
+
+Needs a decision (not done here): file `TestRealMgmtStores/D1/Delete`,
+`TestD1/Delete` and `TestSharedHostTailscaledUnixListen` on Linux as their
+own issue(s); all three fail on master on the amd64 test VM (Ubuntu 24.04,
+kernel 6.8, Landlock ABI 4), none on macOS.
 
 ## Notes and gaps
 
