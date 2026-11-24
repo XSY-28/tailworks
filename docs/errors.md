@@ -23,7 +23,7 @@ agent, cli = `tw`). Detail text is redacted of key material before it is
 printed anywhere.
 
 ### acl_denied
-403 · netd, mgmt, cli. **When:** the peer is visible in the netmap but the port or service is not granted; from `tw deploy`, the preflight found grants or tagOwners your app's `tailnet.connects` needs missing. **Fix:** add the printed grant (`snippet`) to the tailnet policy, or let tailworks add its `tag:tw*` lines with `tw policy --apply` / `tw deploy --apply-policy` (needs the OAuth client's Policy File write scope), or deploy with `--allow-missing-grants`.
+403 · netd, mgmt, cli. **When:** the peer is visible in the netmap but the port or service is not granted; from `tw deploy`, the preflight found grants or tagOwners your app's `tailnet.connects` needs missing. **Fix:** add the printed grant (`snippet`) to the tailnet policy, or let tailworks add its `tag:tw*` lines with `tw policy --apply` / `tw deploy --apply-policy` (needs the OAuth client's Policy File write scope), or deploy with `--allow-missing-grants`. If saving the policy fails with `tag not found: "tag:<name>"`, the `dst` tag doesn't exist in your tailnet yet: add it to `tagOwners` first (for example `"tag:db": ["autogroup:admin"]`) and tag the device it names, or remove it from `tailnet.connects`.
 
 ### already_joined
 409 · mgmt. **When:** a credential (auth key) was requested for an object that already has a node. **Fix:** nothing to do; hostd retries by rejoining. Report it if it repeats.
@@ -86,7 +86,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 1 · cli. **When:** a command that asks first had no terminal to ask on (a coding agent, a script, or `--json`), so it did nothing. These commands ask first: `tw agent setup` and `tw agent remove` (they would write or delete files), `tw upgrade`, and every command that deletes data or a tenant's resources: `tw d1 delete`, `tw kv namespace delete`, `tw queues rm`, `tw queues purge`, `tw r2 bucket rm`, `tw tenant rm` and `tw host rm`. **Fix:** run it in a terminal and answer the prompt (a delete asks you to type the name), or add `--yes`. An agent should tell the user what will be lost (and show `--dry-run` where there is one) and add `--yes` only after the user agreed to that action.
 
 ### credential_file_insecure
-403 · cli. **When:** the OAuth client file given to `tw up --oauth-client-file` is readable by other users. **Fix:** `chmod 600 <file>` then `tw up` again.
+403 · cli. **When:** a credential file (`tw tenant add --oauth-client-file`, `--api-key-file`, `--db-file`) is readable by other users, or is owned by another user. (`tw up` tightens its own OAuth client file to 0600 instead.) **Fix:** `chmod 600 <file>` then run the command again.
 
 ### d1_error
 400 · mgmt, cli. **When:** a statement of `tw d1 execute`, `tw d1 migrations apply` or `POST …/d1/{name}/query` failed: SQLite's error (syntax, constraint, no such table) or a D1 limit (statement over 100 KB, over 100 parameters, a value over 2 MB, a result over 16 MiB, one write over 2 MiB encoded). Nothing of the batch was applied (a failing migration isn't recorded). In a Worker the same failures throw `D1_ERROR: …`, as on Cloudflare. **Fix:** fix the SQL; split a large import into several files or batches.
@@ -278,7 +278,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 409 · cli. **When:** this state dir has no tailworks config or tenant yet. **Fix:** `tw up …` on the host, or `tw link <mgmt>` on a developer machine.
 
 ### oauth_exchange_failed
-401 · cli. **When:** Tailscale refused the OAuth client in `--oauth-client-file` (wrong secret, revoked client). **Fix:** generate a new client (Settings › OAuth clients), overwrite the file (0600), `tw up`.
+401 · cli. **When:** Tailscale refused the OAuth client in `--oauth-client-file` (wrong secret, revoked client). **Fix:** generate a new client (Settings › Trust credentials), overwrite the file (0600), `tw up`.
 
 ### object_killed
 410 · netd. **When:** a new request reached a killed object: its node's tombstone answered. **Fix:** as `killed`.

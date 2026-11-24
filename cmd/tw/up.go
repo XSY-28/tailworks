@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -30,7 +29,6 @@ import (
 	"github.com/rosskukulinski/tailworks/internal/tsapi"
 	"github.com/rosskukulinski/tailworks/mgmt"
 	"github.com/rosskukulinski/tailworks/netd"
-	"golang.org/x/term"
 )
 
 const prodControl = "https://controlplane.tailscale.com"
@@ -105,9 +103,9 @@ const defaultMgmtHostname = "tw-mgmt"
 func cmdUp(args []string) error {
 	f := newFlags("up")
 	tailnet := f.String("tailnet", "", "the tailnet to serve (oauth: read from the client's devices or mgmt's node; headscale: required, the dns.base_domain). Overrides discovery")
-	oauthFile := f.String("oauth-client-file", "", "mint mode \"oauth\" (Tailscale): 0600 file with TS_OAUTH_CLIENT_ID=… and TS_OAUTH_CLIENT_SECRET=tskey-client-… (an OAuth client with Auth Keys write, tag tag:tw). No browser, no Funnel")
+	oauthFile := f.String("oauth-client-file", "", "mint mode \"oauth\" (Tailscale): file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (an OAuth client with Auth Keys write, tag tag:tw; tightened to 0600). Default on the default state dir: ~/.config/tailworks/oauth.env, asked for and saved on the first tw up")
 	keyFile := f.String("api-key-file", "", "--control=headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied). Tailscale API keys are not a mint mode: use --oauth-client-file")
-	yes := f.Bool("yes", false, "non-interactive: don't ask for confirmation")
+	yes := f.Bool("yes", false, "accepted for scripts; tw up no longer asks for confirmation")
 	apply := f.Bool("policy-apply", false, "headscale: apply the policy snippet (validated first, written with If-Match); default: print it")
 	control := f.String("control-url", prodControl, "coordination server for the tailnet's nodes")
 	profileF := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; --api-key-file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain)")
@@ -125,7 +123,7 @@ func cmdUp(args []string) error {
 	warmKeys := f.Int("warm-keys", 5, "pre-minted single-use keys kept per (tenant, tag set), so a new object skips the key-API call; sized from the recent create rate, capped here (0 = off)")
 	poolNodes := f.Int("pool-nodes", 1, "pre-joined nodes kept per hot class (a create here in the last hour), so a new object is renamed onto one (~0.2 s) instead of joining a new node; each is a device (0 = off)")
 	portMapping := f.Bool("port-mapping", false, "use UPnP/NAT-PMP/PCP for this host's nodes (off by default: it adds ~250 ms to every new node's join and has every node ask the router for a mapping; turn on behind hard NATs that need router-assisted direct paths)")
-	service := f.Bool("service", false, "run the supervisor as a service that starts at login: Linux systemd user unit (~/.config/systemd/user/tw.service), macOS LaunchAgent (~/Library/LaunchAgents/dev.tailworks.up.plist)")
+	service := f.Bool("service", false, "run the supervisor as a service that starts at login: Linux systemd user unit (~/.config/systemd/user/tw.service), macOS LaunchAgent (~/Library/LaunchAgents/dev.tailworks.up.plist). Default: on for a new default state dir where available; an existing state dir keeps how it runs (--service=false runs it in the background without a service)")
 	mgmtHost := f.String("mgmt-hostname", "", "mgmt's own tailnet node name (default "+defaultMgmtHostname+")")
 	mgmtKey := f.String("mgmt-authkey-file", "", "TS_AUTHKEY=… file for mgmt's node (unattended join: tests, automation); default: the tenant's credential mints it")
 	localDev := f.Bool("local-dev", false, "DEVELOPMENT ONLY: hostd and the CLI use mgmt's unix socket with the per-host token instead of the tailnet (hermetic tests). Normal operation is tsnet only")
@@ -162,7 +160,7 @@ func cmdUp(args []string) error {
 	if *profileF != controlHeadscale && *keyFile != "" {
 		return fail("mint_mode_removed", "tw no longer mints with a Tailscale API key (--api-key-file is for --control=headscale only)",
 			"an OAuth client is scoped to auth keys and tag:tw, and its secret never expires; an API key could do anything its owner can").
-			withFix("create an OAuth client (admin console › Settings › OAuth clients: Auth Keys write, tag tag:tw; see docs/INSTALL.md), save it 0600, then:",
+			withFix("create an OAuth client (admin console › Settings › Trust credentials: Auth Keys write, tag tag:tw; see docs/INSTALL.md), save it 0600, then:",
 				"tw up --oauth-client-file <file>")
 	}
 	mode := ""
@@ -214,6 +212,20 @@ func cmdUp(args []string) error {
 				withFix("tw down --purge, then remove "+s.Dir, "or use another --state-dir")
 		}
 	}
+	defaultDir := isDefaultStateDir(s.Dir, *f.stateDir) // up_defaults.go
+	if mode == "" && defaultDir && *profileF != controlHeadscale {
+		if p := defaultOAuthFile(); p != "" {
+			asked := false
+			if !fileExists(p) && !*f.json {
+				if asked, err = promptOAuthSecret(p, os.Stdout); err != nil {
+					return err
+				}
+			}
+			if asked || fileExists(p) {
+				*oauthFile, mode = p, "oauth"
+			}
+		}
+	}
 	if mode == "" {
 		return mintModeRequired()
 	}
@@ -236,6 +248,7 @@ func cmdUp(args []string) error {
 	var oauthCreds tsapi.OAuthCredentials
 	if oauthMode {
 		absOAuth, _ = filepath.Abs(*oauthFile)
+		tightenSecretFile(absOAuth) // your own file: fix its mode instead of refusing it
 		c, err := tsapi.LoadOAuthFile(absOAuth)
 		if err != nil {
 			if tsapi.IsInsecureFile(err) {
@@ -246,28 +259,22 @@ func cmdUp(args []string) error {
 		}
 		oauthCreds = c
 	}
+	// --service defaults on for the default state dir (where the platform
+	// has a user service manager); a state dir already set up keeps how it
+	// runs, so tw upgrade's restart doesn't change it.
+	if !flagGiven(f.FlagSet, "service") && !*localDev {
+		if s.configured() {
+			*service, _ = serviceOf(s)
+		} else {
+			*service = defaultDir && serviceAvailable() == nil
+		}
+	}
 	if *service {
 		if err := serviceAvailable(); err != nil {
 			return err
 		}
 	}
-	if !*yes {
-		if *f.json || !term.IsTerminal(int(os.Stdin.Fd())) { // --json never prompts (docs/cli-json.md)
-			return fail("bad_request", "not a terminal (or --json): pass --yes to run non-interactively")
-		}
-		what := "for tailnet " + *tailnet
-		if oauthMode {
-			what = "with OAuth client " + oauthCreds.ClientID
-		}
-		if oauthMode && s.Cfg.Tailnet != "" {
-			what += " for tailnet " + s.Cfg.Tailnet
-		}
-		fmt.Printf("Start tailworks on this machine %s (state in %s)? [y/N] ", what, s.Dir)
-		ln, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-		if a := strings.ToLower(strings.TrimSpace(ln)); a != "y" && a != "yes" {
-			return fail("cancelled", "not started")
-		}
-	}
+	_ = yes // kept for scripts: tw up no longer asks for confirmation
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 	// Progress goes to stdout, or to stderr with --json (stdout then

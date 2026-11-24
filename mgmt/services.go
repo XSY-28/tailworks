@@ -153,7 +153,7 @@ func (m *Mgmt) ensureService(ctx context.Context, t Tenant, workload, name strin
 func serviceAPIError(name, op string, err error) error {
 	if tsapi.IsForbidden(err) || tsapi.IsUnauthorized(err) {
 		return errf(502, "service_api_failed",
-			"the Tailscale API refused to %s Service %s (%v): an OAuth client needs the Services write scope (Settings › OAuth clients › Services › Write), or create the Service in the admin console",
+			"the Tailscale API refused to %s Service %s (%v): an OAuth client needs the Services write scope (Settings › Trust credentials › Credential › OAuth › Services › Write), or create the Service in the admin console",
 			op, name, err)
 	}
 	return errf(502, "service_api_failed", "can't %s Service %s: %v", op, name, err)
