@@ -36,6 +36,7 @@ import (
 	"github.com/rosskukulinski/tailworks/hostd/r2"
 	"github.com/rosskukulinski/tailworks/hostd/vm/helperapi"
 	"github.com/rosskukulinski/tailworks/internal/hostdrun"
+	"github.com/rosskukulinski/tailworks/internal/npminstall"
 	"github.com/rosskukulinski/tailworks/internal/obs"
 	"github.com/rosskukulinski/tailworks/internal/tsapi"
 	"github.com/rosskukulinski/tailworks/netd"
@@ -166,6 +167,9 @@ func run() error {
 		if o.InstallPrefix == "" {
 			o.InstallPrefix = installPrefix()
 		}
+		if in, npm := npminstall.Self(); npm && o.InstallPrefix == "" {
+			return fmt.Errorf("-self-upgrade: this tw-hostd was installed by npm (%s in %s), which owns that directory: upgrade it with %s instead", in.Package, in.Dir, npminstall.UpgradeCommand)
+		}
 		if o.InstallPrefix == "" {
 			return fmt.Errorf("-self-upgrade: this tw-hostd doesn't run from an install.sh prefix (no share/tailworks and VERSION next to its bin/): pass -install-prefix")
 		}
@@ -213,6 +217,9 @@ func installPrefix() string {
 		exe = r
 	}
 	p := filepath.Dir(filepath.Dir(exe))
+	if _, npm := npminstall.At(p); npm { // an npm platform package: npm owns it
+		return ""
+	}
 	for _, f := range []string{"VERSION", filepath.Join("share", "tailworks")} {
 		if _, err := os.Stat(filepath.Join(p, f)); err != nil {
 			return ""

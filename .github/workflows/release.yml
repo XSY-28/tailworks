@@ -16,7 +16,7 @@
 #   setup          the version; on a tag, that it matches VERSION.
 #   gates          one job each, in parallel: ready (scripts/release-check.sh:
 #                  tag = VERSION, notes finalized, a signing key pinned; the
-#                  npm publish dry run; install-test), lint, test,
+#                  npm publish dry run; install-test; npm-cli-test), lint, test,
 #                  e2e-upgrade (newest published release → this tree;
 #                  ADR-041 §9), e2e-tw-upgrade.
 #   suites         every hermetic suite, one job each: e2e-local,
@@ -30,7 +30,8 @@
 #   build          macOS: `make release` with the guests, signed.
 #   tarballs       each tarball on its own platform, as a user gets it
 #                  (scripts/ci-tarball-check.sh: signature, install.sh,
-#                  doctor, every template under tw dev).
+#                  doctor, every template under tw dev), then the npm
+#                  package made from it (scripts/ci-npm-cli-check.sh).
 #   microvm-amd64  the Firecracker tier on KVM with the SHIPPED amd64 guest:
 #                  e2e-vm (storage, bindings, isolation, egress, kill,
 #                  redeploy) and e2e-container (Sandbox SDK).
@@ -171,6 +172,9 @@ jobs:
       - name: install.sh upgrade and rollback
         if: matrix.gate == 'ready'
         run: scripts/ci-suite.sh make install-test
+      - name: the tw CLI's npm packages (hermetic)
+        if: matrix.gate == 'ready'
+        run: scripts/ci-suite.sh make npm-cli-test
       - name: make lint
         if: matrix.gate == 'lint'
         run: make lint
@@ -515,6 +519,10 @@ jobs:
           echo "TW_CI_PKGS=$RUNNER_TEMP/pkgs" >>"$GITHUB_ENV"
       - name: Validate the ${{ matrix.platform }} tarball
         run: scripts/ci-tarball-check.sh dist ${{ matrix.platform }} "${{ needs.setup.outputs.version }}"
+      # The npm package npm-publish.yml makes from this tarball: npm install
+      # -g, then tw doctor, tw init and tw dev --once through it (issue #240).
+      - name: The ${{ matrix.platform }} npm package (@tailworks/cli-${{ matrix.platform }})
+        run: scripts/ci-npm-cli-check.sh dist ${{ matrix.platform }} "${{ needs.setup.outputs.version }}"
 
   # The Firecracker tier on the SHIPPED amd64 guest (kernel, rootfs,
   # firecracker, jailer from vm-assets), on the hosted runner's KVM.

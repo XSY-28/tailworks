@@ -267,7 +267,7 @@ func cmdUp(args []string) error {
 		if s.configured() {
 			*service, _ = serviceOf(s)
 		} else {
-			*service = defaultDir && serviceAvailable() == nil
+			*service = defaultDir && serviceAvailable() == nil && npmServiceErr() == nil // npm_install.go
 		}
 	}
 	if *service {

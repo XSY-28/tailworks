@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/rosskukulinski/tailworks/internal/npminstall"
 )
 
 // Which install prefix `tw upgrade` replaces (issue #63).
@@ -43,6 +45,9 @@ type upgradePrefixChoice struct {
 // isInstallPrefix reports whether dir is an install.sh prefix.
 func isInstallPrefix(dir string) bool {
 	if dir == "" {
+		return false
+	}
+	if _, npm := npminstall.At(dir); npm { // npm_install.go: npm owns it
 		return false
 	}
 	for _, f := range []string{"VERSION", filepath.Join("share", "tailworks")} {

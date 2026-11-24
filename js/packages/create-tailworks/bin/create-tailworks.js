@@ -39,12 +39,13 @@ if (existsSync(dir) && readdirSync(dir).length) {
   console.error(`create-tailworks: ${dir} exists and is not empty`);
   process.exit(2);
 }
-// `npm create tailworks`: with the tailworks CLI installed, `tw init` does it (it
-// also names the workload and its tags after the directory); without it,
-// copy the template as it is.
+// `npm create tailworks`: with the tailworks CLI installed (the release
+// tarball, or npm install -g tailworks), `tw init` does it (it also names the
+// workload and its tags after the directory); without it, copy the template
+// as it is, and point at `npx tailworks`.
 const tw = spawnSync("tw", ["init", dir, "--template", template], { stdio: "inherit" });
 if (!tw.error) process.exit(tw.status ?? 1);
 cpSync(path.join(templates, template), dir, { recursive: true });
 // npm drops .gitignore from published packages: templates ship "gitignore".
 if (existsSync(path.join(dir, "gitignore"))) renameSync(path.join(dir, "gitignore"), path.join(dir, ".gitignore"));
-console.log(`created ${dir} from template ${template}\n  cd ${dir} && npm install && npx tsc --noEmit\n  then install tw (https://github.com/rosskukulinski/tailworks/blob/master/docs/INSTALL.md) and run: tw deploy`);
+console.log(`created ${dir} from template ${template}\n  cd ${dir} && npm install && npx tsc --noEmit\n  then run it locally: npx tailworks dev   (or npm install -g tailworks; docs: https://github.com/rosskukulinski/tailworks/blob/master/docs/INSTALL.md)`);

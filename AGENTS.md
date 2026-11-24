@@ -111,6 +111,7 @@ goes red, fixing it comes before landing anything else.
    | anything `make changes-check` calls upgrade-relevant | `make e2e-upgrade` |
    | `tw upgrade` on a `tw up` machine, or how `tw up` restarts | `make e2e-tw-upgrade` |
    | `install.sh` / `get.sh` | `make install-test` |
+   | the npm CLI packages (`js/cli/tailworks`, `scripts/npm-cli-packages.sh`, `internal/npminstall`) | `make npm-cli-test` |
 
    The suites that need credentials, a real tailnet, Docker, KVM or a Mac's
    virtualization (`e2e-real`, `e2e-public`, `e2e-vm`, `e2e-vz`,
