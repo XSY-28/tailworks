@@ -25,6 +25,7 @@ var errStatus = map[string]int{
 	"cap_missing": 403, "delegation_exceeds_parent": 403, "delegation_invalid": 403,
 	"forbidden_destination": 403, "peer_not_visible": 403, "acl_denied": 403,
 	"internet_egress_unavailable": 403,
+	"internet_port_refused":       403,
 	// Containers (ADR-032): local capacity, the tenant quota (mgmt), mgmt
 	// unreachable (fail closed), a second start of a running container.
 	"capacity_exhausted": 503, "container_quota_exceeded": 429, "quota_unavailable": 503, "container_running": 409,
