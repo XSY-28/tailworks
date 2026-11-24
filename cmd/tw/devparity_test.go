@@ -129,8 +129,8 @@ func TestDevInspectorProxy(t *testing.T) {
 	if code != 200 || strings.Contains(body, inner) || !strings.Contains(body, "ws://"+outer+"/tenant") || !strings.Contains(body, "ws="+outer+"/") {
 		t.Fatalf("/json/list: %d %s", code, body)
 	}
-	if _, body := get("/x"); body != "other /x" {
-		t.Fatalf("/x: %s", body)
+	if code, body := get("/x"); code != http.StatusForbidden { // not a target (devinspectorguard.go)
+		t.Fatalf("/x: %d %s", code, body)
 	}
 	if _, _, err := devInspector(mustPort(t, outer), func() string { return "" }); err == nil {
 		t.Fatal("a second proxy on the same port")
@@ -264,8 +264,8 @@ export default {
 	}
 	b, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if !strings.Contains(string(b), "ws://127.0.0.1:"+strconv.Itoa(ip)+"/tenant") {
-		t.Fatalf("/json/list: %s", b)
+	if !strings.Contains(string(b), "ws://127.0.0.1:"+strconv.Itoa(ip)+"/tenant") || strings.Contains(string(b), "/platform") {
+		t.Fatalf("/json/list (only the tenant target, issue #335): %s", b)
 	}
 
 	cmd.Process.Signal(syscall.SIGINT)
