@@ -152,6 +152,10 @@ func cmdInit(args []string) error {
 			return
 		}
 		fmt.Printf("  cd %s && tw policy && tw deploy   # or `tw dev` for a local run with no tailnet\n", pos[0])
+		if *tmpl == "ai-agent" {
+			// Its tools are a second app's; on its own it only refuses.
+			fmt.Printf("  its tools need the mcp template deployed as workload \"mcp\" and a grant: see %s\n", filepath.Join(pos[0], "README.md"))
+		}
 	})
 	return nil
 }
