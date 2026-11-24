@@ -272,7 +272,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 409 · cli. **When:** tailworks is set up in this state dir but its supervisor is not running. **Fix:** `tw up` (or `systemctl --user start tw`).
 
 ### not_supported
-501 · cli, hostd. **When:** a command or call tailworks doesn't build yet: `tw r2 object get|put` (object bytes live in the hosts' R2 backend, which mgmt can't reach), container preview URLs. **Fix:** go through the workload (its `env.BUCKET` binding); see [COMPAT.md](COMPAT.md).
+501 · cli, hostd. **When:** a command or call tailworks doesn't build yet: `tw r2 object get|put` (object bytes live in the hosts' R2 backend, which mgmt can't reach), container preview URLs, or `tw dev`/`tw deploy` of a Python Worker (`main: *.py` or the `python_workers` flag). **Fix:** go through the workload (its `env.BUCKET` binding); run Python in a [container](containers.md); see [COMPAT.md](COMPAT.md).
 
 ### not_up
 409 · cli. **When:** this state dir has no tailworks config or tenant yet. **Fix:** `tw up …` on the host, or `tw link <mgmt>` on a developer machine.

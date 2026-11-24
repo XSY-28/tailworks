@@ -34,6 +34,15 @@ at least one test that CI runs on every PR (`make test`, `e2e/local`,
 other `e2e/` suites), its Tests cell must say "nightly". `make lint` runs
 `internal/compatdoc` to check all of this.
 
+**Cloudflare's own examples.** The tests above are written for tailworks.
+`make e2e-compat` ([e2e/compat](../e2e/compat/README.md)) deploys 30 example
+projects from Cloudflare's repositories unmodified (pinned commits from
+cloudflare/templates, the create-cloudflare templates, cloudflare/agents and
+cloudflare/ai) to a real host on a real tailnet, and calls each one as its
+README does. The rows marked ❌ that those projects hit (Python Workers,
+service bindings, Workers AI) are expected to fail there in the way the row
+says.
+
 ## Runtime
 
 | Surface | Status | workerd provides | tailworks adds | Different from Cloudflare | Missing | Tests |
