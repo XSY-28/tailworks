@@ -1,6 +1,7 @@
 {{define "content"}}
 <h1>{{.Dep.Workload}} {{template "status" .Dep.Status}}</h1>
-<p class="crumbs">Deployment <span class="mono">{{.Dep.DeploymentID}}</span> · tenant <a class="mono" href="/ui/tenants/{{.Dep.TenantID}}">{{if .Tenant.Tailnet}}{{.Tenant.Tailnet}}{{else}}{{.Dep.TenantID}}{{end}}</a> · host <a class="mono" href="/ui/hosts/{{.Dep.Host}}">{{.Dep.Host}}</a></p>
+<p class="crumbs">Deployment <span class="mono">{{.Dep.DeploymentID}}</span> · tenant <a class="mono" href="/ui/tenants/{{.Dep.TenantID}}">{{if .Tenant.Tailnet}}{{.Tenant.Tailnet}}{{else}}{{.Dep.TenantID}}{{end}}</a> · host <a class="mono" href="/ui/hosts/{{.Dep.Host}}">{{.Dep.Host}}</a>
+  · <a href="/ui/tenants/{{.Dep.TenantID}}/workloads/{{.Dep.Workload}}/logs"><b>Logs</b></a></p>
 {{if .Dep.Error}}<div class="flash bad">{{range errLines .Dep.Error}}<div class="mono small">{{.}}</div>{{end}}</div>{{end}}
 
 <div class="grid">
