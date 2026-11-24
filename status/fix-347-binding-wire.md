@@ -67,6 +67,9 @@ Last update: 2026-11-24. A tenant `fetch()` can no longer forge a service bindin
 - `make e2e-local`: PASS. `make test-node`: PASS (the Node tier's proxy is
   one of the changed handlers). `make test-sdk`: PASS.
 
+- After merging `origin/master` (`4fb7e0f2`): `make lint` ok, `make test`
+  PASS.
+
 Not run: `make e2e-compat` (the table in AGENTS.md lists it for changes to
 the runtime wrapper), `e2e-real`, `e2e-public`: they need a real tailnet
 and its credentials. `e2e-vm`, `e2e-vz`: need KVM or the Mac's
