@@ -89,6 +89,9 @@ func (a *app) loadWrangler(twName string) (string, error) {
 	a.Wrangler = w
 	a.Warnings = append(a.Warnings, notes...)
 	a.Warnings = append(a.Warnings, wranglerWarnings(file, w, a.builder())...)
+	if err := a.detectPages(); err != nil { // pages.go
+		return "", err
+	}
 	base := twName
 	if base == "" {
 		base, _ = cfg["name"].(string)
@@ -117,6 +120,11 @@ func (a *app) printWarnings(w io.Writer) {
 // define, alias, rules, minify, keep_names, jsx_* and tsconfig.
 func (a *app) buildEsbuild(out string, np []string) (files map[string][]byte, types map[string]string, js int, err error) {
 	o := esbundle.Options{Dir: a.Dir, Main: wranglerMain(a.Wrangler), Outfile: filepath.Join(out, "index.js"), NodePaths: np}
+	if a.Pages.hasCode() {
+		if o.Main, err = a.pagesEntry(out); err != nil { // pages.go
+			return nil, nil, 0, err
+		}
+	}
 	if err := esbuildWranglerOptions(a.Wrangler, &o); err != nil {
 		return nil, nil, 0, fail("bad_request", a.WranglerFile+": "+err.Error())
 	}

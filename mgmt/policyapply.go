@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 
@@ -59,7 +60,8 @@ func (a *v1api) ApplyWorkloadPolicy(w http.ResponseWriter, r *http.Request, id v
 }
 
 // ApplyWorkloadPolicy preflights the bundle, then (unless dryRun) adds the
-// missing tagOwners, grants and funnel nodeAttrs to the tenant's policy.
+// missing tagOwners, grants, funnel nodeAttrs and the Service's
+// autoApprovers.services entry to the tenant's policy.
 func (m *Mgmt) ApplyWorkloadPolicy(ctx context.Context, tenantID, workload string, r PolicyApplyRequest, dryRun bool, by string) (PolicyApplyResult, error) {
 	res := PolicyApplyResult{TenantID: tenantID, Workload: workload, DryRun: dryRun}
 	t, err := m.store.GetTenant(ctx, tenantID)
@@ -124,10 +126,11 @@ func (m *Mgmt) ApplyWorkloadPolicy(ctx context.Context, tenantID, workload strin
 
 // preflightSnippet turns a preflight's missing parts into the snippet
 // tailworks may write, parsed from the preflight's own snippets. Entries
-// policy.Check refuses, and what Snippet can't express (a Service's
-// autoApprovers, a team tenant's ownership problems), are returned as
-// manual lines instead, as are grants to a tag the policy doesn't define
-// (defined): the control plane rejects the whole policy for one of those.
+// policy.Check refuses, and what Snippet can't express (a team tenant's
+// ownership problems), are returned as manual lines instead, as are grants
+// to a tag the policy doesn't define (defined): the control plane rejects
+// the whole policy for one of those. A Service's autoApprovers entry is
+// written only for the workload's own tags (serviceApprover).
 func preflightSnippet(pf PreflightResult, o policy.Options, defined func(tag string) bool) (policy.Snippet, []string, error) {
 	var s policy.Snippet
 	var manual []string
@@ -199,10 +202,48 @@ func preflightSnippet(pf PreflightResult, o policy.Options, defined func(tag str
 		keep.NodeAttrs = append(keep.NodeAttrs, n)
 	}
 	if pf.ServiceUnapproved && pf.ServiceSnippet != "" {
-		manual = append(manual, "autoApprovers (tailworks doesn't write it): "+pf.ServiceSnippet)
+		a, why, err := serviceApprover(pf, keep, o, defined)
+		if err != nil {
+			return s, nil, err
+		}
+		if why != "" {
+			manual = append(manual, "autoApprovers.services "+pf.Service+": not written: "+why+"; add it yourself: "+pf.ServiceSnippet)
+		} else {
+			keep.AutoApprovers = a
+		}
 	}
 	manual = append(manual, pf.TagOwnerProblems...)
 	return keep, manual, nil
+}
+
+// serviceApprover is the autoApprovers.services entry for the workload's
+// Service (issue #295), parsed from the preflight's snippet. It is written
+// only as narrow as it gets: one key, the workload's own svc: name, and
+// approvers among the tags the workload node is deployed with, each
+// defined in tagOwners (the control plane rejects an undefined tag) and
+// passing policy.Check. Otherwise why says what stops it.
+func serviceApprover(pf PreflightResult, keep policy.Snippet, o policy.Options, defined func(string) bool) (a policy.AutoApprovers, why string, err error) {
+	var p policy.Snippet
+	if err := parseHuJSONObject(pf.ServiceSnippet, &p); err != nil {
+		return a, "", errf(500, "internal", "preflight snippet %q: %v", pf.ServiceSnippet, err)
+	}
+	a = p.AutoApprovers
+	who, ok := a.Services[pf.Service]
+	if len(a.Services) != 1 || !ok {
+		return a, fmt.Sprintf("the entry isn't for %s alone", pf.Service), nil
+	}
+	for _, tag := range who {
+		if !slices.Contains(pf.workloadTags, tag) {
+			return a, fmt.Sprintf("%s isn't one of the workload's tags", tag), nil
+		}
+		if _, ok := keep.TagOwners[tag]; !ok && !defined(tag) {
+			return a, fmt.Sprintf("%s has no tagOwners entry", tag), nil
+		}
+	}
+	if err := policy.Check(policy.Snippet{AutoApprovers: a}, o); err != nil {
+		return a, strings.TrimPrefix(err.Error(), "policy snippet: "), nil
+	}
+	return a, "", nil
 }
 
 // undefinedDst is the first dst tag of g that neither the policy nor the

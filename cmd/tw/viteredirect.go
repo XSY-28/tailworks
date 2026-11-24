@@ -91,7 +91,7 @@ func rebaseWranglerPaths(cfg map[string]any, cfgDir string) {
 		}
 		return r
 	}
-	for _, k := range []string{"main", "base_dir", "tsconfig"} {
+	for _, k := range []string{"main", "base_dir", "pages_build_output_dir", "tsconfig"} {
 		if s, ok := cfg[k].(string); ok {
 			cfg[k] = rebase(s)
 		}
