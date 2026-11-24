@@ -96,7 +96,7 @@ Anything beyond that is a **workaround**. It's listed in the project's
 quirk to look at:
 
 - **Vite plugin projects** (`react-router-ssr`, `workflows-starter`,
-  `mcp-agent`): the build writes `.wrangler/deploy/config.json`, which
+  `mcp-agent`; [#301](https://github.com/rosskukulinski/tailworks/issues/301)): the build writes `.wrangler/deploy/config.json`, which
   points at a generated `dist/<worker>/wrangler.json` (`no_bundle`, ESModule
   `rules` over pre-split chunks). `wrangler deploy` follows it. `tw deploy`
   reads the project's own config, and its built-in bundler refuses

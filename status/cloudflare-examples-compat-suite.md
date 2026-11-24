@@ -41,20 +41,20 @@ Last update: 2026-11-23 20:45 PT. `make e2e-compat`: 30 Cloudflare example proje
    with `command not found`, though `npm run deploy` works.
    `wranglerEnv` in `cmd/tw/wranglerapp.go` now does what npm does.
    Test: `cmd/tw:TestWranglerEnvPutsBinOnPath`.
-2. **Fixed: a Python Worker failed with esbuild's "No loader is configured
+2. **Fixed (the interim half of [#292](https://github.com/rosskukulinski/tailworks/issues/292)): a Python Worker failed with esbuild's "No loader is configured
    for .py files".** It's now `not_supported: Python Workers are not
    supported …` (`cmd/tw/python.go`). Test:
    `cmd/tw:TestPythonWorkerRefused`; `docs/errors.md#not_supported`.
-3. **Open: Vite plugin output.** `react-router-ssr`, `workflows-starter`
+3. **Open ([#301](https://github.com/rosskukulinski/tailworks/issues/301)): Vite plugin output.** `react-router-ssr`, `workflows-starter`
    and `mcp-agent` need `tw deploy <dist/<worker>> --wrangler`. `tw deploy`
    doesn't follow `.wrangler/deploy/config.json`, and the built-in bundler
    refuses the generated config (`no_bundle`, ESModule `rules`). Following
    the redirect, and accepting `no_bundle` ES-module output in the built-in
    path, would make all three plain `tw deploy` projects.
-4. **Open: `request.cf` has no geo.** `multiplayer-globe` connects, but
+4. **Open ([#302](https://github.com/rosskukulinski/tailworks/issues/302)): `request.cf` has no geo.** `multiplayer-globe` connects, but
    `request.cf.latitude/longitude` are unset, so no marker is sent (the
    server logs a warning). The probe records this and doesn't fail.
-5. **Open (minor): `x-tw-object` reaches app code.** `c3-queues` logs the
+5. **Open ([#303](https://github.com/rosskukulinski/tailworks/issues/303), minor): `x-tw-object` reaches app code.** `c3-queues` logs the
    producer request's headers, and they include `x-tw-object` (an internal
    header) next to `traceparent`.
 6. Upstream quirk: `to-do-list-kv-template`'s lockfile fails `npm ci` on
@@ -76,7 +76,7 @@ Last update: 2026-11-23 20:45 PT. `make e2e-compat`: 30 Cloudflare example proje
   conflict.
 - `make lint`: ok.
 - `make test`: every package ok (`cmd/tw` 285 s) except
-  `internal/tsnetlc` `TestCloseDrainsLocalAPIConns`, which this branch doesn't touch.
+  `internal/tsnetlc` `TestCloseDrainsLocalAPIConns`, which this branch doesn't touch ([#304](https://github.com/rosskukulinski/tailworks/issues/304)).
   It's a timing flake under the full parallel run: "ts.Close (holds) took
   24ms, want 4s–1m0s". Rerun alone, `go test -race -count=1 -run
   TestCloseDrainsLocalAPIConns ./internal/tsnetlc/` passed 3 of 3. `make test-js`:
