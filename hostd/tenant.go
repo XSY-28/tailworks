@@ -72,6 +72,9 @@ func (h *Host) ensureTenant(ctx context.Context, id string) (*tenant, error) {
 	if err != nil {
 		return nil, fmt.Errorf("tenant %s: %w", id, err)
 	}
+	if err := checkTenantLayout(h.sandbox, info); err != nil { // sandboxlayout.go (#342)
+		return nil, err
+	}
 	control := h.cfg.ControlURL
 	if control == "" {
 		control = info.ControlURL
