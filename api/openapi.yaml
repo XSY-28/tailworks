@@ -909,7 +909,9 @@ paths:
       description: |
         Issue #116. mgmt preflights the bundle as `POST /v1/deployments?dryRun=true`
         does, turns what is missing into a policy snippet (the `tagOwners`
-        of its tags, a grant per `tailnet.connects`, and for public routes
+        of its tags, a grant per `tailnet.connects`, for `tailnet.service`
+        the `autoApprovers.services` entry of its own `svc:` name for the
+        workload node's own tags (issue #295), and for public routes
         `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
         tenant's tailnet policy:
 
@@ -923,8 +925,8 @@ paths:
            `409 policy_conflict` and nothing is written.
 
         `added` is what was (or, with `dryRun`, would be) added, and
-        `manual` what is missing that tailworks never writes (the
-        `autoApprovers.services` entry of a Tailscale Service, tag
+        `manual` what is missing that tailworks never writes (an
+        `autoApprovers.services` entry wider than that, or on Headscale, tag
         ownership problems of a team tenant, grants it refuses, and grants
         to a tag outside `tag:tw*` that the policy doesn't define, which the
         control plane would reject); add those

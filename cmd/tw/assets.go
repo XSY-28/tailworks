@@ -83,7 +83,7 @@ func (a *app) addAssets(files map[string][]byte) error {
 		if r == "." {
 			return nil
 		}
-		skip := assetsAlwaysIgnored[d.Name()] || ignore.match(r, d.IsDir())
+		skip := assetsAlwaysIgnored[d.Name()] || ignore.match(r, d.IsDir()) || a.pagesSkipAsset(r)
 		if skip {
 			if d.IsDir() {
 				return filepath.SkipDir
@@ -133,7 +133,7 @@ func (a *app) addAssets(files map[string][]byte) error {
 // "main". tw bundles no Worker; hostd supplies one (bundle.AssetsOnlyMain).
 func (a *app) assetsOnly() bool {
 	_, ok := a.Wrangler["assets"]
-	return ok && wranglerMain(a.Wrangler) == ""
+	return ok && wranglerMain(a.Wrangler) == "" && !a.Pages.hasCode()
 }
 
 // checkBundleSize fails when the packed bundle is over what mgmt accepts

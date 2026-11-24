@@ -64,4 +64,5 @@ has no row below.
 | [048](048-deploy-preview.md) | A preview is a workload of its own next to the workload; promote deploys its bundle to the workload | 2026-11-15 | Accepted |
 | [049](049-worker-internet-egress.md) | Workers have internet egress by default, from the host's network through netd's SSRF guard; `tailnet.egress.internet` turns it off or limits it, for Workers and containers alike | 2026-11-21 | Accepted |
 | [050](050-static-assets.md) | wrangler `assets` are served by a generated router Worker in front of the app, from files in the bundle, with `_redirects`, `_headers` and assets-only projects | 2026-11-23 | Accepted |
+| [051](051-pages-functions.md) | Cloudflare Pages projects (`functions/`, `_worker.js`, `_routes.json`) are compiled by `tw` onto Workers with static assets | 2026-11-23 | Accepted |
 | [052](052-service-bindings.md) | Service bindings are tailnet calls from the calling node, resolved by mgmt; same-host calls take netd's in-process hop | 2026-11-23 | Accepted |

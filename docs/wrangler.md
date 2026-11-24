@@ -42,7 +42,8 @@ commands that call Cloudflare's API. See [below](#wrangler-commands-that-call-cl
   they need a grant like any tailnet call ([below](#service-bindings)).
 - **Not there:** Workers AI, Vectorize, Hyperdrive, Browser Rendering,
   Email, TCP `connect()`. Static assets work, with
-  `_redirects` and `_headers` ([below](#assets)). The full list,
+  `_redirects` and `_headers` ([below](#assets)), and so do Cloudflare
+  Pages projects with `functions/` ([below](#pages)). The full list,
   with tests: [COMPAT.md](COMPAT.md).
 
 ## Config files
@@ -189,7 +190,7 @@ These keys are used without a warning: `name`, `main`, `compatibility_date`,
 `compatibility_flags`, `vars`, `durable_objects`, `kv_namespaces` ([kv.md](kv.md)), `r2_buckets` ([r2.md](r2.md)), `migrations`, `triggers`
 ([cron-triggers.md](cron-triggers.md)), `containers`
 ([containers.md](containers.md)), `placement`, `assets` ([below](#assets)),
-`secrets` (its `required` names, for `tw types`), and the build settings
+`pages_build_output_dir` ([below](#pages)), `secrets` (its `required` names, for `tw types`), and the build settings
 above.
 
 <a id="assets"></a>
@@ -305,6 +306,81 @@ Differences from Cloudflare:
   (`"egress": "workload"`), not in facet-mode objects.
 - The host must run a tailworks release with the `assets` feature; mgmt
   doesn't place an assets deployment on an older host.
+
+<a id="pages"></a>
+## Cloudflare Pages projects (`functions/`, `_worker.js`)
+
+An existing Pages site deploys as it is: a folder of built files plus
+`functions/`, or an advanced-mode `_worker.js`. `tw` compiles the
+Functions into the Worker itself (no wrangler needed), so Pages becomes a
+Worker with [static assets](#assets). For a new project, use a Worker
+with `assets` directly, as Cloudflare also recommends.
+
+```jsonc
+// wrangler.jsonc: Pages sites often have none; this is all it needs
+{
+  "name": "arcade",
+  "compatibility_date": "2026-04-01",
+  "pages_build_output_dir": "./public",   // the folder your build writes
+  "d1_databases": [{ "binding": "DB", "database_name": "arcade", "database_id": "…" }]
+}
+```
+
+```sh
+npm run build    # if the site has a build step: tailworks doesn't run it
+tw dev           # reloads on edits under functions/ and public/
+tw deploy
+```
+
+A project is treated as Pages when the config has
+`pages_build_output_dir`, or when it has no `main` and has `functions/` or
+`<assets.directory>/_worker.js`. `tw deploy` prints
+`Cloudflare Pages project: …` when it does.
+
+What carries over, with Cloudflare's semantics:
+
+- **Routing** from file names: `functions/index.js` is `/`,
+  `api/scores.js` is `/api/scores`, `api/scores/[id].js` is
+  `/api/scores/:id` (`params.id`), `files/[[path]].js` is `/files` and
+  everything under it (`params.path`, an array). The more specific route
+  wins (a literal beats `[id]`, which beats `[[path]]`).
+- **Handlers:** `onRequest`, and `onRequestGet`, `onRequestPost`, `…Put`,
+  `…Patch`, `…Delete`, `…Head`, `…Options`; each a function or an array.
+- **Middleware:** `_middleware.js` at any level, for that directory and
+  below, outermost first; `export const onRequest = [a, b]` chains.
+- **The context:** `request`, `env`, `params`, `data`, `next()`,
+  `next(url)`, `waitUntil`, `passThroughOnException`, `functionPath`.
+- **Assets:** `env.ASSETS.fetch()`; `next()` with no handler left, and any
+  path no function matches, is served from the files. `_redirects` and
+  `_headers` work as [above](#_redirects-and-_headers) (headers apply to
+  files, not to Function responses, as on Pages). A site with no
+  `404.html` is served as a single-page app, as on Pages.
+- **`_routes.json`** (in the output directory) limits which paths run the
+  Functions; an excluded path serves files for every method. Without one,
+  only the paths of your function routes reach the Worker; other files
+  never run code.
+- **Advanced mode:** `<output dir>/_worker.js`, a file or a directory with
+  `index.js`, is the Worker for every request (or the `_routes.json`
+  paths). `functions/` is then ignored, as on Cloudflare. Neither
+  `_worker.js` nor `_routes.json` is served.
+
+Differences from Cloudflare:
+
+- **Bindings must be in the config.** Bindings and secrets set in the
+  Pages dashboard aren't in git, so declare them in the wrangler config
+  (`d1_databases`, `kv_namespaces`, `vars`, …) and set secrets with
+  `tw secret put` (`.dev.vars` for `tw dev`). When `functions/` reads an
+  `env.X` that nothing declares, `tw` warns, naming the file:
+  `functions/ reads env.ADMIN_KEY (api/scores.js), but wrangler.jsonc doesn't declare it`.
+  Listing a secret in `secrets.required` silences it.
+- **`CF-Connecting-IP`** is the client address on a
+  [public](public-ingress.md) route, and absent for a tailnet caller. Key a
+  rate limit on `getRequester(req)` (a login, tags, or the public IP)
+  rather than on the header.
+- **Not supported:** branch preview aliases, dashboard config, the Pages
+  build system (run your build first), the `CF_PAGES*` variables, Pages
+  Plugins (`context.pluginArgs`), and `wrangler pages` commands.
+  `--wrangler` doesn't build a Pages project; the built-in compiler does.
 
 ## Service bindings (`services`)
 
