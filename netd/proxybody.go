@@ -14,7 +14,8 @@ import (
 // Why (#138): for a Content-Length body, http.Transport's writeLoop reads
 // the body once more after the declared length, to check for extra bytes.
 // If the upstream answers as soon as it has the whole body, the proxy
-// writes the response headers (FlushInterval -1 flushes them at once), and
+// writes the response headers (FlushInterval -1, and any SSE response,
+// flushes them at once), and
 // http.Server then closes the inbound request body. When the writeLoop's
 // extra read loses that race it gets http.ErrBodyReadAfterClose, and the
 // Transport closes the upstream connection while the response body is
