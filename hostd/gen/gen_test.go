@@ -203,7 +203,7 @@ func startFilesOpts(t *testing.T, files map[string][]byte, mod func(*gen.Options
 	f.serve(t, res.Sockets.EgressObj, f.egressObj())
 	f.serve(t, res.Sockets.EgressWL, f.egressWL())
 	logf, _ := os.Create(filepath.Join(dir, "workerd.log"))
-	cmd := exec.Command(wdBin, "serve", res.Config, "--experimental")
+	cmd := exec.Command(wdBin, append([]string{"serve", res.Config, "--experimental"}, pythonArgs(t, app)...)...) // python_test.go
 	cmd.Stdout, cmd.Stderr = logf, logf
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
