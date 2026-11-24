@@ -252,7 +252,7 @@ flags:
 check this machine can run tw
 
 ```text
-tw doctor: check this machine: workerd runs, bundler offline, ~/.tailworks writable, the mint credential works, process sandbox active, system tailscaled not used; on Linux also glibc, kernel/Landlock ABI, KVM, firecracker, cgroups v2, systemd and the microVM tier
+tw doctor: check this machine: workerd runs, bundler offline, ~/.tailworks writable, the mint credential works, process sandbox active, system tailscaled not used; on Linux also glibc, kernel/Landlock ABI, KVM, firecracker, cgroups v2, systemd, the microVM tier and the CPU side-channel posture (mitigations, SMT, KSM)
 
 usage: tw doctor
 
