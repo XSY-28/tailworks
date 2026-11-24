@@ -152,7 +152,7 @@ docker exec "$CLIENT" sh -c 'command -v curl >/dev/null 2>&1 || apk add --no-cac
 # USER names the operator in the audit trail (<user>@<host>): keep a real
 # login out of a recording.
 USER=demo tw up --service=false --control=headscale --control-url "http://127.0.0.1:$PORT" \
-	--tailnet "$DOMAIN" --api-key-file "$D/headscale.env" --policy-apply --ephemeral --host-id demo
+	--tailnet "$DOMAIN" --api-key-file "$D/headscale.env" --apply-policy --yes --ephemeral --host-id demo
 
 {
 	echo "# written by scripts/demo-headscale.sh up; source it, then run scripts/demo.sh"
