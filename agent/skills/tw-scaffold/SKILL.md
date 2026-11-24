@@ -14,7 +14,7 @@ the template closest to what the user asked for:
 | `agent` | a Cloudflare Agents SDK `Agent`: each instance is a Durable Object with its own SQLite storage and its own tailnet node | `/agents/support-agent/<name>` |
 | `mcp` | a stateless MCP server; each tool is allowed or denied by the caller's tailnet grant | `/mcp` |
 | `static-site` | wrangler `assets`: the files in `public/` served next to a Worker that answers `/api/*` and checks the caller before serving `/team/` | `/` |
-| `ai-agent` | a Vercel AI SDK agent (one per caller) that calls MCP tools over the tailnet; ships a scripted stand-in model, no LLM key | `/` |
+| `ai-agent` | a Vercel AI SDK agent (one per caller) that calls MCP tools over the tailnet; ships a scripted stand-in model, no LLM key; needs the `mcp` template deployed as workload `mcp` plus a cap grant (its README) | `/` |
 | `node-workflow` | a Vercel Workflow on tailworks' Node.js process tier (needs Node.js 24+ and `npm install`) | `/` |
 
 <!-- tw-eval: scaffold -->

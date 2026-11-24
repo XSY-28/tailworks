@@ -42,7 +42,8 @@ in the CLI: `tw docs ls`, `tw docs search <words>`,
 - [Try it without a tailnet](INSTALL.md#try-it-without-a-tailnet): `tw dev`.
 - Templates: `tw init <dir> --template <name>`. `hello`, `agent`, `mcp`,
   `ai-agent` (a mock model; `src/model.ts` shows how to point it at an LLM
-  gateway on your tailnet), `lock`, `static-site` (wrangler `assets`: a
+  gateway on your tailnet; its tools need the `mcp` template deployed as
+  workload `mcp`), `lock`, `static-site` (wrangler `assets`: a
   folder of files next to a Worker), `refund-approval` (a Workflow that waits for a person), `node-workflow`.
   Each has a README.md: what it shows, how to run it, what to change.
 - [Recipes](recipes.md): short, runnable how-tos (internet APIs and LLMs through a tailnet gateway, a Durable Object per user, a signed webhook, cron into KV).
