@@ -8,8 +8,8 @@ code) or on master pushes.
 
 | Test | Last CI sighting | State |
 | --- | --- | --- |
-| `cmd/tw` `TestDevQueues` | run 45164473088 (2026-11-23, Dependabot) | **fixed here** |
-| `hostd` `TestLockTemplate/KillLockObjectStopsIt` | run 45244249704 (2026-11-23, Dependabot) | not reproduced, see below |
+| `cmd/tw` `TestDevQueues` (#286) | run 45164473088 (2026-11-23, Dependabot) | **fixed here** |
+| `hostd` `TestLockTemplate/KillLockObjectStopsIt` (#287) | run 45244249704 (2026-11-23, Dependabot) | not reproduced, see below |
 | `hostd` `TestSpawnLimEnforcedAtReceiver` (#138) | run 44992982273 (2026-11-22, fix-158) | not reproduced |
 | `mgmt` `TestStoresLimits` | run 45076332888 (2026-11-22) | fixed by #261 (merged later) |
 | `netd` `TestReadyNodeRejectedLater` | run 45064906900 (2026-11-22) | fixed by #252 |
@@ -53,7 +53,7 @@ connection while netd is still writing the body, and netd returns
 That reproduced in 15–44 of 200 requests for 20 KB and 200 KB bodies (all on
 fresh connections). Buffering small bodies to make them replayable
 (`GetBody`) didn't change it. I left the code unchanged and wrote it up as a
-separate issue.
+separate issue: #288.
 
 Next step if it recurs: run the job with `TW_TEST_LOG=1`.
 
