@@ -222,8 +222,9 @@ so.
 6. **Host / ops.** → a host is trusted only for its leases (B4). The
    operator of a host can read every tenant leased to it, and mgmt's
    operator holds every credential: see "Who you trust" in
-   docs/security-model.md. `--policy-apply` merges only additive grants
-   within `tag:tw*` (C12). Releases are signature-checked on every install
+   docs/security-model.md. `--apply-policy` merges only additive grants
+   within `tag:tw*`, plus two grants tailworks builds itself (the admin
+   grant, and `autogroup:member` to a new app's own tag; C12). Releases are signature-checked on every install
    and upgrade path (B9). A host's path reports cover only its own rows
    and its own tenants, are bounded at ingest, and never move a running
    workload by themselves (H23). Warm keys in custody are counted in

@@ -93,6 +93,9 @@ func policyApplyStep(ctx context.Context, s *state, f *flags, a *app, tn TenantR
 	}
 	res.Applied, res.Preflight = ar, ar.Preflight
 	res.OK = res.Preflight.OK
+	if ar.Changed && ar.CallerGrant != "" {
+		res.CallerGrant = "" // written: not in what is left to paste
+	}
 	res.ServiceCallerGrant = serviceCallerGrant(res.Preflight.Service)
 	res.Snippet = policySnippet(res.Preflight, res.CallerGrant, res.ServiceCallerGrant)
 	return nil
@@ -102,10 +105,17 @@ func printPolicyAdditions(plan mgmt.PolicyApplyResult) {
 	if strings.TrimSpace(plan.Added) == "" {
 		fmt.Printf("› policy     nothing tailworks writes is missing\n")
 	} else {
-		fmt.Printf("› policy     tailworks will add to the tailnet policy (additive: only tag:tw* entries, nothing removed or changed):\n")
+		only := "only tag:tw* entries"
+		if plan.CallerGrant != "" {
+			only += " and the grant that lets your tailnet's users call the app"
+		}
+		fmt.Printf("› policy     tailworks will add to the tailnet policy (additive: %s, nothing removed or changed):\n", only)
 		for _, l := range strings.Split(strings.TrimRight(plan.Added, "\n"), "\n") {
 			fmt.Printf("    + %s\n", l)
 		}
+	}
+	if plan.CallerGrant != "" {
+		fmt.Printf("› policy     the autogroup:member grant lets every user in your tailnet call %s (tailworks adds it with a new app's tag; to choose the callers yourself, say no and add your own grant first: tailworks then writes none)\n", plan.Workload)
 	}
 	if len(plan.Manual) > 0 {
 		fmt.Printf("› policy     tailworks won't write these (they stay in the snippet for you to add):\n")

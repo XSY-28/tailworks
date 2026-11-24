@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"os"
 	"slices"
 	"strings"
 
@@ -30,6 +31,34 @@ import (
 // One line can't be written this way: tag:tw must already be in tagOwners,
 // because the admin console only offers existing tags when the OAuth
 // client is created.
+
+// confirmBootstrapWrite is the one rule wherever tw writes its own
+// bootstrap snippet (tw up --apply-policy on Tailscale and on Headscale,
+// tw tenant add --apply-policy): show the lines as a diff, then ask;
+// --yes skips the question and is required without a terminal or with
+// --json (confirmation_required). A refusal is cancelled. Nothing has been
+// written or minted when it returns an error. out nil: stdout, or stderr
+// with --json.
+func confirmBootstrapWrite(f *flags, yes bool, cmdline, profile string, miss policy.Snippet, out io.Writer) error {
+	if out == nil {
+		out = os.Stdout
+		if *f.json {
+			out = os.Stderr
+		}
+	}
+	fmt.Fprintf(out, "› policy   tailworks will add to the tailnet policy (additive: only tailworks' own tags and grants, nothing removed or changed):\n")
+	for _, l := range miss.Diff() {
+		fmt.Fprintf(out, "    %s\n", l)
+	}
+	err := confirmPolicyWrite(f, yes, cmdline)
+	if err == nil {
+		return nil
+	}
+	if ce := asCLIErr(err); ce != nil && ce.Code == "confirmation_required" {
+		ce.Fix = append([]string{"run it again with --yes (" + cmdline + " --yes)", "or add them yourself in " + policyHome(profile) + ", then run it again:"}, snippetLines(miss)...)
+	}
+	return err
+}
 
 // upPolicyOptions lets the bootstrap snippet's admin grant through Check:
 // it is the one grant tailworks writes whose source is not a tag:tw* tag.
@@ -131,14 +160,7 @@ func upApplyPolicy(ctx context.Context, api policy.API, f *flags, pol []byte, re
 		}
 		return failed(err)
 	}
-	fmt.Fprintf(out, "› policy   tailworks will add to the tailnet policy (additive: only tag:tw* entries and the admin grant, nothing removed or changed):\n")
-	for _, l := range miss.Diff() {
-		fmt.Fprintf(out, "    %s\n", l)
-	}
-	if err := confirmPolicyWrite(f, yes, cmdline); err != nil {
-		if ce := asCLIErr(err); ce != nil && ce.Code == "confirmation_required" {
-			ce.Fix = append([]string{cmdline + " --yes", "or add them yourself in the admin console › Access controls, then run tw up again (nothing was minted):"}, snippetLines(miss)...)
-		}
+	if err := confirmBootstrapWrite(f, yes, cmdline, controlTailscale, miss, out); err != nil {
 		return pol, false, err
 	}
 	ar, err := policy.ApplyRetry(ctx, api, want, opts)

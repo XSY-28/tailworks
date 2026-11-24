@@ -62,8 +62,9 @@ that it mints mgmt's node key and joins.
 
 **Headscale refuses to register a node whose tags its policy doesn't
 define.** So on this profile the policy goes in *before* anything joins.
-Without `--apply-policy` (`--policy-apply`, its earlier name, still
-works), `tw up` stops with `policy_missing_tag_owners`
+With `--apply-policy`, `tw up` shows the snippet and asks before writing
+it; add `--yes` to skip the question (required without a terminal).
+Without `--apply-policy`, `tw up` stops with `policy_missing_tag_owners`
 and prints the snippet:
 
 ```hujson

@@ -197,7 +197,7 @@ func TestCLIEndToEnd(t *testing.T) {
 		t.Fatalf("after tw down: %d node IDs tracked, leftover devices %v, keys %v", len(res.NodeIDs), devs, keys)
 	}
 	if fts.setPolicy != 0 {
-		t.Fatalf("tw wrote the policy without --policy-apply (%d times)", fts.setPolicy)
+		t.Fatalf("tw wrote the policy without --apply-policy (%d times)", fts.setPolicy)
 	}
 	b, _ := json.MarshalIndent(res, "", "  ")
 	t.Logf("results:\n%s", b)
@@ -468,7 +468,7 @@ func TestCLIMultiTenant(t *testing.T) {
 	m.Run()
 	m.Down()
 	if fts.setPolicy != 0 {
-		t.Fatalf("tw wrote a policy without --policy-apply (%d times)", fts.setPolicy)
+		t.Fatalf("tw wrote a policy without --apply-policy (%d times)", fts.setPolicy)
 	}
 	b, _ := json.MarshalIndent(m.Res, "", "  ")
 	t.Logf("results:\n%s", b)
@@ -818,7 +818,7 @@ func TestCLISingleProcess(t *testing.T) {
 	backupRestoreRunning(t, e, work) // issue #120
 	e.Down()
 	if fts.setPolicy != 0 {
-		t.Fatalf("tw wrote the policy without --policy-apply (%d times)", fts.setPolicy)
+		t.Fatalf("tw wrote the policy without --apply-policy (%d times)", fts.setPolicy)
 	}
 	out, _ := json.MarshalIndent(res, "", "  ")
 	t.Logf("results:\n%s", out)

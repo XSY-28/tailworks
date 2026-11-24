@@ -250,7 +250,7 @@ All compile and `go vet` clean; skip-marked so CI stays green until the fixes la
 | RT-03 | **Fixed**: per-host bearer token on the unix socket, rotated on `tw up`; peercred kept as an extra check | `rt03_mgmt_socket_test.go` un-skipped |
 | RT-04 | **Partial**: per-object derived MAC keys; the root still lives in the guest, so `isolation: "object"` remains the real fix | STATUS.md |
 | RT-05 | **Fixed** for what exists: nonce caches on egress MACs and the Node caller header; OBO assertions are still unimplemented | STATUS.md |
-| RT-06 | **Fixed**: `--policy-apply` only adds `tag:tw*` tagOwners and tw-sourced grants, refuses any non-additive diff | `internal/policy` hostile table + fuzz tests |
+| RT-06 | **Fixed**: `--policy-apply` only adds `tag:tw*` tagOwners and tw-sourced grants, refuses any non-additive diff. (Later, #320: the flag is `--apply-policy`, and two tw-built grants have a non-tag source; LEDGER C12.) | `internal/policy` hostile table + fuzz tests |
 | RT-07 | **Documented**: kill tier 1 (RST + tombstone) is the fast path; netmap retraction stays a control-plane property | STATUS.md |
 | RT-08 | **Fixed/partial**: `@tailworks/node` `enforceEgress()` (cooperative); hostd reports `egress unenforced`, refuses Node-tier on multi-tenant hosts; docs say only Landlock/microVM is a boundary | `docs/node-tier.md` |
 

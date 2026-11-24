@@ -169,7 +169,8 @@ func cmdTenantAdd(args []string) error {
 	oauthFile := f.String("oauth-client-file", "", "this tailnet's OAuth client (mint mode \"oauth\"): 0600 file with TS_OAUTH_CLIENT_ID=… and TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:tw); read at use, never copied")
 	keyFile := f.String("api-key-file", "", "--control=headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied")
 	profile := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; the tailnet argument is its dns.base_domain)")
-	apply := f.Bool("policy-apply", false, "apply the base policy snippet (validated first, written with If-Match); default: print it")
+	apply := f.Bool("apply-policy", false, "write the base policy snippet to the tailnet policy instead of printing it (additive, validated first, written with If-Match); shows the lines and asks first")
+	yes := f.Bool("yes", false, "with --apply-policy: write the policy without asking (needed without a terminal, and with --json)")
 	control := f.String("control-url", prodControl, "coordination server for this tailnet's nodes")
 	rpm := f.Int("registrations-per-minute", 0, "this tenant's node registration throttle (default 200/min)")
 	ownerTag := f.String("owner-tag", "", "another team's tenant on a tailnet that already has one (docs/teams.md): the tag that owns its tags, e.g. tag:tw-t-payments; its --oauth-client-file must be scoped to it")
@@ -358,6 +359,9 @@ func cmdTenantAdd(args []string) error {
 	if !res.PolicyOK {
 		res.PolicyDiff = miss.HuJSON()
 		if *apply {
+			if err := confirmBootstrapWrite(f, *yes, "tw tenant add --apply-policy", *profile, miss, nil); err != nil { // up_policyapply.go
+				return err
+			}
 			ar, err := policy.ApplyWith(ctx, api, snip, popts)
 			if err != nil {
 				return fail("policy_apply_failed", "could not apply the policy snippet", err.Error()).withFix("add it in "+policyHome(*profile)+":", res.PolicyDiff)
@@ -385,7 +389,7 @@ func cmdTenantAdd(args []string) error {
 		case res.PolicyOK:
 			fmt.Printf("✓ policy   %s tagOwners present\n", owner)
 		default:
-			fmt.Printf("› policy   not applied (re-run with --policy-apply, or add in %s):\n", policyHome(*profile))
+			fmt.Printf("› policy   not applied (re-run with --apply-policy, or add in %s):\n", policyHome(*profile))
 			for _, l := range strings.Split(strings.TrimSpace(res.PolicyDiff), "\n") {
 				fmt.Printf("    %s\n", l)
 			}

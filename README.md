@@ -58,8 +58,9 @@ In the admin console, open **Access controls** and add one line to
 },
 ```
 
-The tag has to exist before step 3 can give it to the OAuth client.
-`tw up --apply-policy` (step 4) writes the rest.
+The tag has to exist before step 3 can give it to the OAuth client. This
+is the only line you paste: `tw up --apply-policy` (step 4) and `tw deploy
+--apply-policy` (step 5) write the rest, after showing you the lines.
 
 <details>
 <summary>Or paste all of it now, if you'd rather not let tailworks write your policy</summary>
@@ -118,18 +119,21 @@ tw init hello && cd hello
 tw deploy --apply-policy
 ```
 
-`tw deploy` shows the lines this app needs in your policy (its own tag),
-asks, writes them, and deploys. It also prints one grant it never writes,
-because who may call the app is your decision: the one that lets everyone
-on your tailnet reach it. Paste it into **Access controls**, or a narrower
-one.
+`tw deploy` shows the lines this app needs in your policy, asks, writes
+them, and deploys. There are two: the app's own tag, and a grant that lets
+**every user in your tailnet** call the app
+(`autogroup:member` to the app's tag, port 80).
 
-Or paste everything yourself: `tw policy` prints the lines (the same grant
-included), then plain `tw deploy`.
+To choose the callers yourself, add your own grant to the app's tag
+instead, now or later: tailworks writes the `autogroup:member` grant only
+together with a new app's tag, never for a tag your policy already has,
+and never when a grant of yours already reaches the app. Or paste
+everything yourself: `tw policy` prints the lines, then plain `tw deploy`.
 
 ### 6. Call it
 
-`tw deploy` prints the app's URL. From any device on your tailnet:
+`tw deploy` prints the app's URL. From any device of yours on the tailnet
+(step 5 wrote the grant that lets you in):
 
 ```sh
 curl http://tw-hello-<id>.<tailnet>.ts.net/    # {"hello":"<you>","caller":{…}}

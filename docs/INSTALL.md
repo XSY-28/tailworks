@@ -244,7 +244,8 @@ Funnel, no HTTPS requirement.**
    - recommended: **Policy File › Write**. `tw up --apply-policy` then
      adds the snippet above, and `tw deploy --apply-policy` (or `tw policy
      --apply`) each app's `tag:tw*` tagOwners, grants and Service
-     auto-approval ([tailworks-jsonc.md](tailworks-jsonc.md#tags-and-tw-init)).
+     auto-approval, and for a new app the grant that lets the tailnet's
+     users call it ([tailworks-jsonc.md](tailworks-jsonc.md#tags-and-tw-init)).
      Both show the lines and ask first, and only ever add. Pick **Policy
      File › Read** to paste the snippets yourself instead: `tw deploy`
      still preflights your app's grants and `spawn()` checks sub-agent
@@ -481,7 +482,8 @@ no Funnel and no posture. See [headscale.md](headscale.md).
 the grants your app declares (`tailnet.connects`), bundles it, and waits
 until the workload node is on your tailnet, then prints its address:
 `http://tw-support-<id>.<tailnet>.ts.net/`. To call it, a grant must let
-you reach the workload's tag on port 80 (the
+you reach the workload's tag on port 80 (`tw deploy --apply-policy` writes
+one for a new app; the
 [quick start](../README.md#quick-start)
 shows it, and `tw deploy` prints it with the tagOwners for new tags). If
 the first deploy doesn't answer, see [troubleshooting.md](troubleshooting.md).

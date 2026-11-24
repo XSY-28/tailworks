@@ -58,7 +58,7 @@ func testTwUp(t *testing.T, extra []string) {
 		t.Fatalf("tw up --control=headscale --oauth-client-file: %v\n%s", err, se)
 	}
 
-	// Without --policy-apply, an undefined tag:tw-mgmt stops tw up before
+	// Without --apply-policy, an undefined tag:tw-mgmt stops tw up before
 	// anything is minted, with a snippet Headscale accepts.
 	if _, se, _, err := e.Tw("up", "--yes", "--json", "--control=headscale", "--control-url", hs.URL, "--tailnet", hs.Domain, "--api-key-file", hs.KeyFile); err == nil ||
 		!strings.Contains(se, "policy_missing_tag_owners") || !strings.Contains(se, "tag:tw-mgmt") || strings.Contains(se, "autogroup:admin") {
@@ -80,7 +80,7 @@ func testTwUp(t *testing.T, extra []string) {
 		Timings    map[string]float64 `json:"timingsMs"`
 	}
 	d := e.MustJSON(&up, append([]string{"up", "--yes", "--control=headscale", "--control-url", hs.URL, "--tailnet", hs.Domain,
-		"--api-key-file", hs.KeyFile, "--policy-apply", "--ephemeral", "--hostname-prefix", "tw-e2e-",
+		"--api-key-file", hs.KeyFile, "--apply-policy", "--ephemeral", "--hostname-prefix", "tw-e2e-",
 		"--mgmt-hostname", "tw-e2e-mgmt", "--host-id", "e2e", "--allow-sibling-egress",
 		"--device-delete-delay", "1s", "--kill-tombstone", "3s"}, extra...)...)
 	if !up.PolicyOK || !up.Applied || up.MintMode != "headscale" {
@@ -190,7 +190,7 @@ func TestRefusesOldHeadscale(t *testing.T) {
 	}
 	hs := startServerImage(t, OldImage)
 	e := &cliflow.Env{T: t, BinDir: cliflow.BuildBinaries(t), StateDir: shortDir(t, "tw-hs-state-"), WorkDir: t.TempDir()}
-	_, se, _, err := e.Tw("up", "--yes", "--json", "--control=headscale", "--control-url", hs.URL, "--tailnet", hs.Domain, "--api-key-file", hs.KeyFile, "--policy-apply")
+	_, se, _, err := e.Tw("up", "--yes", "--json", "--control=headscale", "--control-url", hs.URL, "--tailnet", hs.Domain, "--api-key-file", hs.KeyFile, "--apply-policy")
 	if err == nil || !strings.Contains(se, "profile_unsupported") || !strings.Contains(se, "v0.29") {
 		t.Fatalf("tw up on %s: %v\n%s", OldImage, err, se)
 	}

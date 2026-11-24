@@ -3303,6 +3303,9 @@ type PolicyApply struct {
 	// Added The additions as a HuJSON snippet (with `dryRun`, what would be added). Empty when nothing is missing that tailworks writes.
 	Added *string `json:"added,omitempty"`
 
+	// CallerGrant The grant in `added` that lets every user of the tailnet call the app (`autogroup:member` to the workload's own tags, `tcp:80`), as JSON. Absent when `added` has none.
+	CallerGrant *string `json:"callerGrant,omitempty"`
+
 	// Changed The policy was written.
 	Changed bool `json:"changed"`
 	DryRun  bool `json:"dryRun"`
@@ -7221,12 +7224,19 @@ type ClientInterface interface {
 	// the `autoApprovers.services` entry of its own `svc:` name for the
 	// workload node's own tags (issue #295), and for public routes
 	// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
-	// tenant's tailnet policy:
+	// tenant's tailnet policy. For an app that is new to the policy it
+	// also adds the caller grant (issue #320): `autogroup:member` to the
+	// workload node's own tags on `tcp:80`, so every user of the tailnet
+	// can call the app. mgmt builds that grant itself and adds it only
+	// when the same write adds every one of those tags to `tagOwners`,
+	// each is a tailworks app tag (`tag:tw-*`, not a reserved one), the
+	// control plane is Tailscale, and no grant or ACL from outside
+	// `tag:tw*` already reaches the tag or `*`. `callerGrant` carries it:
 	//
 	// 1. read the policy with its ETag;
 	// 2. merge additively (comments kept; no existing entry is changed,
 	//    reordered or removed), refusing anything outside `tag:tw*`
-	//    (RT-06, `internal/policy.Check`);
+	//    but the caller grant's source (RT-06, `internal/policy.Check`);
 	// 3. validate it with the control plane;
 	// 4. write it with `If-Match`. If the policy changed in between
 	//    (`412`), steps 1–4 run once more; a second conflict is
@@ -7259,12 +7269,19 @@ type ClientInterface interface {
 	// the `autoApprovers.services` entry of its own `svc:` name for the
 	// workload node's own tags (issue #295), and for public routes
 	// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
-	// tenant's tailnet policy:
+	// tenant's tailnet policy. For an app that is new to the policy it
+	// also adds the caller grant (issue #320): `autogroup:member` to the
+	// workload node's own tags on `tcp:80`, so every user of the tailnet
+	// can call the app. mgmt builds that grant itself and adds it only
+	// when the same write adds every one of those tags to `tagOwners`,
+	// each is a tailworks app tag (`tag:tw-*`, not a reserved one), the
+	// control plane is Tailscale, and no grant or ACL from outside
+	// `tag:tw*` already reaches the tag or `*`. `callerGrant` carries it:
 	//
 	// 1. read the policy with its ETag;
 	// 2. merge additively (comments kept; no existing entry is changed,
 	//    reordered or removed), refusing anything outside `tag:tw*`
-	//    (RT-06, `internal/policy.Check`);
+	//    but the caller grant's source (RT-06, `internal/policy.Check`);
 	// 3. validate it with the control plane;
 	// 4. write it with `If-Match`. If the policy changed in between
 	//    (`412`), steps 1–4 run once more; a second conflict is
@@ -10391,12 +10408,19 @@ func (c *Client) GetWorkloadLogs(ctx context.Context, id TenantID, workload Work
 // the `autoApprovers.services` entry of its own `svc:` name for the
 // workload node's own tags (issue #295), and for public routes
 // `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
-// tenant's tailnet policy:
+// tenant's tailnet policy. For an app that is new to the policy it
+// also adds the caller grant (issue #320): `autogroup:member` to the
+// workload node's own tags on `tcp:80`, so every user of the tailnet
+// can call the app. mgmt builds that grant itself and adds it only
+// when the same write adds every one of those tags to `tagOwners`,
+// each is a tailworks app tag (`tag:tw-*`, not a reserved one), the
+// control plane is Tailscale, and no grant or ACL from outside
+// `tag:tw*` already reaches the tag or `*`. `callerGrant` carries it:
 //
 //  1. read the policy with its ETag;
 //  2. merge additively (comments kept; no existing entry is changed,
 //     reordered or removed), refusing anything outside `tag:tw*`
-//     (RT-06, `internal/policy.Check`);
+//     but the caller grant's source (RT-06, `internal/policy.Check`);
 //  3. validate it with the control plane;
 //  4. write it with `If-Match`. If the policy changed in between
 //     (`412`), steps 1–4 run once more; a second conflict is
@@ -10439,12 +10463,19 @@ func (c *Client) ApplyWorkloadPolicyWithBody(ctx context.Context, id TenantID, w
 // the `autoApprovers.services` entry of its own `svc:` name for the
 // workload node's own tags (issue #295), and for public routes
 // `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
-// tenant's tailnet policy:
+// tenant's tailnet policy. For an app that is new to the policy it
+// also adds the caller grant (issue #320): `autogroup:member` to the
+// workload node's own tags on `tcp:80`, so every user of the tailnet
+// can call the app. mgmt builds that grant itself and adds it only
+// when the same write adds every one of those tags to `tagOwners`,
+// each is a tailworks app tag (`tag:tw-*`, not a reserved one), the
+// control plane is Tailscale, and no grant or ACL from outside
+// `tag:tw*` already reaches the tag or `*`. `callerGrant` carries it:
 //
 //  1. read the policy with its ETag;
 //  2. merge additively (comments kept; no existing entry is changed,
 //     reordered or removed), refusing anything outside `tag:tw*`
-//     (RT-06, `internal/policy.Check`);
+//     but the caller grant's source (RT-06, `internal/policy.Check`);
 //  3. validate it with the control plane;
 //  4. write it with `If-Match`. If the policy changed in between
 //     (`412`), steps 1–4 run once more; a second conflict is
@@ -19397,12 +19428,19 @@ type ClientWithResponsesInterface interface {
 	// the `autoApprovers.services` entry of its own `svc:` name for the
 	// workload node's own tags (issue #295), and for public routes
 	// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
-	// tenant's tailnet policy:
+	// tenant's tailnet policy. For an app that is new to the policy it
+	// also adds the caller grant (issue #320): `autogroup:member` to the
+	// workload node's own tags on `tcp:80`, so every user of the tailnet
+	// can call the app. mgmt builds that grant itself and adds it only
+	// when the same write adds every one of those tags to `tagOwners`,
+	// each is a tailworks app tag (`tag:tw-*`, not a reserved one), the
+	// control plane is Tailscale, and no grant or ACL from outside
+	// `tag:tw*` already reaches the tag or `*`. `callerGrant` carries it:
 	//
 	// 1. read the policy with its ETag;
 	// 2. merge additively (comments kept; no existing entry is changed,
 	//    reordered or removed), refusing anything outside `tag:tw*`
-	//    (RT-06, `internal/policy.Check`);
+	//    but the caller grant's source (RT-06, `internal/policy.Check`);
 	// 3. validate it with the control plane;
 	// 4. write it with `If-Match`. If the policy changed in between
 	//    (`412`), steps 1–4 run once more; a second conflict is
@@ -19435,12 +19473,19 @@ type ClientWithResponsesInterface interface {
 	// the `autoApprovers.services` entry of its own `svc:` name for the
 	// workload node's own tags (issue #295), and for public routes
 	// `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
-	// tenant's tailnet policy:
+	// tenant's tailnet policy. For an app that is new to the policy it
+	// also adds the caller grant (issue #320): `autogroup:member` to the
+	// workload node's own tags on `tcp:80`, so every user of the tailnet
+	// can call the app. mgmt builds that grant itself and adds it only
+	// when the same write adds every one of those tags to `tagOwners`,
+	// each is a tailworks app tag (`tag:tw-*`, not a reserved one), the
+	// control plane is Tailscale, and no grant or ACL from outside
+	// `tag:tw*` already reaches the tag or `*`. `callerGrant` carries it:
 	//
 	// 1. read the policy with its ETag;
 	// 2. merge additively (comments kept; no existing entry is changed,
 	//    reordered or removed), refusing anything outside `tag:tw*`
-	//    (RT-06, `internal/policy.Check`);
+	//    but the caller grant's source (RT-06, `internal/policy.Check`);
 	// 3. validate it with the control plane;
 	// 4. write it with `If-Match`. If the policy changed in between
 	//    (`412`), steps 1–4 run once more; a second conflict is
@@ -32362,12 +32407,19 @@ func (c *ClientWithResponses) GetWorkloadLogsWithResponse(ctx context.Context, i
 // the `autoApprovers.services` entry of its own `svc:` name for the
 // workload node's own tags (issue #295), and for public routes
 // `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
-// tenant's tailnet policy:
+// tenant's tailnet policy. For an app that is new to the policy it
+// also adds the caller grant (issue #320): `autogroup:member` to the
+// workload node's own tags on `tcp:80`, so every user of the tailnet
+// can call the app. mgmt builds that grant itself and adds it only
+// when the same write adds every one of those tags to `tagOwners`,
+// each is a tailworks app tag (`tag:tw-*`, not a reserved one), the
+// control plane is Tailscale, and no grant or ACL from outside
+// `tag:tw*` already reaches the tag or `*`. `callerGrant` carries it:
 //
 //  1. read the policy with its ETag;
 //  2. merge additively (comments kept; no existing entry is changed,
 //     reordered or removed), refusing anything outside `tag:tw*`
-//     (RT-06, `internal/policy.Check`);
+//     but the caller grant's source (RT-06, `internal/policy.Check`);
 //  3. validate it with the control plane;
 //  4. write it with `If-Match`. If the policy changed in between
 //     (`412`), steps 1–4 run once more; a second conflict is
@@ -32406,12 +32458,19 @@ func (c *ClientWithResponses) ApplyWorkloadPolicyWithBodyWithResponse(ctx contex
 // the `autoApprovers.services` entry of its own `svc:` name for the
 // workload node's own tags (issue #295), and for public routes
 // `tag:tw-public` with the funnel `nodeAttrs`) and adds it to the
-// tenant's tailnet policy:
+// tenant's tailnet policy. For an app that is new to the policy it
+// also adds the caller grant (issue #320): `autogroup:member` to the
+// workload node's own tags on `tcp:80`, so every user of the tailnet
+// can call the app. mgmt builds that grant itself and adds it only
+// when the same write adds every one of those tags to `tagOwners`,
+// each is a tailworks app tag (`tag:tw-*`, not a reserved one), the
+// control plane is Tailscale, and no grant or ACL from outside
+// `tag:tw*` already reaches the tag or `*`. `callerGrant` carries it:
 //
 //  1. read the policy with its ETag;
 //  2. merge additively (comments kept; no existing entry is changed,
 //     reordered or removed), refusing anything outside `tag:tw*`
-//     (RT-06, `internal/policy.Check`);
+//     but the caller grant's source (RT-06, `internal/policy.Check`);
 //  3. validate it with the control plane;
 //  4. write it with `If-Match`. If the policy changed in between
 //     (`412`), steps 1–4 run once more; a second conflict is

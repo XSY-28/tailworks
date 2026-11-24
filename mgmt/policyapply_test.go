@@ -130,7 +130,8 @@ func TestPolicyApply(t *testing.T) {
 		}
 	}
 	added := policy.Snippet{TagOwners: map[string][]string{"tag:tw-wl-app": {"autogroup:admin", "tag:tw"}},
-		Grants: []map[string]any{{"src": []string{"tag:tw-wl-app"}, "dst": []string{"tag:db"}, "ip": []string{"tcp:80"}}}}
+		Grants: []map[string]any{{"src": []string{"tag:tw-wl-app"}, "dst": []string{"tag:db"}, "ip": []string{"tcp:80"}},
+			{"src": []string{"autogroup:member"}, "dst": []string{"tag:tw-wl-app"}, "ip": []string{"tcp:80"}}}} // callergrant.go
 	if err := policy.VerifyAdditive([]byte(operatorOnly), []byte(after), added); err != nil {
 		t.Fatalf("not purely additive: %v", err)
 	}

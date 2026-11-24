@@ -195,11 +195,14 @@ func printPolicyPlan(a *app, res policyResult) {
 	}
 	printNodeBudget("  nodes      ", "! nodes      ", res.Tenant, res.Nodes) // nodebudget.go
 	if res.Snippet == "" {
+		if res.OK && applied && res.Applied.CallerGrant != "" {
+			fmt.Printf("\nThe policy now has everything tailworks checks, and every user in your tailnet may call %s; run tw deploy.\n", a.Name)
+		}
 		return
 	}
 	switch {
 	case res.OK && applied:
-		fmt.Printf("\nThe policy now has everything tailworks checks; run tw deploy. If people should call %s, make sure a grant like this exists (tailworks never writes who may call an app):\n\n", a.Name)
+		fmt.Printf("\nThe policy now has everything tailworks checks; run tw deploy. If people should call %s, make sure a grant like this exists (tailworks didn't write it):\n\n", a.Name)
 	case res.OK:
 		fmt.Printf("\nThe policy has everything tailworks checks. If people should call %s, make sure a grant like this exists:\n\n", a.Name)
 	case applied:

@@ -474,7 +474,7 @@ func cmdDeploy(args []string) error {
 		if policyUnavailable != "" {
 			fmt.Printf("› preflight  skipped: mgmt can't read the tailnet policy (%s)\n             give the OAuth client the Policy File › Read scope to preflight grants; tags are still checked by Tailscale at mint\n", firstLine(policyUnavailable))
 		} else {
-			printPreflight(a, pf)
+			printPreflight(a, pf, *applyPolicy)
 			printPublicPreflight(pf)
 		}
 	}
@@ -632,7 +632,7 @@ func cmdDeploy(args []string) error {
 	return nil
 }
 
-func printPreflight(a *app, pf mgmt.PreflightResult) {
+func printPreflight(a *app, pf mgmt.PreflightResult, applying bool) {
 	for _, w := range pf.AccessWarnings { // tenant admins (docs/teams.md)
 		fmt.Printf("! preflight  access: %s\n", w)
 	}
@@ -680,7 +680,7 @@ func printPreflight(a *app, pf mgmt.PreflightResult) {
 		if pf.TagOwnersSnippet != "" {
 			fmt.Printf("  add to your tailnet policy:\n    %s\n", pf.TagOwnersSnippet)
 		}
-		if len(pf.MissingTagOwners) > 0 {
+		if len(pf.MissingTagOwners) > 0 && !applying { // --apply-policy: the plan that follows says what is written
 			printCallerGrant(a.Cfg.Tailnet.Tags, pf.Service) // callergrant.go
 		}
 		if len(pf.Missing) > 0 {

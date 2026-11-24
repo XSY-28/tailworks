@@ -105,9 +105,8 @@ func cmdUp(args []string) error {
 	tailnet := f.String("tailnet", "", "the tailnet to serve (oauth: read from the client's devices or mgmt's node; headscale: required, the dns.base_domain). Overrides discovery")
 	oauthFile := f.String("oauth-client-file", "", "mint mode \"oauth\" (Tailscale): file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (an OAuth client with Auth Keys write, tag tag:tw; tightened to 0600). Default on the default state dir: ~/.config/tailworks/oauth.env, asked for and saved on the first tw up")
 	keyFile := f.String("api-key-file", "", "--control=headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied). Tailscale API keys are not a mint mode: use --oauth-client-file")
-	yes := f.Bool("yes", false, "with --apply-policy on Tailscale: write the policy without asking (needed without a terminal, and with --json). Otherwise accepted and ignored: tw up asks nothing else")
-	apply := f.Bool("apply-policy", false, "write the tagOwners and grants tailworks needs to the tailnet policy instead of printing them (additive, validated first, written with If-Match). Tailscale: the OAuth client needs Policy File write; tw up shows the lines and asks first (--yes to skip). Headscale: written without asking")
-	f.BoolVar(apply, "policy-apply", false, "the same as --apply-policy (its earlier name)")
+	yes := f.Bool("yes", false, "with --apply-policy: write the policy without asking (needed without a terminal, and with --json). Otherwise accepted and ignored: tw up asks nothing else")
+	apply := f.Bool("apply-policy", false, "write the tagOwners and grants tailworks needs to the tailnet policy instead of printing them (additive, validated first, written with If-Match); tw up shows the lines and asks first (--yes to skip). Tailscale: the OAuth client needs Policy File write. Headscale: needs policy.mode database")
 	control := f.String("control-url", prodControl, "coordination server for the tailnet's nodes")
 	profileF := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; --api-key-file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain)")
 	tsapiURL := f.String("tsapi-url", "", "Tailscale API base URL (testing)")
@@ -286,7 +285,7 @@ func cmdUp(args []string) error {
 	}
 
 	// The credential must work for this tailnet; read the policy (written
-	// only by --policy-apply on Headscale).
+	// only with --apply-policy).
 	var api *tsapi.Client
 	var capi controlAPI // mints mgmt's node key; reads/applies the policy
 	hsApplied := false  // headscale: the policy snippet was applied up front
@@ -305,7 +304,7 @@ func cmdUp(args []string) error {
 		timings["api_check"] = ms(time.Since(ps))
 		// Headscale refuses to register a node whose tags its policy
 		// doesn't define, so the snippet goes in before mgmt's key is used.
-		if pol, hsApplied, err = headscaleUpPolicy(ctx, hc, pol, *apply); err != nil {
+		if pol, hsApplied, err = headscaleUpPolicy(ctx, hc, f, pol, *apply, *yes, out); err != nil {
 			return err
 		}
 	}
@@ -649,6 +648,9 @@ func cmdUp(args []string) error {
 		if !res.PolicyOK {
 			res.PolicyDiff = miss.HuJSON()
 			if *apply {
+				if err := confirmBootstrapWrite(f, *yes, "tw up --apply-policy", profile, miss, out); err != nil { // up_policyapply.go
+					return err
+				}
 				ar, err := policy.ApplyWith(ctx, capi, snip, popts)
 				if err != nil {
 					return fail("policy_apply_failed", "could not apply the policy snippet", err.Error()).withFix("add it in "+policyHome(profile)+":", res.PolicyDiff)

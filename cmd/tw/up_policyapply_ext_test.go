@@ -17,7 +17,7 @@ func upApplyPolicyRefusals(t *testing.T, e *cliflow.Env, up []string, counts fun
 	t.Helper()
 	// No terminal, no --yes: the lines are shown, nothing is written.
 	noYes := slices.DeleteFunc(slices.Clone(up), func(a string) bool { return a == "--yes" })
-	for _, flag := range []string{"--apply-policy", "--policy-apply"} {
+	for _, flag := range []string{"--apply-policy"} {
 		so, se, _, err := e.Tw(append(slices.Clone(noYes), flag)...)
 		if err == nil || !strings.Contains(se, "confirmation_required") || !strings.Contains(se, "tw up --apply-policy --yes") {
 			t.Fatalf("tw up %s without --yes: %v\n%s\n%s", flag, err, so, se)
@@ -33,6 +33,10 @@ func upApplyPolicyRefusals(t *testing.T, e *cliflow.Env, up []string, counts fun
 		if minted, posts := counts(); minted != 0 || posts != 0 {
 			t.Fatalf("tw up %s without --yes: %d keys minted, %d policy writes", flag, minted, posts)
 		}
+	}
+	// --policy-apply, the flag's name before #320, is gone.
+	if _, se, _, err := e.Tw(append(slices.Clone(up), "--policy-apply")...); err == nil || !strings.Contains(se, "bad_request") {
+		t.Fatalf("tw up --policy-apply: %v\n%s", err, se)
 	}
 	// --yes, and the control plane refuses the write: tw up stops with the
 	// lines to paste, before minting.

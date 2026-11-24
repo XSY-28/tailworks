@@ -308,7 +308,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 501 · netd (SDK). **When:** the tailnet's plan or control server lacks a feature tailworks would use. **Fix:** see the message for the feature; [COMPAT.md](COMPAT.md) lists what is built.
 
 ### policy_apply_failed
-500 · mgmt, cli. **When:** `tw up --apply-policy` or `tw tenant add --policy-apply` could not write the policy snippet (validation failed, or the ETag changed); or `tw policy --apply` / `tw deploy --apply-policy`: the control plane rejected the merged policy (for example a grant to a tag no `tagOwners` entry defines), or tailworks refused the snippet (RT-06). Nothing was written. **Fix:** add the printed snippet in the admin console, after fixing what the message names.
+500 · mgmt, cli. **When:** `tw up --apply-policy` or `tw tenant add --apply-policy` could not write the policy snippet (validation failed, or the ETag changed); or `tw policy --apply` / `tw deploy --apply-policy`: the control plane rejected the merged policy (for example a grant to a tag no `tagOwners` entry defines), or tailworks refused the snippet (RT-06). Nothing was written. **Fix:** add the printed snippet in the admin console, after fixing what the message names.
 
 ### policy_conflict
 409 · mgmt, cli. **When:** `tw policy --apply` / `tw deploy --apply-policy` / `tw up --apply-policy`: the tailnet policy changed between tailworks' read and its `If-Match` write, and again on the one retry. Nothing was written. **Fix:** run it again; if someone keeps editing the policy, wait for them, or add the printed snippet yourself.

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -343,19 +344,58 @@ func TestUpApplyPolicyConfirm(t *testing.T) {
 	operatorMissing(t, after)
 }
 
-// --apply-policy and --policy-apply (its earlier name, Headscale) are one
-// flag on tw up.
-func TestUpApplyPolicyFlagAlias(t *testing.T) {
-	for _, given := range []string{"--apply-policy", "--policy-apply"} {
-		fs := upFlagSet(t)
-		if err := fs.Parse([]string{given}); err != nil {
-			t.Fatal(err)
+// --apply-policy is the only spelling, on tw up and tw tenant add: the
+// earlier --policy-apply is refused, not kept as an alias.
+func TestApplyPolicyFlagSpelling(t *testing.T) {
+	if fs := upFlagSet(t); fs.Lookup("apply-policy") == nil || fs.Lookup("policy-apply") != nil || fs.Lookup("yes") == nil {
+		t.Error("tw up: want --apply-policy and --yes, and no --policy-apply")
+	}
+	for _, run := range []func([]string) error{cmdUp, cmdTenantAdd} {
+		if err := run([]string{"--policy-apply", "--state-dir", t.TempDir() + "/never-created"}); cliCode(err) != "bad_request" {
+			t.Errorf("--policy-apply: %v, want bad_request", err)
 		}
-		for _, name := range []string{"apply-policy", "policy-apply"} {
-			if f := fs.Lookup(name); f == nil || f.Value.String() != "true" {
-				t.Errorf("tw up %s: --%s is not set", given, name)
-			}
+	}
+	var h *helpRequest
+	if err := cmdTenantAdd([]string{"--help"}); !errors.As(err, &h) {
+		t.Fatalf("tw tenant add --help: %v", err)
+	}
+	if h.f.Lookup("apply-policy") == nil || h.f.Lookup("yes") == nil {
+		t.Error("tw tenant add: want --apply-policy and --yes")
+	}
+}
+
+// Headscale asks too (it wrote without asking before #320): the snippet
+// is shown, and without a terminal --yes is required.
+func TestHeadscaleUpPolicyConfirm(t *testing.T) {
+	const pol = `{"tagOwners": {}}`
+	e := newUpApplyEnv(t, pol)
+	run := func(terminal bool, input string, yes bool) (string, bool, string, error) {
+		oldT, oldIn := confirmIsTerminal, confirmIn
+		defer func() { confirmIsTerminal, confirmIn = oldT, oldIn }()
+		confirmIsTerminal = func() bool { return terminal }
+		confirmIn = strings.NewReader(input)
+		var b bytes.Buffer
+		after, applied, err := headscaleUpPolicy(context.Background(), e.c, newFlags("up"), []byte(pol), true, yes, &b)
+		return string(after), applied, b.String(), err
+	}
+	for name, c := range map[string]struct {
+		terminal bool
+		input    string
+		code     string
+	}{"no terminal": {false, "y\n", "confirmation_required"}, "declined": {true, "n\n", "cancelled"}} {
+		_, applied, out, err := run(c.terminal, c.input, false)
+		if cliCode(err) != c.code || applied || !strings.Contains(out, `+   "tag:tw-mgmt"`) {
+			t.Fatalf("%s: applied=%v err=%v\n%s", name, applied, err, out)
 		}
-		fs.Parse([]string{given + "=false"}) // upFlagSet shares cmdUp's values
+	}
+	if _, writes, posts := e.now(); writes != 0 || posts != 0 {
+		t.Fatalf("unconfirmed, but %d POSTs", posts)
+	}
+	after, applied, out, err := run(false, "", true)
+	if err != nil || !applied || !strings.Contains(after, "tag:tw-mgmt") {
+		t.Fatalf("--yes: applied=%v err=%v\n%s", applied, err, out)
+	}
+	if _, writes, _ := e.now(); writes != 1 {
+		t.Fatalf("--yes: %d writes", writes)
 	}
 }
