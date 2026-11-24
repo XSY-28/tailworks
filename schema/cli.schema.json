@@ -44,6 +44,9 @@
         "applied": {
           "type": "object",
           "description": "--apply: what mgmt wrote to the tailnet policy (changed, added, manual, oldETag, newETag, and the preflight after it)"
+        },
+        "nodes": {
+          "$ref": "#/$defs/nodeBudget"
         }
       },
       "required": [
@@ -61,6 +64,116 @@
       "additionalProperties": {
         "type": "number"
       }
+    },
+    "nodeBudget": {
+      "type": "object",
+      "description": "tailnet nodes (docs/limits.md#tailnet-node-budget): what an app costs (tw policy and tw deploy), the tenant's live nodes, and warnings when that count is within 80% of the tenant's maxObjects or of its hosts' node capacity. Every node is a device on the tailnet",
+      "properties": {
+        "app": {
+          "type": "object",
+          "description": "tw policy and tw deploy: the app's cost, from its tailworks.jsonc",
+          "properties": {
+            "workload": {
+              "type": "integer",
+              "description": "workload nodes: one per copy (replicas)"
+            },
+            "public": {
+              "type": "integer",
+              "description": "public-ingress nodes: one per copy of an app with public routes"
+            },
+            "fixed": {
+              "type": "integer",
+              "description": "workload + public: the nodes the deploy itself joins"
+            },
+            "perObjectClasses": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Durable Object classes whose every object gets a node of its own"
+            },
+            "sharedClasses": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "classes with \"node\": false: their objects add no node"
+            }
+          },
+          "required": [
+            "workload",
+            "public",
+            "fixed",
+            "perObjectClasses",
+            "sharedClasses"
+          ]
+        },
+        "tenant": {
+          "type": "object",
+          "description": "the tenant's live nodes, by what they are; absent when mgmt couldn't be asked",
+          "properties": {
+            "total": {
+              "type": "integer"
+            },
+            "workloads": {
+              "type": "integer",
+              "description": "workload nodes (replicas and previews included)"
+            },
+            "objects": {
+              "type": "integer",
+              "description": "Durable Objects with a node of their own, sub-agents included"
+            },
+            "pool": {
+              "type": "integer",
+              "description": "pre-joined pool nodes waiting for a new object"
+            },
+            "public": {
+              "type": "integer",
+              "description": "public-ingress nodes"
+            },
+            "maxObjects": {
+              "type": "integer",
+              "description": "the tenant's quota of live nodes (tw tenant set --max-objects)"
+            }
+          },
+          "required": [
+            "total",
+            "workloads",
+            "objects",
+            "pool",
+            "public"
+          ]
+        },
+        "capacity": {
+          "type": "object",
+          "description": "the live hosts' node capacity (tw-hostd -capacity-nodes) and the nodes they run for every tenant; absent when the caller may not list hosts",
+          "properties": {
+            "hosts": {
+              "type": "integer"
+            },
+            "capacityNodes": {
+              "type": "integer"
+            },
+            "liveNodes": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "hosts",
+            "capacityNodes",
+            "liveNodes"
+          ]
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "warnings"
+      ]
     },
     "errorObject": {
       "type": "object",
@@ -1531,6 +1644,9 @@
           "type": "object",
           "description": "--apply-policy: what mgmt wrote to the tailnet policy before the deploy (as tw policy --apply's applied)"
         },
+        "nodes": {
+          "$ref": "#/$defs/nodeBudget"
+        },
         "bundleBytes": {
           "type": "integer"
         },
@@ -1900,6 +2016,9 @@
           "items": {
             "$ref": "#/$defs/object"
           }
+        },
+        "nodes": {
+          "$ref": "#/$defs/nodeBudget"
         }
       },
       "required": [

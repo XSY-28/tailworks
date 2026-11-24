@@ -1,7 +1,7 @@
 {
   "version": "0.5.0",
   "date": "2026-11-24",
-  "workerd": "1.20261118.1",
+  "workerd": "1.20261121.1",
   "schema": "202611212131_audit_checkpoints",
   "protocols": {
     "cliJSON": 1,
@@ -15,13 +15,22 @@
     "cli-json",
     "config-default",
     "feature-string",
-    "protocol"
+    "protocol",
+    "workerd"
   ],
   "notes": [
     {
       "kind": "fix",
       "source": "cloudflare-examples-compat-suite.md",
       "text": "`tw deploy --wrangler` (and `tw dev --wrangler`) now runs wrangler with the\nproject's `node_modules/.bin` first on PATH, as `npm run deploy` does. A\nwrangler `build.command` that calls a locally installed tool (for example\n`esbuild …` in Cloudflare's `durable-chat-template`) used to fail with\n`command not found`.\n\nA Python Worker (`main: *.py` or the `python_workers` flag) is now refused\nwith `not_supported: Python Workers are not supported`, instead of\nesbuild's \"No loader is configured for .py files\".\n\nNew: `make e2e-compat` deploys 30 of Cloudflare's own example projects,\nunmodified, to a real host on a real tailnet and calls each one as its\nREADME does (`e2e/compat/README.md`)."
+    },
+    {
+      "kind": "fix",
+      "upgrade": [
+        "workerd"
+      ],
+      "source": "deps-workerd-1.20261121.1.md",
+      "text": "The pinned workerd moves from 1.20261118.1 to 1.20261121.1. `fetch()` now\nrejects with a `TypeError` when a response head doesn't parse\n(cloudflare/workerd#8535), `Body.formData()` rejects with the body stream's\nerror (#8679), `new Request(request, init)` leaves the original body usable\nwhen it throws (#8681), and `TextDecoder` keeps its state after a fatal\nstreaming error (#8658). In `node:net`, connect failures to unknown hosts carry\nNode's `ENOTFOUND` properties (#8648) and IDN hosts are converted to ASCII\n(#8709). Apps don't need changes.\n\nOperator action: workerd moves to 1.20261121.1."
     },
     {
       "kind": "feature",
@@ -35,6 +44,11 @@
       "kind": "fix",
       "source": "fix-268.md",
       "text": "The `ai-agent` template now works when you follow its README. Its default\n`vars.MCP_URL` was `http://mcp/mcp`, which named no node: a workload's node\nis `tw-\u003cworkload\u003e` (with `tw up`'s default `--hostname-prefix`), so the\nagent got `peer_not_visible` even with the `mcp` template deployed. The\ndefault is now `http://tw-mcp/mcp`, and the `node-workflow` README uses the\nsame address. The README walks through the whole two-workload setup:\ndeploying `mcp` under that name, the capability grant that gives the agent\nits tools, what a working reply looks like, and that the scripted model\nignores the prompt. `tw init --template ai-agent` and the template listings\nsay it needs `mcp`. Apps already made from the template keep their old\n`MCP_URL`: set it to `http://tw-mcp/mcp` (or `tw deploy --var MCP_URL=…`)."
+    },
+    {
+      "kind": "fix",
+      "source": "fix-288-early-response.md",
+      "text": "A Worker or Durable Object that answers a request without reading its body\n(a killed object's 410, a handler that rejects an upload with 401 or 413)\nnow reaches the caller with that answer. Before, when the body was about\n16 KB or more, the caller often got `503 upstream_unavailable` (\"write:\nbroken pipe\" or \"socket is not connected\") instead."
     },
     {
       "kind": "feature",
@@ -116,6 +130,14 @@
       "kind": "fix",
       "source": "release-rehearsal-fixes-4.md",
       "text": "The `node-workflow` template now builds from an installed release. Before,\n`tw dev` and `tw deploy` failed with `Cannot find package 'esbuild'`\nbecause create-tailworks loaded esbuild from its own install directory,\nwhich a release doesn't include. It now uses the app's own esbuild, and the\ntemplate lists esbuild as a dependency.\n\nOperator action: in an app made from the `node-workflow` template with an\nearlier release, run `npm install --save-dev esbuild@0.28.2`."
+    },
+    {
+      "kind": "feature",
+      "upgrade": [
+        "feature-string"
+      ],
+      "source": "require-exit-node-egress-hosts-workloads.md",
+      "text": "A host can send every workload's internet egress through a tailnet exit\nnode: `tw up --worker-internet=exit-node=\u003cnode\u003e` (or `tw-hostd\n-worker-internet=exit-node=\u003cnode\u003e -container-internet=exit-node`). The\nhost's own node (`tag:tw-host`) uses the exit node, so the destination\nsees the exit node's address and the host's resolver never sees the names\n(they resolve at the exit node, or at `dns=\u003cip\u003e` through it). netd's SSRF\nguard is unchanged. When the exit node is missing, not offered, offline or\nrefuses DNS, internet egress is refused with the new `exit_node_unavailable`\ncode; the host never falls back to its own network. `tw status` and\n`tw doctor` show the exit node and why it is unusable.\n\nA workload can require it with `tailnet.egress.via: \"exit-node\"` in\ntailworks.jsonc. Such a deploy needs the new host feature\n`internet-exit-node`, which a host advertises only when its path is an\nexit node; mgmt places it only there (`feature_unavailable` otherwise).\n\nOperator action: none unless you use it. To use it, grant `tag:tw-host` →\n`autogroup:internet` in the tailnet policy and approve the exit node's\nroutes."
     },
     {
       "kind": "feature",

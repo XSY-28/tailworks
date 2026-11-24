@@ -9,9 +9,22 @@ What may run together, and how to upgrade:
 
 ## v0.5.0 (2026-11-24)
 
-workerd 1.20261118.1.
+workerd 1.20261121.1.
 
 ### Upgrade actions
+
+#### deps-workerd-1.20261121.1
+
+The pinned workerd moves from 1.20261118.1 to 1.20261121.1. `fetch()` now
+rejects with a `TypeError` when a response head doesn't parse
+(cloudflare/workerd#8535), `Body.formData()` rejects with the body stream's
+error (#8679), `new Request(request, init)` leaves the original body usable
+when it throws (#8681), and `TextDecoder` keeps its state after a fatal
+streaming error (#8658). In `node:net`, connect failures to unknown hosts carry
+Node's `ENOTFOUND` properties (#8648) and IDN hosts are converted to ASCII
+(#8709). Apps don't need changes.
+
+Operator action: workerd moves to 1.20261121.1.
 
 #### policy-define-connects-tags
 
@@ -278,6 +291,28 @@ most tailnets don't have (pasting its grant failed with `tag not found`).
 `tw deploy` now ends with a `curl` line for the app and `tw logs <app> -f`.
 The README is rewritten as a short quick start.
 
+#### require-exit-node-egress-hosts-workloads
+
+A host can send every workload's internet egress through a tailnet exit
+node: `tw up --worker-internet=exit-node=<node>` (or `tw-hostd
+-worker-internet=exit-node=<node> -container-internet=exit-node`). The
+host's own node (`tag:tw-host`) uses the exit node, so the destination
+sees the exit node's address and the host's resolver never sees the names
+(they resolve at the exit node, or at `dns=<ip>` through it). netd's SSRF
+guard is unchanged. When the exit node is missing, not offered, offline or
+refuses DNS, internet egress is refused with the new `exit_node_unavailable`
+code; the host never falls back to its own network. `tw status` and
+`tw doctor` show the exit node and why it is unusable.
+
+A workload can require it with `tailnet.egress.via: "exit-node"` in
+tailworks.jsonc. Such a deploy needs the new host feature
+`internet-exit-node`, which a host advertises only when its path is an
+exit node; mgmt places it only there (`feature_unavailable` otherwise).
+
+Operator action: none unless you use it. To use it, grant `tag:tw-host` →
+`autogroup:internet` in the tailnet policy and approve the exit node's
+routes.
+
 #### service-bindings-293
 
 wrangler `services` (service bindings) work between workloads of one
@@ -384,6 +419,19 @@ New: `make e2e-compat` deploys 30 of Cloudflare's own example projects,
 unmodified, to a real host on a real tailnet and calls each one as its
 README does (`e2e/compat/README.md`).
 
+#### deps-workerd-1.20261121.1
+
+The pinned workerd moves from 1.20261118.1 to 1.20261121.1. `fetch()` now
+rejects with a `TypeError` when a response head doesn't parse
+(cloudflare/workerd#8535), `Body.formData()` rejects with the body stream's
+error (#8679), `new Request(request, init)` leaves the original body usable
+when it throws (#8681), and `TextDecoder` keeps its state after a fatal
+streaming error (#8658). In `node:net`, connect failures to unknown hosts carry
+Node's `ENOTFOUND` properties (#8648) and IDN hosts are converted to ASCII
+(#8709). Apps don't need changes.
+
+Operator action: workerd moves to 1.20261121.1.
+
 #### fix-268
 
 The `ai-agent` template now works when you follow its README. Its default
@@ -397,6 +445,14 @@ its tools, what a working reply looks like, and that the scripted model
 ignores the prompt. `tw init --template ai-agent` and the template listings
 say it needs `mcp`. Apps already made from the template keep their old
 `MCP_URL`: set it to `http://tw-mcp/mcp` (or `tw deploy --var MCP_URL=…`).
+
+#### fix-288-early-response
+
+A Worker or Durable Object that answers a request without reading its body
+(a killed object's 410, a handler that rejects an upload with 401 or 413)
+now reaches the caller with that answer. Before, when the body was about
+16 KB or more, the caller often got `503 upstream_unavailable` ("write:
+broken pipe" or "socket is not connected") instead.
 
 #### fix-303
 
