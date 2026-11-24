@@ -157,7 +157,7 @@ func cmdRollback(args []string) error {
 			break
 		}
 		if v.Endpoint.Status == "failed" || v.Endpoint.Status == "killed" {
-			return fail("bootstrap_failed", "the workload node for "+workload+" is "+v.Endpoint.Status).withFix("tw logs --component hostd")
+			return workloadNodeFailed(workload, v.Endpoint.Status) // workloadnode.go
 		}
 		if time.Since(ds) > *wait {
 			return fail("identity_pending", fmt.Sprintf("%s not ready after %v (status %s, node %s)", workload, *wait, v.Status, v.Endpoint.Status)).withFix("tw status", "tw logs "+workload)

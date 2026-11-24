@@ -68,7 +68,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 403 · hostd. **When:** a request named a service binding entrypoint or RPC method (the `Tailworks-Binding` header) but did not come from a tailworks workload or object of the target's tenant (its node has no certificate from the tenant), or it reached an object's node or a public route rather than a workload's entry node. Plain requests are not affected. **Fix:** call named entrypoints and RPC methods through a wrangler `services` binding of a workload in the same tenant ([wrangler.md](wrangler.md#service-bindings)); from anywhere else, call the target's default `fetch()` over the tailnet.
 
 ### bootstrap_failed
-502 · netd, mgmt, cli. **When:** an object's node could not be created: the control plane refused the mint (tag not owned, key invalid), the token exchange failed, or the node never joined. From `tw up`, mgmt's or the host's own node failed to join. **Fix:** check the tagOwners snippet (`policy_missing_tag_owners`), the credential (`tw doctor`), then `tw logs --component mgmt`.
+502 · netd, mgmt, cli. **When:** an object's node could not be created: the control plane refused the mint (tag not owned, key invalid), the token exchange failed, or the node never joined. From `tw up`, mgmt's or the host's own node failed to join. From `tw deploy`, "the workload node for <workload> is killed": the workload's entry node was killed (`tw kill`) while it was deployed. **Fix:** check the tagOwners snippet (`policy_missing_tag_owners`), the credential (`tw doctor`), then `tw logs --component mgmt`. For a killed workload node: `tw undeploy <workload>`, then deploy it again (see `killed`).
 
 ### build_failed
 500 · cli. **When:** esbuild (workerd apps) or `create-tailworks build-node` (Node apps) could not bundle the app. **Fix:** the compiler output is in the detail; fix the source and re-run. `Could not resolve "@tailworks/…"` means tailworks' own JS packages are missing next to its bundler: in a source checkout run `make deps` (a plain `make build` doesn't install them), otherwise reinstall tailworks; `tw doctor` checks it.
@@ -197,7 +197,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 1 · cli. **When:** `tw host vmcheck --keyscan` found key material inside a microVM guest. **Fix:** this must never happen (keys stay in hostd); report it with the output.
 
 ### killed
-410 · netd, mgmt, cli. **When:** the object was killed: in-flight flows were RST, the node closed, and its tombstone answers new requests for the tombstone window; `tw kill` of an object that is already killed. **Fix:** a killed object does not come back; a new request to the same name creates a fresh object with a new node.
+410 · netd, mgmt, cli. **When:** the object was killed: in-flight flows were RST, the node closed, and its tombstone answers new requests for the tombstone window; `tw kill` of an object that is already killed. **Fix:** a killed name stays killed while its workload is deployed (redeploys and rollbacks keep the kill). To use the name again, `tw undeploy <workload>` and deploy it again: that releases every name the workload had (the release is audited as `purge`). `tw down --purge` releases every killed name of the tenant on this machine.
 
 ### lease_held
 409 · mgmt. **When:** another host holds the namespace lease a host tried to take. **Fix:** nothing; placement picks the lease holder. If the holder is dead, `tw host rm <id> --drain`.

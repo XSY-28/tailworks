@@ -1021,6 +1021,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 			return resp, err
 		}
 	}
+	m.releaseUndeployedNames(ctx, t.ID, r.Workload) // redeploy.go (#364)
 	d := Deployment{ID: newID("dp_"), TenantID: t.ID, Workload: r.Workload, HostID: host, Namespaces: classes,
 		MaxLive: maxLive, MaxDepth: maxDepth, Epoch: lease.Epoch, Bundle: r.Bundle, DeployedBy: r.By, CreatedAt: m.now().UnixMilli(), Fence: fence,
 		Containers: ctrs, Public: pub, Placement: &dec}

@@ -282,6 +282,9 @@ type Object struct {
 
 	// rejectedCancel stops the ready node's watchRejected (rejected.go).
 	rejectedCancel context.CancelFunc
+
+	// tomb ends a kill's tombstone once (tombstone_end.go).
+	tomb tombstoneEnd
 }
 
 // ObjectInfo is a snapshot of an object, safe to serialize.
@@ -336,6 +339,7 @@ func (r *Registry) Create(id string, opts ObjectOptions) (*Object, error) {
 	if !ValidObjectID(id) {
 		return nil, fmt.Errorf("netd: invalid object id %q (want a lowercase DNS label)", id)
 	}
+	r.endTombstoneOf(id) // tombstone_end.go (#364): before the new node takes the dir
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.closed {
