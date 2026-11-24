@@ -68,3 +68,14 @@ as after `tw down --purge`).
   `redeploy_after_undeploy` step; without the mgmt fix it fails with
   `bootstrap_failed: the workload node for agent is killed`.
 - `make lint`: PASS.
+- `make test` (on the mbp runner, `mbp-test.sh test`): PASS.
+- `make test-pg`: PASS.
+- `make demo-test` (Headscale in Docker): PASS, including the new run
+  after `--cleanup` under the same names. It needed the
+  `scripts/demo-headscale.sh` flag fix (`--policy-apply` →
+  `--apply-policy --yes`), which #371 also made on master (same line).
+- After merging origin/master (#371): `make lint`, `TestRedeployAfterUndeploy`,
+  `TestCLIEndToEnd`: PASS.
+- Not run: `make e2e-placement` (placement unchanged; the release runs
+  after placement, before the deployment is recorded), `e2e-headscale`,
+  real-tailnet suites (`e2e-real`, `e2e-mac`).
