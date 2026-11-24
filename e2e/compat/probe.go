@@ -25,6 +25,11 @@ type Run struct {
 	Tw func(args ...string) (stdout, stderr string, err error)
 	// Steps records what the probe checked (the results file).
 	Steps []string
+
+	// Hdr is sent with every request after it is set (key, value pairs).
+	Hdr []string
+	// WaitLogFn overrides WaitLog (tw dev: the dev process's own output).
+	WaitLogFn func(s string, timeout time.Duration) (string, error)
 }
 
 // Res is one HTTP response.
@@ -80,6 +85,7 @@ func (r *Run) Do(method, path string, body []byte, hdr ...string) Res {
 		res.Err = err
 		return res
 	}
+	hdr = append(append([]string{}, r.Hdr...), hdr...)
 	for i := 0; i+1 < len(hdr); i += 2 {
 		req.Header.Set(hdr[i], hdr[i+1])
 	}
@@ -169,10 +175,15 @@ type MCP struct {
 // MCPConnect runs initialize (+ notifications/initialized) on path and
 // returns the server's serverInfo name.
 func (r *Run) MCPConnect(path string) (*MCP, string, error) {
+	return r.MCPConnectWith(path, map[string]any{})
+}
+
+// MCPConnectWith is MCPConnect with the client's capabilities.
+func (r *Run) MCPConnectWith(path string, caps map[string]any) (*MCP, string, error) {
 	m := &MCP{r: r, path: path}
 	res, err := m.Call("initialize", map[string]any{
 		"protocolVersion": "2025-06-18",
-		"capabilities":    map[string]any{},
+		"capabilities":    caps,
 		"clientInfo":      map[string]any{"name": "tw-compat", "version": "1"},
 	})
 	if err != nil {
@@ -265,6 +276,9 @@ func (m *MCP) Tool(name string, args map[string]any) (string, error) {
 // WaitLog waits until the workload's console output (tw logs --console)
 // contains s.
 func (r *Run) WaitLog(s string, timeout time.Duration) (string, error) {
+	if r.WaitLogFn != nil {
+		return r.WaitLogFn(s, timeout)
+	}
 	var last string
 	err := Eventually(timeout, func() error {
 		out, se, err := r.Tw("logs", r.P.ID, "--console", "-n", "500")

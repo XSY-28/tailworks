@@ -22,6 +22,8 @@ var Repos = map[string]string{
 	"cloudflare/workers-sdk": "Apache-2.0 OR MIT",
 	"cloudflare/agents":      "MIT",
 	"cloudflare/ai":          "MIT",
+	"vercel/ai":              "Apache-2.0",
+	"vercel/mcp-handler":     "Apache-2.0",
 }
 
 // Install says how a project's npm dependencies are installed.
@@ -110,6 +112,34 @@ type Project struct {
 	Expect      Expect
 	// Probe calls the deployed workload. Nil only for ExpectRefused.
 	Probe func(r *Run) error
+
+	// Section is the COMPAT.md upstream-examples table this project is
+	// published in (SectionAgents, SectionMCP, SectionVercel; issue #325).
+	// "" = not published there. `make e2e-compat-dev` runs these.
+	Section string
+	// Changes lists what the run changes in the example itself (its
+	// config, an added entry file, a stubbed model). With any, a pass is
+	// published as "pass with change". Workarounds are install and deploy
+	// mechanics; Changes are differences a user would have to make too.
+	Changes []string
+	// OriginVar names a wrangler `vars` entry the example's README says to
+	// set to the deployed URL. The run sets it to <origin>/mcp
+	// (setOriginVar): under tw dev before the start, deployed after a first
+	// deploy has shown the origin, followed by a second deploy.
+	OriginVar string
+	// ExpectDeployed, when its Kind isn't ExpectPass, replaces Expect in
+	// the deployed run: the example behaves differently on a real host
+	// than under tw dev.
+	ExpectDeployed Expect
+}
+
+// ExpectIn is what the suite expects of p in a run mode ("dev" or
+// "deployed").
+func (p *Project) ExpectIn(mode string) Expect {
+	if mode == "deployed" && p.ExpectDeployed.Kind != ExpectPass {
+		return p.ExpectDeployed
+	}
+	return p.Expect
 }
 
 var (
@@ -141,7 +171,7 @@ func Validate(ps []*Project, anchors map[string]bool) error {
 		if p.What == "" || len(p.Exercises) == 0 {
 			bad("needs What and Exercises")
 		}
-		for _, a := range append(append([]string{}, p.Exercises...), p.Expect.Compat) {
+		for _, a := range append(append([]string{}, p.Exercises...), p.Expect.Compat, p.ExpectDeployed.Compat) {
 			if a != "" && anchors != nil && !anchors[a] {
 				bad("COMPAT.md has no anchor %q", a)
 			}

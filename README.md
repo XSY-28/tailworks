@@ -8,7 +8,11 @@ what, and what each object can reach.
 
 It runs your code on [workerd](https://github.com/cloudflare/workerd) on
 macOS (Apple silicon) or Linux. Agents SDK agents, MCP servers and Vercel AI
-SDK agents run unmodified.
+SDK agents run unmodified. What that covers is measured against the upstream
+projects' own examples, one row each, failures included:
+[Agents SDK](docs/COMPAT.md#upstream-examples-agents-sdk),
+[Vercel AI SDK](docs/COMPAT.md#upstream-examples-vercel-ai-sdk),
+[mcp-handler](docs/COMPAT.md#upstream-examples-mcp-handler).
 
 tailworks is a community project, not affiliated with or endorsed by
 Tailscale Inc.
@@ -260,9 +264,9 @@ and the tests behind each row: [docs/COMPAT.md](docs/COMPAT.md).
 | Platform | [Environments (`--env`)](docs/COMPAT.md#wrangler-env) | ✅ | one workload per environment |
 | Platform | [Bundling (`define`, `alias`, `rules`, `--wrangler`)](docs/COMPAT.md#wrangler-bundling) | ✅ | built-in esbuild, or wrangler's own |
 | Platform | [`wrangler deploy` / `secret` / `tail`](docs/COMPAT.md#wrangler-api) | 🚫 | use `tw deploy` / `secret` / `logs` |
-| SDKs | [Cloudflare Agents SDK](docs/COMPAT.md#agents-sdk) | ⚠️ | core and `AgentWorkflow` run unmodified; no `subAgent()` |
+| SDKs | [Cloudflare Agents SDK](docs/COMPAT.md#agents-sdk) | ⚠️ | core and `AgentWorkflow` run unmodified; no `subAgent()` or `env.AI`; [Cloudflare's examples, one by one](docs/COMPAT.md#upstream-examples-agents-sdk) |
 | SDKs | [MCP servers](docs/COMPAT.md#mcp) | ✅ | tools gated by tailnet grants |
-| SDKs | [Vercel AI SDK](docs/COMPAT.md#vercel-ai) | ⚠️ | MCP client needs `mcpFetch` |
+| SDKs | [Vercel AI SDK](docs/COMPAT.md#vercel-ai) | ⚠️ | MCP client needs `mcpFetch`; [the AI SDK's examples](docs/COMPAT.md#upstream-examples-vercel-ai-sdk) |
 | Tooling | [CLI `--json` output](docs/COMPAT.md#cli-json) | ✅ | schema for every command; NDJSON events |
 | Tooling | [Coding-agent skills (`tw agent`)](docs/COMPAT.md#agent-skills) | ✅ | Claude Code, Codex, Cursor, Gemini CLI, OpenCode |
 | Tooling | [Testing: `@cloudflare/vitest-plugin`](docs/COMPAT.md#vitest-plugin) | ⚠️ | Worker and DO logic as on Cloudflare; callers and `ctx.tailnet` via `@tailworks/tailnet/testing` |

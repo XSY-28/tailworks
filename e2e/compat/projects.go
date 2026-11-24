@@ -48,6 +48,12 @@ const redirectWorkaround = "deploys the Vite plugin's output directory with --wr
 
 // Projects is the suite. Order is the run order (cheap ones first).
 func Projects() []*Project {
+	return append(cloudflareProjects(), upstreamProjects()...)
+}
+
+// cloudflareProjects are the example projects of issue #305; upstream.go
+// has the upstream examples of issue #325.
+func cloudflareProjects() []*Project {
 	return []*Project{
 		// --- create-cloudflare (npm create cloudflare) templates ---
 		with(c3("c3-hello-world", "hello-world/ts"), func(p *Project) {
@@ -448,6 +454,7 @@ func Projects() []*Project {
 		// --- cloudflare/agents examples ---
 		with(agentsEx("mcp-server", "mcp-server"), func(p *Project) {
 			p.What = "Stateless MCP server (createMcpHandler)"
+			p.Section = SectionAgents
 			p.Exercises = []string{"mcp"}
 			p.Workarounds = []string{"npm install (the example is in a pnpm monorepo and has no lockfile of its own)"}
 			p.Probe = func(r *Run) error {
@@ -475,11 +482,9 @@ func Projects() []*Project {
 			p.AddDeps = map[string]string{"@modelcontextprotocol/server": "2.4.0"}
 			p.Install = InstallUpgrade
 			p.Build = [][]string{{"npx", "vite", "build"}}
-			p.DeployDir = "redirect"
-			p.DeployArgs = []string{"--wrangler"}
+			p.Section = SectionAgents
 			p.Workarounds = []string{
 				`"agents": "*" (a pnpm workspace dependency) pinned to the published 0.34.0, plus its peer @modelcontextprotocol/server@2.4.0 (hoisted by the monorepo); npm install (no lockfile of its own)`,
-				redirectWorkaround,
 			}
 			p.Probe = func(r *Run) error {
 				m, name, err := r.MCPConnect("/mcp")
