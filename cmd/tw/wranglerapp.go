@@ -130,6 +130,9 @@ func (a *app) buildEsbuild(out string, np []string) (files map[string][]byte, ty
 	}
 	o.SourceMap, o.SourcesContent = a.wantSourceMap() // sourcemap.go
 	r, err := esbundle.BuildApp(o)
+	if ee := emailImportFailure(err); ee != nil { // emailimport.go
+		return nil, nil, 0, ee
+	}
 	if err != nil {
 		return nil, nil, 0, withBundleFix(fail("build_failed", "esbuild failed for "+a.Dir, strings.Split(strings.TrimSpace(err.Error()), "\n")...), err.Error()) // sourcehints.go
 	}
