@@ -1015,6 +1015,7 @@ func (m *ctrManager) servePort(w http.ResponseWriter, r *http.Request, k ctrKey,
 		FlushInterval: -1,
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
+			netd.KeepBodyEOF(pr) // #138
 			pr.Out.URL.Path, pr.Out.URL.RawPath, pr.Out.URL.RawQuery = path, "", r.URL.RawQuery
 			if h := r.Header.Get("x-tw-host"); h != "" {
 				pr.Out.Host = h

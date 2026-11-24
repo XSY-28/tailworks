@@ -201,6 +201,7 @@ func UnixUpstream(path string) http.Handler {
 		ErrorLog:      log.New(io.Discard, "", 0), // errors are reported via ErrorHandler
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
+			KeepBodyEOF(pr) // proxybody.go (#138)
 			pr.Out.Host = pr.In.Host
 			KeepForwarded(pr)
 		},
