@@ -38,7 +38,7 @@ watch each upstream that ships in it:
 | --- | --- | --- |
 | Go modules and the Go toolchain | `go.mod`, `tools/go.mod` | `make vulncheck` (govulncheck, run by `make lint`), Dependabot alerts, golang-announce |
 | npm packages | `package-lock.json`, `e2e/*/package-lock.json` | Dependabot alerts, `npm audit` |
-| workerd | `package.json` | the workerd GitHub releases and security advisories |
+| workerd | `package.json`, `internal/version/workerd.go` | the workerd GitHub releases and security advisories; for the V8 inside it, Chrome's stable-channel release notes, watched by the nightly `v8-check` job (see **V8** below) |
 | Tailscale (`tailscale.com`) | `go.mod` | tailscale.com/security-bulletins, govulncheck |
 | Firecracker | `guest/inputs.sh` | the Firecracker GitHub releases and security advisories |
 | Guest kernel (6.1 LTS) | `guest/inputs.sh` | the kernel.org stable releases and linux-cve-announce |
@@ -66,6 +66,45 @@ the guest and a tenant or a network peer can reach it.
 - Medium or low: the next release. Ship it sooner if it is cheap.
 - Not affected: say so in the issue or advisory, so the next person
   doesn't triage it again.
+
+**V8.** workerd carries V8, and V8 security fixes don't arrive as workerd
+advisories: V8 rolls into ordinary workerd releases, and the public signal
+is Chrome's stable-channel security release, whose notes list the V8 CVEs
+([Chrome Releases, stable updates](https://chromereleases.googleblog.com/search/label/Stable%20updates);
+the current stable version is also at
+`https://chromiumdash.appspot.com/fetch_releases?channel=Stable&platform=Linux&num=1`).
+V8 `MAJOR.MINOR` ships in Chrome milestone `MAJOR*10+MINOR`: V8 15.8 is
+Chrome 158.
+
+- *Which V8 a release carries* is the V8 in its pinned workerd. `make
+  v8-check` prints it: it reads V8's version string out of the workerd
+  binary, which is the only place it shows (`process.versions.v8` is empty
+  under workerd's `nodejs_compat`, `workerd --version` prints only a date,
+  and the inspector names no V8). Put it in the `workerd` fragment when the
+  pin moves ("workerd 1.20261121.1, V8 15.8.62.5").
+- *What watches the feed* is the nightly `v8-check` job
+  (`.github/workflows/nightly.yml`, `scripts/v8-check.sh`,
+  `internal/v8check`). It compares the pin's V8 milestone with Chrome
+  stable's and, when the pin is behind, opens or updates one `security`
+  issue, "workerd pin is behind Chrome stable's V8", with both versions and
+  the link to the release notes; it closes the issue when the pin catches
+  up. The job stays green either way; the issue is the signal.
+- *That issue starts the clock.* Triage it within 2 business days: read the
+  Chrome notes for the V8 CVEs and decide whether tenant code can reach
+  them. A High or Critical one means a patch release whose workerd carries
+  the fixed V8 **within 7 days of the Chrome stable release that names it**
+  (the 7-day rule above, counted from Chrome's release because that is when
+  the fix is public). Its fragment is `kind: security`: that makes the
+  Security section of the release notes, which `tw` reads to call the
+  release a security release (below). If workerd hasn't rolled the fixed V8
+  yet, say so in the issue and ship when it has.
+- *What the operator sees.* `tw doctor`'s `workerd_age` check shows how old
+  the pinned workerd is and warns past 30 days. The once-a-day update
+  notice (after `tw doctor`, `tw status` and other commands) and `tw
+  version --check` say "security release" when the latest release's notes
+  have a Security section (`securityRelease` in `tw version --check
+  --json`). Whether the shipped workerd has the V8 sandbox is recorded in
+  `docs/security-model.md`.
 
 **What a patch release may bump for a security fix.** The patch rules under
 [Versions](#versions) hold, except that a patch may move the Go toolchain,

@@ -130,6 +130,52 @@ confines reads, writes and unix socket connects under the deny list only,
 so TCP, signals to tailworks' own processes and writes elsewhere (`/tmp`)
 are open again, and `tw status` reports Node egress as `unenforced`.
 
+### The V8 sandbox in the shipped workerd
+
+The [V8 sandbox](https://v8.dev/blog/sandbox) is a compile-time V8 feature
+(`v8_enable_sandbox`) that keeps a memory-corruption bug in V8 from reaching
+memory outside the JavaScript heap. **The workerd builds tailworks ships do
+not have it**: the npm `workerd` 1.20261121.1 binaries for macOS arm64
+(`@cloudflare/workerd-darwin-arm64`), Linux amd64 (`workerd-linux-64`) and
+Linux arm64 (`workerd-linux-arm64`), all carrying V8 15.8.62.5. The microVM
+guest runs the same Linux binary. Checked 2026-11-24 (issue #338):
+
+- **How it is built.** workerd builds V8 with Bazel, and V8's Bazel build
+  on the 15.8 branch hardcodes `sandbox = false` in the build
+  configuration it embeds (`bazel/defs.bzl`) and lists `v8_enable_sandbox`
+  among the GN flags the Bazel build doesn't support (`BUILD.bazel`).
+  workerd's own source says the same (`src/workerd/jsg/jsg.c++`: "We do not
+  build workerd with the V8_ENABLED_SANDBOX flag").
+- **Measured at run time.** A workerd process serving one Worker reserves a
+  single 4 GiB region (V8's pointer-compression cage) and nothing near the
+  1 TiB the sandbox reserves at startup. macOS arm64: `vmmap <pid>` of the
+  pinned binary. Linux amd64: `/proc/<pid>/maps` of the `workerd-linux-64`
+  binary from npm, run on an amd64 VM. Same result on both.
+- **Not evidence**, so the next person doesn't repeat the detour: the
+  binaries contain the flag names `sandbox_testing` and `sandbox_fuzzing`
+  and the text "V8 sandbox violation detected", but V8 defines those flags
+  (read-only) in builds without the sandbox too. The string
+  `v8_enable_sandbox: 0` in the binary is workerd's copy of Node's
+  `process.config` (`src/node/internal/internal_process.ts`), not its own
+  build configuration. `process.versions.v8` is empty under workerd, so a
+  Worker can't report the V8 version either.
+
+What it means: pointer compression on its own is not a security boundary.
+A memory-corruption bug in V8 (a JIT type confusion, say) that hostile
+tenant code triggers gives it arbitrary read and write in that workload's
+workerd process, which also runs the platform worker for that workload and
+its secrets. The next wall is the OS sandbox on the process tier (the table
+above: Seatbelt, or Landlock and seccomp) and the VM on the microVM tier,
+which is why the pinned workerd's age matters (`tw doctor`'s `workerd_age`)
+and why the nightly `v8-check` job watches Chrome's stable releases for the
+V8 fixes ([RELEASING.md](RELEASING.md), "Upstream advisories").
+
+To recheck when the pin moves: `make v8-check` prints the V8 version; run
+the new workerd on a one-Worker config and look at its address space
+(`vmmap <pid>` on macOS, `/proc/<pid>/maps` on Linux). A 4 GiB reservation
+and nothing larger means no sandbox; a reservation of hundreds of GiB or
+more means it is on, and this section should change.
+
 ### When a host is shared between tenants
 
 tailworks runs a second tenant's process-tier workloads on a host only when

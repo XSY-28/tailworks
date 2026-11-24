@@ -37,6 +37,7 @@ var doctorGroups = []string{
 var (
 	reDiskFree     = regexp.MustCompile(`^([\d.]+ \S+ free)`)
 	reWorkerdVer   = regexp.MustCompile(`: workerd (\S+)`)
+	reWorkerdAge   = regexp.MustCompile(`, (\d+ days?) old`)
 	reSandboxKind  = regexp.MustCompile(`^(.+?) works? on `)
 	reBeforeColon  = regexp.MustCompile(`^([^:;(]+)[:;(]`)
 	reStoreTenants = regexp.MustCompile(`^(\d+ tenants?, \d+ stores?, \d+ queues?)`)
@@ -81,6 +82,7 @@ var doctorMetas = map[string]doctorMeta{
 	"user_namespaces":            {group: "Linux host", label: "user namespaces"},
 	"worker_internet":            {group: "Isolation", label: "Worker internet", fact: submatch(reBeforeColon)},
 	"workerd":                    {group: "Install", label: "workerd", fact: submatch(reWorkerdVer)},
+	"workerd_age":                {group: "Install", label: "workerd age", fact: submatch(reWorkerdAge)}, // doctor_workerdage.go
 }
 
 func binariesFact(d string) string {
