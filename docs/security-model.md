@@ -155,6 +155,58 @@ a host between tenants that don't trust each other, use
 `"tier": "microvm"`, a Linux host with kernel 6.7+, or macOS with the
 default Seatbelt profile.
 
+#### Side channels
+
+The sandboxes above control what a workload may read, write and reach.
+They do nothing about what it can *infer* from the hardware it shares
+with its neighbours: cache timing, speculative execution (Spectre and its
+successors), a sibling hyper-thread's execution ports, or pages the kernel
+merged between processes. tailworks relies on two things here: a process
+(or a VM) per workload, so the OS's and CPU's mitigations apply at the
+process or VM boundary, and **the host kernel's and CPU's mitigations
+being on**. Nothing in tailworks turns them on. On a shared host they are
+what keeps one tenant's code from reading another tenant's secrets, or
+tw-hostd's and tw-mgmt's (every tenant's node keys, the custody key, the
+mint credential) off a shared core. There is no complete defence against
+Spectre-class attacks for any isolation technology; the mitigations make
+them impractical, not impossible.
+
+"No native code" does not hold on two tiers, so don't count on it there.
+The Node tier runs native code by design (`node:vm`, child processes,
+native modules, with precise timers and threads), and a microVM guest runs
+whatever the tenant ships. workerd on the process tier runs only
+JavaScript and WebAssembly, which is a weaker attacker but still one with
+timers and shared-memory threads.
+
+What the operator keeps on, on a Linux host that serves more than one
+tenant, runs a Node-tier workload or offers the microVM tier:
+
+- **Kernel mitigations on**: the kernel's defaults, no `mitigations=off`;
+  every entry in `/sys/devices/system/cpu/vulnerabilities/` reads
+  `Mitigation:` or `Not affected`, none `Vulnerable`. Keep the CPU
+  microcode current.
+- **SMT (hyper-threading) off** (`nosmt`, or `echo off >
+  /sys/devices/system/cpu/smt/control`), or accept that a tenant's sibling
+  thread can watch another tenant's cache and port use. Firecracker's
+  production guidance says off.
+- **KSM (kernel samepage merging) off** (`/sys/kernel/mm/ksm/run` is `0`).
+
+`tw doctor` reads these (`side_channels`, Linux only) and warns on a
+`Vulnerable` entry, SMT on, `mitigations=off` or KSM on, saying when it
+matters. A macOS host can't be read this way (and Seatbelt's process tier
+shares the kernel and the cores with every tenant), so a macOS host is
+**development-grade** for tenants that don't trust each other.
+
+*Decision (issue #334):* this is a warning, not a gate. hostd does not
+refuse a second tenant on a host that reports `Vulnerable` or
+`mitigations=off`, as it does for a missing sandbox. A single-tenant host
+is the common case and would gain nothing; the kernel's `Vulnerable`
+strings vary by CPU and kernel (`Vulnerable: Safe RET, no microcode` is a
+partial mitigation), so a gate would need its own judgement of each; and an
+operator switch to override it would be needed anyway, as
+`--insecure-shared-host` is today. Read the warning before you add a
+tenant.
+
 ### Experimental compatibility flags
 
 Every workerd tailworks starts runs with `--experimental`, because the
