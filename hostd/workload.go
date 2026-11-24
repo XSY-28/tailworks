@@ -561,6 +561,9 @@ func (h *Host) startInstance(w *workload, depID string, app *bundle.App, tier st
 		DeploymentID: depID,
 		Workload:     w.name,
 		HeapMiB:      h.workerdHeapMiB(),
+		// Experimental compatibility flags (gen/compatflags.go, #337).
+		AllowExperimentalFlags: h.cfg.AllowExperimentalFlags,
+		WorkerdBin:             h.cfg.WorkerdBin,
 	}
 	vmTier := tier == bundle.TierMicroVM
 	if vmTier {

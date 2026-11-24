@@ -465,6 +465,7 @@ const (
 	ErrorCodeDelegationExceedsParent ErrorCode = "delegation_exceeds_parent"
 	ErrorCodeDelegationInvalid       ErrorCode = "delegation_invalid"
 	ErrorCodeExists                  ErrorCode = "exists"
+	ErrorCodeExperimentalFlag        ErrorCode = "experimental_flag"
 	ErrorCodeFeatureUnavailable      ErrorCode = "feature_unavailable"
 	ErrorCodeForbidden               ErrorCode = "forbidden"
 	ErrorCodeHostHoldsLeases         ErrorCode = "host_holds_leases"
@@ -578,6 +579,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeDelegationInvalid:
 		return true
 	case ErrorCodeExists:
+		return true
+	case ErrorCodeExperimentalFlag:
 		return true
 	case ErrorCodeFeatureUnavailable:
 		return true
@@ -2329,6 +2332,7 @@ type Error struct {
 	// | `tenant_forbidden` | 403 | a tenant admin's `github.com/rosskukulinski/tailworks/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
 	// | `cap_missing` | 403 | an approval the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants do not cover (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
+	// | `experimental_flag` | 403 | the bundle's `compatibility_flags` list flags workerd marks experimental (`unsafe_module`, `rtti_api`, `precise_timers`, …) and no host allows them (`tw-hostd -allow-experimental-flags`); the deploy and its dry run |
 	// | `host_not_registered` | 403 | `tag:tw-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 	// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 	// | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
@@ -2433,6 +2437,7 @@ type Error struct {
 // | `tenant_forbidden` | 403 | a tenant admin's `github.com/rosskukulinski/tailworks/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
 // | `cap_missing` | 403 | an approval the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants do not cover (`snippet` given) |
 // | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
+// | `experimental_flag` | 403 | the bundle's `compatibility_flags` list flags workerd marks experimental (`unsafe_module`, `rtti_api`, `precise_timers`, …) and no host allows them (`tw-hostd -allow-experimental-flags`); the deploy and its dry run |
 // | `host_not_registered` | 403 | `tag:tw-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 // | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 // | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
@@ -2656,6 +2661,7 @@ type HostDrainResult struct {
 		// | `tenant_forbidden` | 403 | a tenant admin's `github.com/rosskukulinski/tailworks/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
 		// | `cap_missing` | 403 | an approval the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants do not cover (`snippet` given) |
 		// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
+		// | `experimental_flag` | 403 | the bundle's `compatibility_flags` list flags workerd marks experimental (`unsafe_module`, `rtti_api`, `precise_timers`, …) and no host allows them (`tw-hostd -allow-experimental-flags`); the deploy and its dry run |
 		// | `host_not_registered` | 403 | `tag:tw-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 		// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 		// | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |
@@ -4523,6 +4529,7 @@ type TombstoneError struct {
 	// | `tenant_forbidden` | 403 | a tenant admin's `github.com/rosskukulinski/tailworks/cap/tenant-admin` grants don't name the tenant with the action, or the route is admin-only (`snippet` given) |
 	// | `cap_missing` | 403 | an approval the caller's `github.com/rosskukulinski/tailworks/cap/approve` grants do not cover (`snippet` given) |
 	// | `forbidden` | 403 | role ok, but outside the caller's records / namespaces |
+	// | `experimental_flag` | 403 | the bundle's `compatibility_flags` list flags workerd marks experimental (`unsafe_module`, `rtti_api`, `precise_timers`, …) and no host allows them (`tw-hostd -allow-experimental-flags`); the deploy and its dry run |
 	// | `host_not_registered` | 403 | `tag:tw-host` node that never did `PUT /v1/hosts/{id}`, or a `PUT` for a host ID the admin never created |
 	// | `host_identity_mismatch` | 403 | host ID bound to another node; `registrationSecret` missing or wrong; `auditPubKey` differs from the pinned one |
 	// | `delegation_invalid` | 403 | child tag not owned by the parent's, parent unknown (404) or dead (410) |

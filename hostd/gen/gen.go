@@ -74,6 +74,16 @@ type Options struct {
 	// HeapMiB, if > 0, caps each V8 isolate's heap in this workerd
 	// (limits.go).
 	HeapMiB int
+
+	// AllowExperimentalFlags lets the app set compatibility flags workerd
+	// marks experimental (compatflags.go; tw-hostd
+	// -allow-experimental-flags). Off, such an app is refused with
+	// ExperimentalFlagError.
+	AllowExperimentalFlags bool
+	// WorkerdBin, if set, is the workerd that is asked which of the app's
+	// flags are experimental (internal/compatflags.Probe), in addition to
+	// the known list.
+	WorkerdBin string
 }
 
 // LoopbackNet are hostd's per-instance loopback listeners (127.0.0.1:port).
@@ -113,6 +123,9 @@ func Generate(app *bundle.App, o Options) (*Result, error) {
 		if !flagRE.MatchString(f) {
 			return nil, fmt.Errorf("gen: bad compatibility flag %q", f)
 		}
+	}
+	if err := checkCompatFlags(app.CompatFlags, o); err != nil { // compatflags.go (#337)
+		return nil, err
 	}
 	if err := checkSecrets(app); err != nil {
 		return nil, err

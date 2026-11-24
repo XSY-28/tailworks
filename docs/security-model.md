@@ -120,6 +120,25 @@ a host between tenants that don't trust each other, use
 `"tier": "microvm"`, a Linux host with kernel 6.7+, or macOS with the
 default Seatbelt profile.
 
+### Experimental compatibility flags
+
+Every workerd tailworks starts runs with `--experimental`, because the
+platform worker needs it (the worker loader, facets). Without that switch
+workerd refuses the compatibility flags upstream marks experimental
+(`unsafe_module`, which gives `workerd:unsafe` and string eval; `rtti_api`;
+`precise_timers`; and whatever a workerd release adds). So that the switch
+doesn't also unlock them for tenant code, a deploy whose
+`compatibility_flags` list one is refused (`experimental_flag`): by mgmt at
+the deploy and its dry run, from the known list (`internal/compatflags`),
+and by the host when it generates the workerd config, from the list and
+from the pinned workerd itself (a 20 ms `workerd test` of a throwaway
+config without `--experimental`). `tw up --allow-experimental-flags` (or
+`tw-hostd -allow-experimental-flags`) lets a host run them; it advertises
+the `experimental-flags` feature and mgmt places such deployments only on
+hosts that have it. Everything an experimental flag unlocks stays inside
+the tenant's own workerd; the policy is about not handing out APIs upstream
+calls not ready (issue #337, [COMPAT.md](COMPAT.md#experimental-flags)).
+
 ### Availability between tenants
 
 The sandboxes above are about confidentiality and integrity: what a

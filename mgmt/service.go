@@ -862,6 +862,9 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	if err := m.checkReplicaName(ctx, r); err != nil { // workload_replicas.go (#348)
 		return resp, err
 	}
+	if err := m.checkCompatFlags(ctx, r); err != nil { // compatflags.go (#337)
+		return resp, err
+	}
 	classes := slices.Clone(r.Namespaces)
 	maxLive, maxDepth := DefaultMaxLive, DefaultMaxDepth
 	var svcCfg *TwConfig
