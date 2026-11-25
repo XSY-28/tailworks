@@ -65,7 +65,7 @@ Coding agents: start with the skills. `tw agent setup` installs them for Claude 
 
 - [Management API](https://github.com/rosskukulinski/tailworks/blob/master/docs/contracts/mgmt-api.md): the REST v1 contract, rendered from api/openapi.yaml
 - [OpenAPI spec](https://github.com/rosskukulinski/tailworks/blob/master/api/openapi.yaml): the source of truth for /v1
-- [tw-hostd additions](https://github.com/rosskukulinski/tailworks/blob/master/docs/contracts/hostd-additions.md): the host agent's contract
+- [tw-hostd API](https://github.com/rosskukulinski/tailworks/blob/master/docs/contracts/hostd-api.md): the host agent's routes, mgmt → hostd and the operator's local socket
 - [RFC](https://github.com/rosskukulinski/tailworks/blob/master/docs/design/RFC.md): the design
 - [Architecture decision records](https://github.com/rosskukulinski/tailworks/blob/master/docs/design/adr/README.md): one file per decision
 

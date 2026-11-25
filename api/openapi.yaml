@@ -49,8 +49,11 @@ info:
     scheme; `tw doctor` reports `transport: tsnet` in normal operation and
     flags any local-socket use.
 
-    mgmt → hostd pushes (kill, assignments) go to the host's tsnet node and are
-    hostd's API, not this document's.
+    mgmt → hostd pushes and calls (`POST /v1/push/*`, `GET /v1/logs`,
+    `POST /v1/store-admin`, `/v1/approvals*`) and the operator's local-socket
+    calls (`tw status`, `tw down --purge`, `tw host vmcheck`) are hostd's API,
+    not this document's: see
+    [hostd-api.md](hostd-api.md).
 
     ## Conventions
 
