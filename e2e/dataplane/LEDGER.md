@@ -7,15 +7,19 @@ labelled `dataplane-chaos`.
 
 | Scenario | Clean seeds (consecutive) | Notes |
 |---|---|---|
-| queues | 1, 2, 5, 6 | Attempt gaps inside fault windows: see F1 (#431) |
-| fencing | 2, 7 | Seed 2 counts only the rerun with safe takeovers |
-| d1 | 4 (on replay after the checker fix) | |
-| mixed | 3, 8, 9 (macOS) | Linux: 20261125 failed D1 before the F3 fix (#501) |
-| 10-minute mixed soak | none yet | |
+| queues | 101 (macOS), 102 (Linux), 103 (macOS) | Earlier: 1, 2, 5, 6. Attempt gaps inside fault windows: see F1 (#431) |
+| fencing | 101, 102, 103 (Linux, with `skew`) | Earlier: 2, 7. 101 failed D1/D2 before the F3 fix and passed after it (same seed) |
+| d1 | 101 (Linux), 102, 103 (macOS) | |
+| mixed | 101, 102, 103 (Linux, with `skew`) | 102 failed KV on a checker race (an op sent while a step was applied) and passed on replay and on rerun after the fix. D2 notes 2 overlaps right after forward steps (F5, #569) |
+| 10-minute mixed soak | 1001 (Linux, 4 skew steps, 6 takeovers), 1002 (macOS, 6 takeovers) | |
 
-The issue's stop condition is not met yet: 3 consecutive seeds on every
-scenario (d1 has 1) and 2 clean 10-minute soaks. Nightly runs `mixed` with
-the date as the seed.
+The stop condition of #415 is met (2026-11-24, branch
+`dataplane-415-finish`): 3 consecutive seeds on every scenario and 2 clean
+10-minute `mixed` soaks, with the KV checker and the `skew` fault. Two
+things are allowed rather than gated: D2 overlaps right after a forward
+clock step (F5, until #569 is decided), and Pulse going quiet after a
+backward step (F6, #570: no invariant checks liveness). Nightly runs
+`mixed` with the date as the seed, on Linux, so with `skew`.
 
 ## Findings
 
@@ -77,3 +81,9 @@ the date as the seed.
 | CI ubuntu-24.04, nightly dispatch run 45535497016 | mixed 20261125 | **D1 fail: F3** (2 stale Pulse side effects after takeovers of stalled hosts) |
 | fix-432 branch, queues 6 | queues 6, crash-hostd + move | pass. Workerds alive 10 s after a hostd crash and restart: 8 of 8 → 0 of 7 (D7 now gates it) |
 | fix-501 branch, Linux arm64 (Lima) | fencing 20261125, pause-takeover + pause-hostd-takeover, 5 min | pass. 6 takeovers of a stalled host, 7 epochs, 0 stale answers, 0 stale side effects (of 371 pulses) |
+| dataplane-415-finish, Linux (before merging the F3 fix) | fencing 101 | D1 4 stale answers, 4 stale side effects; D2 1 overlap: F3 again (pause-takeover of h3). Same seed after the merge: pass |
+| dataplane-415-finish, Linux | fencing 7, `TW_DP_FAULTS=skew,pause-takeover,cut-takeover,move` | KV fail on the first checker (expiry seen by a clock stepped back after the key had expired); pass on replay after the checker fix. 4 takeovers, 2 with h3 skewed −5m1s |
+| dataplane-415-finish, Linux | fencing 3, `TW_DP_FAULTS=skew`, 2 min (19 steps) | **F4** (12 TTL keys missing, #568), **F5** (2 overlaps after forward steps, #569), **F6** (Pulse silent after the first step back, #570). D1, D3, D4 clean |
+| dataplane-415-finish + #575, Linux | fencing 3, `skew` only, 2 min | KV clean (F4 fixed); F5 2 notes; F6 again (62 pulses) |
+| dataplane-415-finish + #575, Linux | fencing 7, skew + takeovers | pass. A −5m1s step: the Worker read −300.8 s, a DO −0.5 s (doesn't go back) |
+| dataplane-415-finish + #575 | queues 101–103, fencing 101–103, d1 101–103, mixed 101–103, soaks mixed 1001 (Linux, 10 min) and 1002 (macOS, 10 min) | pass (mixed 102 after a KV checker fix: see Status). Stop condition met |
