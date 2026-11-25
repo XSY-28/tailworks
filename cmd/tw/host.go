@@ -74,6 +74,7 @@ func cmdHostSetup(args []string) error {
 	huge := f.Int("hugepages", -1, "2 MiB huge pages to reserve for guest RAM (default: enough for 4 VMs, at most a quarter of RAM; 0 = none)")
 	fc := f.String("firecracker", "", "firecracker binary to install (default: the release's share/tailworks/vm/firecracker)")
 	jl := f.String("jailer", "", "jailer binary to install (default: the release's share/tailworks/vm/jailer)")
+	f.hidden("to install other firecracker builds", "firecracker", "jailer") // helpflags.go
 	if _, err := f.parse(args); err != nil {
 		return err
 	}

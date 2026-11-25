@@ -46,6 +46,7 @@ func cmdLs(args []string) error {
 	all := f.Bool("all", false, "also list killed objects and stopped deployments")
 	limit := f.Int("limit", lsCeiling, "list at most this many objects (0: no ceiling)")
 	tenantF := tenantFlag(f)
+	f.group(advancedFlags, "limit") // helpflags.go
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
