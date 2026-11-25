@@ -14,7 +14,7 @@ func init() {
 	if path == "" {
 		return
 	}
-	if err := follow(path, os.Getenv("TW_TEST_FAKETIME_LIB"), nil); err != nil {
+	if err := follow(path, os.Getenv("TW_TEST_CLOCK_PRELOAD"), nil); err != nil {
 		fmt.Fprintf(os.Stderr, "TEST HOOK: TW_TEST_WALL_CLOCK_FILE: %v\n", err)
 		os.Exit(2)
 	}

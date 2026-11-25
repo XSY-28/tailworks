@@ -3,7 +3,6 @@ package wallclock
 import (
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 	"time"
 )
@@ -14,26 +13,29 @@ import (
 //	                                 "-3m30s", "0s"). Re-read every 100 ms,
 //	                                 so a test steps the clock by rewriting
 //	                                 it. A missing or empty file is 0.
-//	TW_TEST_FAKETIME_LIB=<path>      libfaketime (libfaketime.so.1). When
-//	                                 set, every workerd hostd starts runs
-//	                                 with it preloaded and follows the same
-//	                                 offset, through <path>.faketime.
+//	TW_TEST_CLOCK_PRELOAD=<path>     a preload library that shifts a
+//	                                 process's wall clock by the seconds in
+//	                                 $TW_TEST_CLOCK_FILE (testdata/skewclock.c,
+//	                                 built by e2e/cliflow.BuildClockPreload).
+//	                                 When set, every workerd hostd starts
+//	                                 runs with it, reading <path>.secs, so
+//	                                 the whole host follows one offset.
 //
-// The offset is rounded to whole seconds (libfaketime's file format), the
-// same for hostd and workerd. On a step, workerd's view changes within
-// about a second (libfaketime re-reads its file once a second) and hostd's
-// right after the file is written. Monotonic clocks are never shifted:
-// a wrong wall clock doesn't make a machine's timers run fast or slow.
+// The offset is rounded to whole seconds, the same for hostd and workerd.
+// On a step, <path>.secs is written first and hostd's own clock moves
+// right after; workerd re-reads the file at most 100 ms later. Monotonic
+// clocks are never shifted: a wrong wall clock doesn't make a machine's
+// timers run fast or slow.
 
 // pollEvery is how often follow re-reads the offset file.
 const pollEvery = 100 * time.Millisecond
 
 // follow sets the offset from path now and keeps it in step with the file
-// until stop is closed. lib, if set, is libfaketime: workerds get it
-// preloaded, and the offset is mirrored to path+".faketime" (written
-// before hostd's own offset changes) for it to read.
+// until stop is closed. lib, if set, is the preload library: workerds get
+// it, and the offset is mirrored to path+".secs" (written before hostd's
+// own offset changes) for it to read.
 func follow(path, lib string, stop <-chan struct{}) error {
-	ft := path + ".faketime"
+	secs := path + ".secs"
 	last := time.Duration(-1 << 63)
 	apply := func() error {
 		d, err := readOffset(path)
@@ -44,7 +46,7 @@ func follow(path, lib string, stop <-chan struct{}) error {
 			return nil
 		}
 		if lib != "" {
-			if err := writeAtomic(ft, faketimeSpec(d)); err != nil {
+			if err := writeAtomic(secs, secsSpec(d)); err != nil {
 				return err
 			}
 		}
@@ -56,13 +58,8 @@ func follow(path, lib string, stop <-chan struct{}) error {
 		return err
 	}
 	if lib != "" {
-		env := []string{"FAKETIME_TIMESTAMP_FILE=" + ft, "FAKETIME_DONT_FAKE_MONOTONIC=1", "FAKETIME_CACHE_DURATION=1"}
-		if runtime.GOOS == "darwin" {
-			env = append(env, "DYLD_INSERT_LIBRARIES="+lib, "DYLD_FORCE_FLAT_NAMESPACE=1")
-		} else {
-			env = append(env, "LD_PRELOAD="+lib)
-		}
-		workerd = func() ([]string, []string) { return env, []string{lib, ft} }
+		env := []string{"TW_TEST_CLOCK_FILE=" + secs, "LD_PRELOAD=" + lib} // Linux only (skewclock.c)
+		workerd = func() ([]string, []string) { return env, []string{lib, secs} }
 	}
 	go func() {
 		t := time.NewTicker(pollEvery)
@@ -99,8 +96,8 @@ func readOffset(path string) (time.Duration, error) {
 	return d.Round(time.Second), nil
 }
 
-// faketimeSpec is d in libfaketime's relative format: "+300", "-90".
-func faketimeSpec(d time.Duration) string {
+// secsSpec is d as the preload library reads it: "+300", "-90".
+func secsSpec(d time.Duration) string {
 	return fmt.Sprintf("%+d\n", int64(d/time.Second))
 }
 

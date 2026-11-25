@@ -22,7 +22,7 @@ func TestNowWithoutHook(t *testing.T) {
 }
 
 // TestFollow steps the offset file and checks that hostd's clock and
-// libfaketime's file follow it.
+// the preload library's file follow it.
 func TestFollow(t *testing.T) {
 	defer func() { offset.Store(0); workerd = nil }()
 	dir := t.TempDir()
@@ -33,31 +33,31 @@ func TestFollow(t *testing.T) {
 		}
 	}
 	ft := func() string {
-		b, _ := os.ReadFile(path + ".faketime")
+		b, _ := os.ReadFile(path + ".secs")
 		return strings.TrimSpace(string(b))
 	}
 	write("5m")
 	stop := make(chan struct{})
 	defer close(stop)
-	if err := follow(path, "/lib/libfaketime.so.1", stop); err != nil {
+	if err := follow(path, "/lib/skewclock.so", stop); err != nil {
 		t.Fatal(err)
 	}
 	if Offset() != 5*time.Minute || ft() != "+300" {
-		t.Fatalf("offset %v, faketime %q; want 5m, +300", Offset(), ft())
+		t.Fatalf("offset %v, secs file %q; want 5m, +300", Offset(), ft())
 	}
 	if d := Now().Sub(time.Now()); d < 5*time.Minute-time.Second || d > 5*time.Minute+time.Second {
 		t.Fatalf("Now is %v ahead, want 5m", d)
 	}
 	env, read := Workerd()
-	if !slices.Contains(env, "FAKETIME_TIMESTAMP_FILE="+path+".faketime") || !slices.Contains(env, "FAKETIME_DONT_FAKE_MONOTONIC=1") ||
-		!slices.Contains(read, "/lib/libfaketime.so.1") {
+	if !slices.Contains(env, "TW_TEST_CLOCK_FILE="+path+".secs") ||
+		!slices.Contains(read, "/lib/skewclock.so") {
 		t.Fatalf("Workerd() = %v, %v", env, read)
 	}
 	wait := func(want time.Duration, wantFT string) {
 		t.Helper()
 		for i := 0; Offset() != want || ft() != wantFT; i++ {
 			if i > 50 {
-				t.Fatalf("offset %v, faketime %q; want %v, %q", Offset(), ft(), want, wantFT)
+				t.Fatalf("offset %v, secs file %q; want %v, %q", Offset(), ft(), want, wantFT)
 			}
 			time.Sleep(20 * time.Millisecond)
 		}
