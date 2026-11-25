@@ -10,6 +10,7 @@
     ],
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Lock", "Pulse", "Reg"] }],
+  "kv_namespaces": [{ "binding": "KV", "id": "dp-kv" }],
   "d1_databases": [{ "binding": "DB", "database_name": "dp-db", "database_id": "00000000-0000-4000-8000-0000000000dd" }],
   "queues": {
     "producers": [{ "binding": "JOBS", "queue": "jobs" }],
