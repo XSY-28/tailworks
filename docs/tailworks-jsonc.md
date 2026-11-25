@@ -234,7 +234,7 @@ needs no flag.
 ## `placement`
 
 How mgmt picks a host when there is more than one
-([INSTALL.md](INSTALL.md#where-a-workload-runs-placement-multi-host)).
+([hosts.md](hosts.md#where-a-workload-runs-placement-multi-host)).
 
 | key | type | default | what it does |
 |---|---|---|---|
