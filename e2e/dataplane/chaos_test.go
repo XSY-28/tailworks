@@ -64,6 +64,10 @@ func TestDataplane(t *testing.T) {
 		}
 	}
 	t.Logf("scenario %s, seed %d, duration %v, faults %v", scenario, seed, dur, names)
+	if strings.HasPrefix(scenario, "deploys") { // deploys_test.go (#421)
+		testDeploys(t, scenario, names, seed, dur)
+		return
+	}
 
 	root, _ := filepath.Abs("results")
 	rdir := filepath.Join(root, fmt.Sprintf("%s-%s-%d", time.Now().UTC().Format("20060102T150405Z"), scenario, seed))

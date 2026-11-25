@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/rosskukulinski/tailworks/e2e/internal/mgmtpg"
@@ -239,7 +238,6 @@ func (n *nemesis) pgFault() string {
 		px.Set("blackhole", 0)
 		time.Sleep(d)
 		px.Set("pass", 0)
-		px.CloseAll() // held connections carry half-forwarded queries
 		return fmt.Sprintf("r%d blackhole %v", i, d)
 	case 1:
 		per, d := n.between(200*time.Millisecond, 1500*time.Millisecond), n.between(5*time.Second, 15*time.Second)
@@ -253,8 +251,3 @@ func (n *nemesis) pgFault() string {
 		return fmt.Sprintf("r%d reset for %v", i, d)
 	}
 }
-
-// replicaPID is replica i's pid (0 when it is down).
-func (c *cluster) replicaPID(i int) int { return c.pid(replicaName(i)) }
-
-var _ = syscall.SIGKILL

@@ -1,7 +1,8 @@
 // The e2e/dataplane deploys workload (issue #421, LOOP.md "Deploys").
 //
-//   GET /info → 200 {epoch, build, sec, wbuild, wsec}
+//   GET /info → 200 {epoch, inst, build, sec, wbuild, wsec}
 //     epoch:  the lease epoch the Info Durable Object runs at (tailnet.self())
+//     inst:   a random ID of this copy of the Durable Object
 //     build:  the bundle's BUILD var, as the Durable Object sees it
 //     sec:    per secret name, the first 16 hex digits of the SHA-256 of its
 //             value as the Durable Object sees it ("-" when unset)
@@ -27,11 +28,15 @@ async function secrets(env) {
 
 export class Info extends DurableObject {
   async fetch() {
+    // inst names this copy of the object (a new workerd, a new deploy):
+    // the epoch is the workload's current one, so during a redeploy on the
+    // same host the previous copy answers at the new epoch.
+    this.inst ??= crypto.randomUUID();
     let epoch = 0;
     try {
       epoch = (await this.ctx.tailnet.self()).epoch;
     } catch {}
-    return Response.json({ epoch, build: this.env.BUILD, sec: await secrets(this.env) });
+    return Response.json({ epoch, inst: this.inst, build: this.env.BUILD, sec: await secrets(this.env) });
   }
 }
 

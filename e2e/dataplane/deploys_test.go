@@ -116,6 +116,7 @@ type infoObs struct {
 	Sent, Recv          time.Time
 	OK                  bool
 	Epoch               int64
+	Inst                string // the Durable Object copy that answered
 	Build, WBuild       string
 	Sec, WSec           map[string]string
 	Err                 string `json:",omitempty"`
@@ -233,8 +234,12 @@ func (d *deploysRun) noteEndpoint(v depView) {
 	if v.Endpoint.MagicDNS == "" || v.Workload == "" {
 		return
 	}
+	// The host is the node name's prefix (-hostname-prefix <host>-): a
+	// deployment's view can still name the previous host's node for a
+	// moment after a move.
+	host, _, _ := strings.Cut(v.Endpoint.MagicDNS, "-")
 	d.mu.Lock()
-	d.eps[v.Endpoint.MagicDNS] = endpoint{v.Workload, v.Host}
+	d.eps[v.Endpoint.MagicDNS] = endpoint{v.Workload, host}
 	d.mu.Unlock()
 }
 
@@ -283,8 +288,8 @@ func (d *deploysRun) finish(o *depOp, st int, b []byte, err error, v depView) {
 				o.Workload = previewWL(o.Alias)
 			}
 		}
-		v.Workload = o.Workload
-		d.noteEndpoint(v)
+		// Endpoints are learned from GET /v1/deployments/{id} once ready
+		// (poll), which names the node as the host serves it.
 	}
 	d.dh.op(*o)
 }
@@ -351,6 +356,9 @@ func (d *deploysRun) putSecret(client string, rep int, wl, name string) secOp {
 	val := fmt.Sprintf("dpsec-%s-%s-v%d-%s", d.runID, name, ver, randHex(8))
 	dg := digestOf(val)
 	d.vals[dg] = secretVal{name, ver, val}
+	d.dh.h.mu.Lock()
+	d.dh.h.log("secval", map[string]any{"digest": dg, "name": name, "ver": ver}) // never the value
+	d.dh.h.mu.Unlock()
 	d.mu.Unlock()
 	o := secOp{Client: client, Workload: wl, Name: name, Kind: "put", Ver: ver, Digest: dg, Replica: rep, Sent: time.Now()}
 	st, b, err := d.c.tryOn(rep, "PUT", "/v1/tenants/"+d.c.tenantID+"/workloads/"+wl+"/secrets/"+name, map[string]any{"value": val}, nil)
@@ -526,16 +534,16 @@ func (d *deploysRun) prober() {
 func (d *deploysRun) probe(dns string, ep endpoint) infoObs {
 	o := infoObs{Workload: ep.workload, DNS: dns, Host: ep.host, Sent: time.Now()}
 	var r struct {
-		Epoch         int64
-		Build, WBuild string
-		Sec, WSec     map[string]string
+		Epoch               int64
+		Inst, Build, WBuild string
+		Sec, WSec           map[string]string
 	}
 	_, err := getJSON(d.cli, "http://"+dns+"/info", &r)
 	o.Recv, o.OK = time.Now(), err == nil
 	if err != nil {
 		o.Err = err.Error()
 	} else {
-		o.Epoch, o.Build, o.WBuild, o.Sec, o.WSec = r.Epoch, r.Build, r.WBuild, r.Sec, r.WSec
+		o.Epoch, o.Inst, o.Build, o.WBuild, o.Sec, o.WSec = r.Epoch, r.Inst, r.Build, r.WBuild, r.Sec, r.WSec
 	}
 	d.dh.ob(o)
 	return o
@@ -630,7 +638,7 @@ func (d *deploysRun) poll(rep int) {
 			continue
 		}
 		var v depView
-		if st, _, err := d.c.tryOn(rep, "GET", "/v1/deployments/"+newest.DeploymentID, nil, &v); err == nil && st == 200 && v.Endpoint.MagicDNS != "" {
+		if st, _, err := d.c.tryOn(rep, "GET", "/v1/deployments/"+newest.DeploymentID, nil, &v); err == nil && st == 200 && v.Endpoint.Status == "ready" && v.Endpoint.MagicDNS != "" {
 			v.Workload = wl
 			d.noteEndpoint(v)
 			if wl == dpdWL {
@@ -697,14 +705,12 @@ func (d *deploysRun) fetchAudit(kinds ...string) ([]auditRec, []byte, error) {
 
 // ---- the deploys faults (registered in nemesis_test.go) ----
 
-func (n *nemesis) pick(lo, hi time.Duration) time.Duration { return n.between(lo, hi) }
-
 // deployThen starts a sticky deploy of a random bundle on the current
 // holder and, mid-activation (0–1.5 s after the 202), breaks the host.
 func (n *nemesis) deployThen(h string, brk func()) depOp {
 	d := n.dep
 	o := d.deploy("nemesis", d.replica(), d.bundles[n.rnd.Intn(len(d.bundles))].label, "", "", false, false)
-	time.Sleep(n.pick(0, 1500*time.Millisecond))
+	time.Sleep(n.between(0, 1500*time.Millisecond))
 	brk()
 	return o
 }
@@ -742,7 +748,7 @@ func (n *nemesis) takeoverDeploy(from string, live bool, within time.Duration) (
 }
 
 func faultDeployKillHost(n *nemesis, h string) string {
-	down := n.pick(time.Second, 5*time.Second)
+	down := n.between(time.Second, 5*time.Second)
 	o := n.deployThen(h, func() { n.c.stop(h, true) })
 	time.Sleep(down)
 	n.c.startHost(h)
@@ -751,7 +757,7 @@ func faultDeployKillHost(n *nemesis, h string) string {
 }
 
 func faultDeployPauseHost(n *nemesis, h string) string {
-	p := n.pick(3*time.Second, 20*time.Second)
+	p := n.between(3*time.Second, 20*time.Second)
 	o := n.deployThen(h, func() { n.c.pause(h, false) })
 	time.Sleep(p)
 	n.c.resume(h)
@@ -759,7 +765,7 @@ func faultDeployPauseHost(n *nemesis, h string) string {
 }
 
 func faultDeployCut(n *nemesis, h string) string {
-	p := n.pick(3*time.Second, 20*time.Second)
+	p := n.between(3*time.Second, 20*time.Second)
 	o := n.deployThen(h, func() { n.c.proxies[h].cut(true) })
 	time.Sleep(p)
 	n.c.proxies[h].cut(false)
@@ -782,7 +788,7 @@ func (n *nemesis) deployTakeover(h string, brk, heal func()) string {
 		heal()
 		return "FAILED: " + err.Error()
 	}
-	time.Sleep(n.pick(2*time.Second, 8*time.Second))
+	time.Sleep(n.between(2*time.Second, 8*time.Second))
 	heal()
 	return fmt.Sprintf("%s; host broken mid-activation; takeover %s; healed at t0+%.1fs", opSummary(o), opSummary(t), time.Since(t0).Seconds())
 }
@@ -842,10 +848,10 @@ func faultDeployKillMgmt(n *nemesis, h string) string {
 			done <- d.deploy("nemesis", rep, label, "", "", false, false)
 		}
 	}()
-	time.Sleep(n.pick(0, 300*time.Millisecond))
+	time.Sleep(n.between(0, 300*time.Millisecond))
 	n.c.stop(name, true)
 	o := <-done
-	time.Sleep(n.pick(time.Second, 3*time.Second))
+	time.Sleep(n.between(time.Second, 3*time.Second))
 	n.c.startMgmt(false)
 	return fmt.Sprintf("%s SIGKILLed mid-request: %s", name, opSummary(o))
 }
@@ -932,6 +938,7 @@ func testDeploys(t *testing.T, scenario string, names []string, seed int64, dur 
 		b := dBundle{label, base64.StdEncoding.EncodeToString(tar), hex.EncodeToString(sum[:])}
 		d.bundles = append(d.bundles, b)
 		d.labelOf[b.sha] = label
+		h.log("bundle", map[string]string{"label": label, "sha": b.sha})
 	}
 
 	// The workload's secrets before the first deploy, then b1 on h1.
@@ -1006,6 +1013,7 @@ func testDeploys(t *testing.T, scenario string, names []string, seed int64, dur 
 
 	audit, rawAudit, aerr := d.fetchAudit("deploy", "rollback", "promote", "secret_release", "secret_put", "secret_delete", "deny")
 	d.dh.audit = audit
+	h.log("audit", audit)
 	scan := d.scanForValues(rdir, rawAudit)
 
 	h.mu.Lock()

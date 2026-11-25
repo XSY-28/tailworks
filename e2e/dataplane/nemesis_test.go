@@ -25,6 +25,9 @@ type nemesis struct {
 	tg     *target
 	rnd    *rand.Rand
 	bundle string
+
+	// dep is the deploys loop (deploys_test.go), nil in other scenarios.
+	dep *deploysRun
 }
 
 func (n *nemesis) between(lo, hi time.Duration) time.Duration {
@@ -108,6 +111,15 @@ var faults = map[string]fault{
 		}
 		return fmt.Sprintf("old workerds %v; still alive 10 s after the restart: %v", old, alive)
 	}},
+	// The deploys loop's faults (deploys_test.go, issue #421).
+	"deploy-cut":            {"deploy-cut", faultDeployCut},
+	"deploy-cut-takeover":   {"deploy-cut-takeover", faultDeployCutTakeover},
+	"deploy-kill-host":      {"deploy-kill-host", faultDeployKillHost},
+	"deploy-kill-mgmt":      {"deploy-kill-mgmt", faultDeployKillMgmt},
+	"deploy-move":           {"deploy-move", faultDeployMove},
+	"deploy-pause-host":     {"deploy-pause-host", faultDeployPauseHost},
+	"deploy-pause-takeover": {"deploy-pause-takeover", faultDeployPauseTakeover},
+	"deploy-race":           {"deploy-race", faultDeployRace},
 	// SIGKILL workerd only; hostd restarts it.
 	"kill-workerd": {"kill-workerd", func(n *nemesis, h string) string {
 		k := n.c.killWorkerd(h)
@@ -155,8 +167,14 @@ var faults = map[string]fault{
 		}
 		return fmt.Sprintf("%s → %s epoch %d, %s", h, d.Host, d.Epoch, how)
 	}},
-	// mgmt crashes (SIGKILL) or restarts (SIGTERM) and comes back.
+	// One replica's path to Postgres blackholed, slowed or reset (mgmtpg_test.go).
+	"pg-fault": {"pg-fault", faultPG},
+	// mgmt crashes (SIGKILL) or restarts (SIGTERM) and comes back; with
+	// replicas (TW_DP_MGMT=pg3), one of them.
 	"restart-mgmt": {"restart-mgmt", func(n *nemesis, h string) string {
+		if n.c.pg != nil {
+			return n.restartReplica()
+		}
 		crash := n.rnd.Intn(2) == 0
 		down := n.between(500*time.Millisecond, 5*time.Second)
 		n.c.stop("mgmt", crash)
@@ -183,6 +201,11 @@ func (n *nemesis) takeover(h string, fail, heal func()) string {
 }
 
 var scenarios = map[string][]string{
+	// The deploys loop (deploys_test.go, issue #421).
+	"deploys-hosts": {"deploy-cut", "deploy-cut-takeover", "deploy-kill-host", "deploy-move", "deploy-pause-host", "deploy-pause-takeover", "deploy-race", "kill-workerd"},
+	"deploys-mgmt":  {"deploy-kill-mgmt", "deploy-race", "pg-fault", "restart-mgmt"},
+	"deploys-mixed": {"deploy-cut", "deploy-cut-takeover", "deploy-kill-host", "deploy-kill-mgmt", "deploy-move", "deploy-pause-host", "deploy-pause-takeover", "deploy-race", "kill-workerd", "pg-fault", "restart-mgmt"},
+
 	"queues":  {"kill-host", "crash-hostd", "kill-workerd", "pause-short", "cut-short", "move", "restart-mgmt"},
 	"fencing": {"pause-takeover", "pause-hostd-takeover", "cut-takeover", "move"},
 	"d1":      {"move", "kill-host", "pause-takeover", "restart-mgmt"},
