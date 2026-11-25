@@ -232,6 +232,9 @@ func wranglerKeyNote(k string, v any, builder string) string {
 		if builder == "wrangler" || (builder == builderPrebuilt && k != "build") {
 			return "" // nobundle.go packs a pre-built no_bundle Worker as wrangler does
 		}
+		if builder == "esbuild" && k == "build" {
+			return "" // buildcmd.go runs build.command before the built-in esbuild
+		}
 		return "needs wrangler's bundler; ignored by tailworks' built-in esbuild (use tw deploy --wrangler)"
 	case "upload_source_maps":
 		if builder == "wrangler" {

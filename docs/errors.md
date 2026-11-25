@@ -70,6 +70,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### bootstrap_failed
 502 · netd, mgmt, cli. **When:** an object's node could not be created: the control plane refused the mint (tag not owned, key invalid), the token exchange failed, or the node never joined. From `tw up`, mgmt's or the host's own node failed to join. From `tw deploy`, "the workload node for <workload> is killed": the workload's entry node was killed (`tw kill`) while it was deployed. **Fix:** check the tagOwners snippet (`policy_missing_tag_owners`), the credential (`tw doctor`), then `tw logs --component mgmt`. For a killed workload node: `tw undeploy <workload>`, then deploy it again (see `killed`).
 
+### build_command_failed
+1 · cli. **When:** the wrangler config's custom build (`build.command`) exited non-zero; `tw deploy`, `tw dev` and `tw policy` run it before bundling ([wrangler.md](wrangler.md#custom-builds)). Nothing is deployed. **Fix:** its output is printed above the error; fix the build and re-run, or run it yourself and remove `build` from the wrangler config.
+
 ### build_failed
 500 · cli. **When:** esbuild (workerd apps) or `create-tailworks build-node` (Node apps) could not bundle the app. **Fix:** the compiler output is in the detail; fix the source and re-run. `Could not resolve "@tailworks/…"` means tailworks' own JS packages are missing next to its bundler: in a source checkout run `make deps` (a plain `make build` doesn't install them), otherwise reinstall tailworks; `tw doctor` checks it.
 
