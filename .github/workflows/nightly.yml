@@ -3,8 +3,8 @@
 #
 #   suite    one matrix job per Makefile target, so they run in parallel and
 #            report separately. Each needs only `make deps` (npm ci, workerd,
-#            the JS builds), Go and Node; e2e-headscale and
-#            e2e-multimgmt also use the runner's Docker. (e2e-local, templates-typecheck and
+#            the JS builds), Go and Node; e2e-headscale,
+#            e2e-multimgmt and e2e-dataplane-r2 also use the runner's Docker. (e2e-local, templates-typecheck and
 #            test-vitest moved to ci.yml, so every PR runs them: #163.)
 #   test-pg  `make test-pg` against a Postgres 17 service container
 #            (scripts/test-pg.sh uses TW_TEST_POSTGRES_DSN instead of
@@ -78,6 +78,10 @@ jobs:
           # other (#419).
           - target: e2e-dataplane-cron
             timeout: 40
+            allow_failure: ""
+          # R2 under faults; r2-s3 and r2-replicas run Garage in the runner's Docker.
+          - target: e2e-dataplane-r2
+            timeout: 45
             allow_failure: ""
           - target: e2e-headscale
             timeout: 45
@@ -161,6 +165,13 @@ jobs:
         with:
           name: multimgmt-results
           path: e2e/multimgmt/results/
+          if-no-files-found: ignore
+      - name: upload dataplane results
+        if: failure() && startsWith(matrix.target, 'e2e-dataplane')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ matrix.target }}-results
+          path: e2e/dataplane/results/
           if-no-files-found: ignore
 
   test-pg:

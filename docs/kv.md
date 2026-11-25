@@ -94,7 +94,15 @@ holding the workload's lease can append. So:
   host stops the whole workload after 30 s without mgmt, reads included.
   Use a Durable Object for state that is written often.
 - **Expiry.** An expired key disappears from `get` and `list` at once. The
-  namespace's alarm then deletes it from the journal too.
+  namespace's alarm then deletes it from the journal too. Expiry is
+  measured on the wall clock of the host serving the namespace, so if that
+  clock is stepped forward a key expires early (in real time), and if it is
+  stepped back the key lasts longer.
+
+Read-your-writes, durability across restarts, moves and takeovers, and
+expiry are measured under faults by the data-plane chaos loop
+(`e2e/dataplane:TestDataplane`, invariant KV), with the host's clock
+stepped forward and back on Linux.
 
 ## Limits
 
