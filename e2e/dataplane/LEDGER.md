@@ -3,6 +3,8 @@
 Issue #415. Process: `LOOP.md`. Findings are filed as GitHub issues
 labelled `dataplane-chaos`.
 
+- R2 buckets (#420, `TestR2`): [ledger/r2.md](ledger/r2.md)
+
 ## Status
 
 | Scenario | Clean seeds (consecutive) | Notes |
