@@ -100,44 +100,49 @@ func (c *cluster) workerdClock(dns string) (worker, obj time.Duration, err error
 	return time.UnixMilli(r.Now).Sub(mid), time.UnixMilli(r.Obj).Sub(mid), nil
 }
 
-// waitClock waits up to 10 s for the workload on dns (the Worker and a
-// Durable Object) to read our clock plus want (±1.5 s), and returns what
-// the Worker read.
-func (c *cluster) waitClock(dns string, want time.Duration) (time.Duration, error) {
-	var got, obj time.Duration
-	var err error
+// waitClock waits up to 10 s for the Worker on dns to read our clock plus
+// want (±1.5 s), and returns what it and a Durable Object read. A Durable
+// Object's Date.now() never goes back (workerd holds it at the latest
+// value it returned until the clock catches up), so after a step back
+// obj stays ahead: measured, not required.
+func (c *cluster) waitClock(dns string, want time.Duration) (worker, obj time.Duration, err error) {
 	for i := 0; i < 20; i++ {
-		got, obj, err = c.workerdClock(dns)
-		if err == nil && (got-want).Abs() < 1500*time.Millisecond && (obj-want).Abs() < 1500*time.Millisecond {
-			return got, nil
+		worker, obj, err = c.workerdClock(dns)
+		if err == nil && (worker-want).Abs() < 1500*time.Millisecond {
+			return worker, obj, nil
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
 	if err == nil {
-		err = fmt.Errorf("workerd's clock is %v off (a Durable Object's %v), want %v", got.Round(time.Millisecond), obj.Round(time.Millisecond), want)
+		err = fmt.Errorf("workerd's clock is %v off, want %v", worker.Round(time.Millisecond), want)
 	}
-	return got, err
+	return worker, obj, err
 }
 
 // checkSkewHook proves the hook works before the nemesis relies on it:
-// the workload on h (the first holder) reads a +90 s clock, then the true
+// the workload on h (the first holder) reads a +10 s clock, then the true
 // one again. Without the preload library it does nothing.
 func checkSkewHook(t *testing.T, c *cluster, cli *http.Client, h, dns string) {
 	c.clocks.cli = cli
 	if c.clocks.lib == "" {
 		return
 	}
-	c.setClock(h, 90*time.Second)
-	got, err := c.waitClock(dns, 90*time.Second)
+	c.setClock(h, 10*time.Second)
+	got, obj, err := c.waitClock(dns, 10*time.Second)
+	if err == nil && (obj-10*time.Second).Abs() > 1500*time.Millisecond {
+		err = fmt.Errorf("a Durable Object's clock is %v off, want 10s", obj.Round(time.Millisecond))
+	}
 	c.setClock(h, 0)
 	if err != nil {
 		c.dumpLogs()
 		t.Fatalf("skew hook: %v", err)
 	}
-	if _, err := c.waitClock(dns, 0); err != nil {
+	_, back, err := c.waitClock(dns, 0)
+	if err != nil {
 		t.Fatalf("skew hook: back to 0: %v", err)
 	}
-	t.Logf("skew hook works: dp on %s read %+.1fs, then the true clock", h, got.Seconds())
+	t.Logf("skew hook works: dp on %s read %+.1fs (a Durable Object %+.1fs), then the true clock (the object %+.1fs: it doesn't go back)",
+		h, got.Seconds(), obj.Seconds(), back.Seconds())
 }
 
 // skewHost steps the lease holder's wall clock forward or back by 1–6 min
@@ -160,9 +165,9 @@ func skewHost(n *nemesis, h string) string {
 	if d.Host != h {
 		return fmt.Sprintf("%v → %v (the workload moved off %s, not checked)", prev, to, h)
 	}
-	got, err := n.c.waitClock(d.Endpoint.MagicDNS, to)
+	got, obj, err := n.c.waitClock(d.Endpoint.MagicDNS, to)
 	if err != nil {
 		return fmt.Sprintf("%v → %v; workerd: %v", prev, to, err)
 	}
-	return fmt.Sprintf("%v → %v; workerd reads %+.1fs", prev, to, got.Seconds())
+	return fmt.Sprintf("%v → %v; the Worker reads %+.1fs, a Durable Object %+.1fs", prev, to, got.Seconds(), obj.Seconds())
 }
