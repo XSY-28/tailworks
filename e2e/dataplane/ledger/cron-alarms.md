@@ -68,3 +68,4 @@ clocks *differ*.
 | 20261125T075324Z-cron-35 | cron 35 | pass. `clock-forward` +2m24s with a hostd restart, 2 schedule changes, 2 known #566 overlaps |
 | Linux arm64 (Lima), cron 34 | cron 34 | pass. `clock-back` −1m49s with a hostd restart |
 | 20261125T080709Z-cron-31 (#605 merged in locally) | cron 31, `clock-back,clock-forward`, 5m | pass, **0 reruns** (4 without the fix): #594 fixed |
+| 20261125T083221Z-cron-36 | cron 36, 3m, on master with #603 and #588 merged in | pass. 2 `clock-back`, one with a hostd restart |
