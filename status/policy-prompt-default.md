@@ -28,3 +28,13 @@ Last update: 2026-11-25 PT. Issue #481: prompt to write the policy by default on
 ## Tests
 
 See the PR's Tests section.
+
+## Test results (2026-11-25)
+
+- `make lint`: pass. `make changes-check`: ok.
+- `make test` (offloaded to mbp via mbp-test.sh): pass.
+- `go test ./cmd/tw -run 'TestPolicyModeOf|TestUpPolicyAskFirst|TestHeadscaleUpPolicyAskFirst|TestDeployPolicyAskFirst'`: pass.
+- `make e2e-tw-upgrade`: TestTwUpgradeSingleMachine and TestUpDownBudget pass.
+- Skipped: `make e2e-headscale` (Docker; the Headscale path is covered by
+  TestHeadscaleUpPolicyAskFirst against the fake), `make demo-test` (the
+  demo runs tw without a terminal: print-only, unchanged).
