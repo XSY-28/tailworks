@@ -81,7 +81,10 @@ upgrading tailworks to update the skills; when nothing changed it does nothing.
   agent asks you to run them.
 - **Policy stays with you.** When a deploy needs a `tagOwners` line or a
   grant, tailworks prints it; the agent shows it to you and you add it in the
-  Tailscale admin console. Tailworks never edits the policy during a deploy.
+  Tailscale admin console. Tailworks writes the policy only when you pass
+  `--apply-policy` or run `tw policy --apply`, and confirm the lines it
+  shows; the skills tell the agent not to pass those flags, or `--yes`
+  with them, for you.
 - **The MCP server enforces it.** Over MCP, `kill`, `undeploy` and
   `deploy` exist for an agent only if a `github.com/rosskukulinski/tailworks/cap/mcp` grant (or the
   operator's `tw mcp --allow`) names them. See

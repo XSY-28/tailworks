@@ -72,7 +72,7 @@ the network, so that a network policy can tell one from another?
   machine, no per-object identity and your own process supervision are
   enough, you don't need anything on top. Its README warns that "workerd
   is not a hardened sandbox" and must run inside one; that applies to
-  tailworks' process tier too ([Isolation](INSTALL.md#isolation)).
+  tailworks' process tier too ([Isolation tiers](security-model.md#isolation-tiers)).
 - **OpenOrange** targets AWS, Google Cloud, Azure or your own servers with
   storage in S3, and lists bindings tailworks doesn't have (Hyperdrive,
   pluggable Workers AI). It runs on Node.js rather than
