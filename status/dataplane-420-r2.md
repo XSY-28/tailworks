@@ -29,8 +29,8 @@ Last update: 2026-11-24 23:20 PT. R2 data-plane chaos loop (#420): built, 3+ cle
 
 | Issue | Status |
 |---|---|
-| #562 store writes that change nothing are acknowledged from a stale copy (lost R2/KV delete, D1 no-op update; writes acknowledged with mgmt unreachable) | fix PR #573 (`fix-562-noop-write`), regression test `hostd:TestStoreNoopWriteChecksJournal` |
-| #574 an R2 put whose journal answer is lost deletes its blob though the index has the row | fix PR #576 (`fix-574-r2-lost-answer`), regression test `hostd:TestR2PutLostAnswer` |
+| #562 store writes that change nothing are acknowledged from a stale copy (lost R2/KV delete, D1 no-op update; writes acknowledged with mgmt unreachable) | fixed by #573 (merged), regression test `hostd:TestStoreNoopWriteChecksJournal` |
+| #574 an R2 put whose journal answer is lost deletes its blob though the index has the row | fixed by #576 (merged), regression test `hostd:TestR2PutLostAnswer` |
 | #580 fs backend: blobs left on a host after a move are never deleted | filed, needs a decision |
 
 ## Results
@@ -41,12 +41,13 @@ failed seed 1 without it). Run log: `e2e/dataplane/ledger/r2.md`.
 
 ## Tests run
 
-See the PR body.
+- `make lint`: pass. `make changes-check`: ok.
+- `make test`: all packages pass except `./hostd`, which hit an intermittent data race (#586, not this branch's code).
+- `TestR2Checkers`: pass. `TestDataplane` mixed seed 3, 60 s: pass.
+- `make e2e-dataplane-r2` (seed 20261125, with the fixes): pass, 774 s.
 
 ## Gaps / next
 
-- The loop needs #573 and #576 merged for `r2-fs` / `r2-replicas` to pass
-  nightly.
 - H1/F-R2-2's window (a lost answer after a commit) is only hit by chance;
   a mgmt-side delay fault (the mgmt proxy can only cut) would widen it.
 - Moves of replicas aren't faulted (a replica can't be placed with
