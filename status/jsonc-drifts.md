@@ -21,6 +21,7 @@ Last update: 2026-11-24 19:50 PT. #440 (tailworks.jsonc schema/doc drifts) and #
 
 - `make lint`: ok.
 - `make test`: failures in netd `TestService`, mgmtd `TestStartCloseBudget`, cmd/tw `TestCLIOAuth`, four mgmt tests (`no eligible host ... not live`) and the hostd/gen Python tests (`workerd did not come up`). The machine's load average was about 95 during the run. Each failing test passed when rerun alone: `go test ./netd -run TestService`, `./internal/mgmtd -run TestStartCloseBudget`, `./cmd/tw -run TestCLIOAuth`, `./mgmt -run 'TestRT3_H23_PlacementPoison|TestRedeployAfterUndeploy|TestRT_Hr2group_ReplicaNameReserved|TestTenantAdminScope'` and `./hostd/gen -run TestPython`.
+- After merging origin/master (`efef68ba`): `make cli-docs` (no change), `make lint` ok, `make test`: `TestCLIOAuth` and `mgmt.TestWorkloadReplicas` (`no eligible host ... not live`) failed at load average 80. Both passed when rerun alone.
 - `make templates-typecheck test-sdk`: ok.
 - `make e2e-wrangler`: ok.
 - `make demo-test`: it printed "SKIPPED (no docker daemon)".
