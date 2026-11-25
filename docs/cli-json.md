@@ -36,7 +36,7 @@ tw deploy --json | jq -r .endpoint.magicDNS
 On failure, stdout is empty and stderr's **last line** is one JSON object:
 
 ```json
-{"error": {"code": "acl_denied", "message": "preflight failed: …", "hint": "add to your tailnet policy:\n  \"tagOwners\": …", "doc_url": "https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#acl_denied"}}
+{"error": {"code": "acl_denied", "message": "preflight failed: …", "hint": "add to your tailnet policy (admin console › Access controls):\n  // merge into your policy: …\n  \"tagOwners\": {…", "doc_url": "https://github.com/rosskukulinski/tailworks/blob/master/docs/errors.md#acl_denied"}}
 ```
 
 | Field | Always | |

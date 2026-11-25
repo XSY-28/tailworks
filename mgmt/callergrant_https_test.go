@@ -19,7 +19,7 @@ func TestPolicyApplyCallerGrantHTTPS(t *testing.T) {
 		"tailworks.jsonc": `{"name": "app", "tailnet": {"tags": ["tag:tw-wl-app"], "https": true}}`,
 		"dist/index.js":   "export default {}",
 	})}
-	const grant = `{"dst":["tag:tw-wl-app"],"ip":["tcp:80","tcp:443"],"src":["autogroup:member"]}`
+	const grant = `{ "src": ["autogroup:member"], "dst": ["tag:tw-wl-app"], "ip": ["tcp:80", "tcp:443"] }`
 	var res PolicyApplyResult
 	e.c.ok("POST", "/v1/tenants/"+tn+"/workloads/app/policy", body, &res)
 	if !res.Changed || res.CallerGrant != grant {

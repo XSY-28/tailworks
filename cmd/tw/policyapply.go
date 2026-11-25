@@ -110,11 +110,12 @@ func policyApplyStep(ctx context.Context, s *state, f *flags, a *app, tn TenantR
 	}
 	res.Applied, res.Preflight = ar, ar.Preflight
 	res.OK = res.Preflight.OK
+	caller := callerGrantEntry(a.Cfg.Tailnet.Tags, a.Cfg.Tailnet.HTTPS)
 	if ar.Changed && ar.CallerGrant != "" {
-		res.CallerGrant = "" // written: not in what is left to paste
+		res.CallerGrant, caller = "", nil // written: not in what is left to paste
 	}
 	res.ServiceCallerGrant = serviceCallerGrant(res.Preflight.Service)
-	res.Snippet = policySnippet(res.Preflight, res.CallerGrant, res.ServiceCallerGrant)
+	res.Snippet = policySnippet(res.Preflight, caller, serviceCallerGrantEntry(res.Preflight.Service))
 	return nil
 }
 

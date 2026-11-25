@@ -98,7 +98,7 @@ func cmdPolicy(args []string) error {
 	}
 	res.OK = res.Checked && res.Preflight.OK
 	res.ServiceCallerGrant = serviceCallerGrant(res.Preflight.Service)
-	res.Snippet = policySnippet(res.Preflight, res.CallerGrant, res.ServiceCallerGrant)
+	res.Snippet = policySnippet(res.Preflight, callerGrantEntry(a.Cfg.Tailnet.Tags, a.Cfg.Tailnet.HTTPS), serviceCallerGrantEntry(res.Preflight.Service))
 	res.Nodes = s.nodeBudgetOf(ctx, tn, a.Cfg, false) // nodebudget.go
 	if *apply {
 		if err := policyApplyStep(ctx, s, f, a, tn, tb, *yes, &res); err != nil {
@@ -119,37 +119,30 @@ func cmdPolicy(args []string) error {
 	return nil
 }
 
-// policySnippet is one block to paste into the tailnet policy: what the
-// preflight found missing, then the caller grant.
-func policySnippet(pf mgmt.PreflightResult, caller, svcCaller string) string {
-	var b strings.Builder
-	if needTagOwnersSnippet(pf) {
-		b.WriteString(pf.TagOwnersSnippet + ",\n")
-	}
-	if len(pf.Missing) > 0 || caller != "" || svcCaller != "" {
-		b.WriteString("\"grants\": [\n")
-		for _, g := range pf.MissingGrants() {
-			note := ""
-			if !policy.IsTwTag(g.Dst) && strings.HasPrefix(g.Dst, "tag:") {
-				note = " (" + g.Dst + " must already be in tagOwners)"
+// policySnippet is one block to paste into the tailnet policy
+// (policysnippet.go): what the preflight found missing, then the caller
+// grants (nil: none), each grant with a comment saying why.
+func policySnippet(pf mgmt.PreflightResult, caller, svcCaller map[string]any) string {
+	s := preflightPolicy(pf)
+	s.Grants = slices.Clone(s.Grants)
+	notes := make([]string, len(s.Grants))
+	for i, g := range s.Grants {
+		notes[i] = "tailnet.connects"
+		for _, d := range entryStrs(g, "dst") {
+			if !policy.IsTwTag(d) && strings.HasPrefix(d, "tag:") {
+				notes[i] += " (" + d + " must already be in tagOwners)"
 			}
-			b.WriteString("  " + g.Snippet + ", // tailnet.connects" + note + "\n")
 		}
-		if caller != "" {
-			b.WriteString("  " + caller + ", // who may call it (not checked: narrow src to a user, group or tag)\n")
-		}
-		if svcCaller != "" {
-			b.WriteString("  " + svcCaller + ", // calls through " + pf.Service + ": callers' app caps go on this grant\n")
-		}
-		b.WriteString("],\n")
 	}
-	if pf.ServiceUnapproved && pf.ServiceSnippet != "" {
-		b.WriteString(pf.ServiceSnippet + ",\n")
+	if caller != nil {
+		s.Grants = append(s.Grants, caller)
+		notes = append(notes, "who may call it (not checked: narrow src to a user, group or tag)")
 	}
-	if len(pf.MissingNodeAttrs) > 0 && pf.NodeAttrsSnippet != "" {
-		b.WriteString(strings.TrimRight(pf.NodeAttrsSnippet, "\n") + "\n")
+	if svcCaller != nil {
+		s.Grants = append(s.Grants, svcCaller)
+		notes = append(notes, "calls through "+pf.Service+": callers' app caps go on this grant")
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return s.Paste(notes)
 }
 
 // printPolicyHeader is the report's first lines: what is checked, and the

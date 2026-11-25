@@ -60,9 +60,8 @@ func callerGrantPorts(tags, ports []string, keep policy.Snippet, pol *Policy, o 
 		return nil, ""
 	}
 	g := map[string]any{"src": []string{CallerSrc}, "dst": append([]string(nil), tags...), "ip": append([]string(nil), ports...)}
-	gb, _ := json.Marshal(g)
 	manual := func(why string) (map[string]any, string) {
-		return nil, fmt.Sprintf("callers: no grant lets people call this app, and tailworks didn't write one (%s); add it, or a narrower one, yourself: %s", why, gb)
+		return nil, fmt.Sprintf("callers: no grant lets people call this app, and tailworks didn't write one (%s); add it, or a narrower one, yourself: %s", why, policy.EntryHuJSON(g))
 	}
 	if pol.peopleReach("*") {
 		return nil, ""

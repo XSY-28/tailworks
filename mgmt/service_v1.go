@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rosskukulinski/tailworks/internal/policy"
 	"github.com/rosskukulinski/tailworks/internal/tsapi"
 )
 
@@ -362,7 +363,7 @@ func (m *Mgmt) CreateHost(ctx context.Context, r HostCreate) (HostJoin, bool, er
 	if err != nil {
 		if tsapi.IsTagsNotPermitted(err) {
 			e := errf(403, "policy_missing_tag_owners", "the control plane refused to mint a %s key with tenant %s's %s credential: %v", HostTag, t.ID, t.MintMode, err)
-			e.Snippet = HostTagOwnersSnippet()
+			e.Snippet = HostTagOwnersSnippet(t)
 			return HostJoin{}, false, e
 		}
 		return HostJoin{}, false, errf(502, "bootstrap_failed", "mint host join key: %v", err)
@@ -751,6 +752,8 @@ var _ = fmt.Sprintf
 // already in the policy: only tag:tw-host needs tag:tw among its owners.
 // It is one line to paste inside the existing "tagOwners" section; a whole
 // second "tagOwners" block would not parse (issue #389).
-func HostTagOwnersSnippet() string {
-	return `"` + HostTag + `": ["autogroup:admin", "tag:tw"], // inside the existing "tagOwners" section (replace any line for ` + HostTag + `; don't add a second section)`
+// On Headscale it is owned by tag:tw alone (tagOwnersFor).
+func HostTagOwnersSnippet(t Tenant) string {
+	return fmt.Sprintf(`%q: %s, // inside the existing "tagOwners" section (replace any line for %s; don't add a second section)`,
+		HostTag, policy.ListHuJSON(tagOwnersFor(t)), HostTag)
 }
