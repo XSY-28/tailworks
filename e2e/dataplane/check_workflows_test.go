@@ -253,6 +253,16 @@ func leaseHost(deps []depEv, t time.Time) string {
 	return h
 }
 
+// arrives reports whether the watch saw the lease come to host in (from, to].
+func arrives(deps []depEv, host string, from, to time.Time) bool {
+	for _, d := range deps {
+		if d.Host == host && d.At.After(from) && !d.At.After(to) {
+			return true
+		}
+	}
+	return false
+}
+
 // leftHost reports whether the lease was off host at any time in [from, to].
 func leftHost(deps []depEv, host string, from, to time.Time) bool {
 	if leaseHost(deps, from) != host {
@@ -506,7 +516,7 @@ func checkW4(wh *wfHist, deps []depEv, faults []faultEv) result {
 			}
 			// The watch sees a new copy only once mgmt reports it active, a
 			// few seconds after it starts running: allow activationLag.
-			if lh := leaseHost(deps, a.at); lh != home && lh != "" && leaseHost(deps, a.at.Add(-fenceSlack)) != home && leaseHost(deps, a.at.Add(activationLag)) != home {
+			if lh := leaseHost(deps, a.at); lh != home && lh != "" && leaseHost(deps, a.at.Add(-fenceSlack)) != home && !arrives(deps, home, a.at, a.at.Add(activationLag)) {
 				stale++
 				r.fail("%s: acted on %s (%s at %s) while the lease was on %s [fault %s]", inst, home, a.what, a.at.Format("15:04:05.000"), lh, faultAt(faults, a.at))
 			}

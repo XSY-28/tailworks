@@ -273,7 +273,7 @@ func TestDataplaneWorkflows(t *testing.T) {
 	}
 	h.log("wf-approvers", wh.nodeIDs)
 	drv := &wfDriver{wh: wh, stop: make(chan struct{}), busy: map[string]bool{}, last: map[string]time.Time{}, finished: map[string]bool{},
-		cli:  nodes["dp-cli"].HTTPClient(10 * time.Second),
+		cli: nodes["dp-cli"].HTTPClient(10 * time.Second), stat: nodes["dp-cli"].HTTPClient(3 * time.Second),
 		apps: map[string]*http.Client{"A": nodes["dp-apa"].HTTPClient(10 * time.Second), "B": nodes["dp-apb"].HTTPClient(10 * time.Second)}}
 	if err := serveWFRecorder(nodes["dp-rec"], wh, drv); err != nil {
 		t.Fatal(err)
@@ -414,6 +414,7 @@ type wfDriver struct {
 	wh   *wfHist
 	tg   *target
 	cli  *http.Client
+	stat *http.Client            // status reads (short timeout)
 	apps map[string]*http.Client // the approvers
 	stop chan struct{}
 	wg   sync.WaitGroup
@@ -462,11 +463,8 @@ func (d *wfDriver) nudge() {
 			}
 			d.mu.Unlock()
 			b, _ := d.base()
-			for _, id := range quiet {
-				var st struct {
-					Status string `json:"status"`
-				}
-				if code, _ := getJSON(d.cli, b+"/status?id="+id, &st); code == 200 && st.Status == "waiting" {
+			for id, f := range d.statuses(b, quiet) {
+				if f.Code == 200 && f.Status == "waiting" {
 					d.wh.add("wf-nudge", id, func() {})
 					d.react("event", id, func() { d.sendEvent(id) })
 					d.react("approval", id, func() { d.decide(id) })
@@ -643,6 +641,37 @@ func (d *wfDriver) decideAs(inst, client, dec string) {
 	}
 }
 
+// statuses reads the instances' status from base, 16 at a time, each with
+// a 3 s timeout (a stalled copy mustn't hold the driver up).
+func (d *wfDriver) statuses(base string, ids []string) map[string]wfFinal {
+	out := map[string]wfFinal{}
+	var mu sync.Mutex
+	var g sync.WaitGroup
+	sem := make(chan struct{}, 16)
+	for _, id := range ids {
+		g.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer func() { <-sem; g.Done() }()
+			var st struct {
+				Status string          `json:"status"`
+				Output json.RawMessage `json:"output"`
+				Error  json.RawMessage `json:"error"`
+			}
+			code, err := getJSON(d.stat, base+"/status?id="+id, &st)
+			f := wfFinal{Inst: id, Code: code, Status: st.Status, Output: st.Output, Error: st.Error}
+			if err != nil && code != 404 {
+				f.Status = "unreadable: " + err.Error()
+			}
+			mu.Lock()
+			out[id] = f
+			mu.Unlock()
+		}()
+	}
+	g.Wait()
+	return out
+}
+
 // converge polls every instance's status on the final copy until each is
 // complete, errored or terminated, or not found there 5 times in a row,
 // or the time runs out.
@@ -656,26 +685,18 @@ func (d *wfDriver) converge(cur deployment, within time.Duration) []wfFinal {
 	base := "http://" + cur.Endpoint.MagicDNS
 	for deadline := time.Now().Add(within); time.Now().Before(deadline); {
 		left := 0
+		var todo []string
 		for _, id := range ids {
-			if done[id] {
-				continue
+			if !done[id] {
+				todo = append(todo, id)
 			}
-			f := wfFinal{Inst: id}
-			var st struct {
-				Status string          `json:"status"`
-				Output json.RawMessage `json:"output"`
-				Error  json.RawMessage `json:"error"`
-			}
-			code, err := getJSON(d.cli, base+"/status?id="+id, &st)
-			f.Code, f.Status, f.Output, f.Error = code, st.Status, st.Output, st.Error
-			if err != nil && code != 404 {
-				f.Status = "unreadable: " + err.Error()
-			}
+		}
+		for id, f := range d.statuses(base, todo) {
 			last[id] = f
 			switch {
-			case code == 200 && (st.Status == "complete" || st.Status == "errored" || st.Status == "terminated"):
+			case f.Code == 200 && (f.Status == "complete" || f.Status == "errored" || f.Status == "terminated"):
 				done[id] = true
-			case code == 404:
+			case f.Code == 404:
 				if missing[id]++; missing[id] >= 5 {
 					done[id] = true
 				}
