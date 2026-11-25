@@ -69,14 +69,20 @@ func releaseRepo() string {
 	return "rosskukulinski/tailworks"
 }
 
+// releaseAPI is the GitHub API base every "latest release" lookup uses
+// (tw version --check, tw upgrade): TW_RELEASE_API names a mirror or a
+// test server.
+func releaseAPI() string {
+	if api := strings.TrimSuffix(os.Getenv("TW_RELEASE_API"), "/"); api != "" {
+		return api
+	}
+	return "https://api.github.com"
+}
+
 // fetchLatestRelease asks GitHub for the latest published release.
 func fetchLatestRelease(ctx context.Context) (latestRelease, error) {
-	api := strings.TrimSuffix(os.Getenv("TW_RELEASE_API"), "/")
-	if api == "" {
-		api = "https://api.github.com"
-	}
 	var r latestRelease
-	req, err := http.NewRequestWithContext(ctx, "GET", api+"/repos/"+releaseRepo()+"/releases/latest", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", releaseAPI()+"/repos/"+releaseRepo()+"/releases/latest", nil)
 	if err != nil {
 		return r, err
 	}
