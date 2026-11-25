@@ -396,7 +396,7 @@ flags:
   -name string
     	workload name (default: tailworks.jsonc name, then wrangler name, then the directory)
   -no-wait
-    	return once mgmt accepted the deploy
+    	return once mgmt accepted the request, without waiting for ready
   -preview
     	deploy as a preview next to the workload (<workload>--preview-<alias>), leaving the workload as it is; tw promote makes it the workload
   -preview-alias string
@@ -408,7 +408,7 @@ flags:
 
 Advanced:
   -allow-missing-grants
-    	deploy even if the preflight finds policy lines missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)
+    	deploy even if the preflight finds policy lines the bundle needs missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)
   -force-takeover
     	the workload's current host is gone for good: move its Durable Objects anyway (audited; see takeover_unconfirmed); with --replace, confirms moving a stateful workload off a live host
   -from-wrangler-out string
@@ -418,7 +418,7 @@ Advanced:
   -platform string
     	containers: arches to build Dockerfile images for (linux/amd64,linux/arm64; default: the arches of the tenant pool's container hosts)
   -replace
-    	re-place the workload: move it to a clearly better host (smart placement: the best measured path to tailnet.connects) instead of keeping it where it runs
+    	re-place the workload: move it to a clearly better host (smart placement: the best measured path to tailnet.connects) instead of keeping it on its host with its Durable Object storage
   -wait duration
     	how long to wait for ready (default 3m0s)
   -wait-public duration
@@ -501,17 +501,17 @@ flags:
   -keep-preview
     	leave the preview running (default: undeploy it once promoted)
   -no-wait
-    	return once mgmt accepted the promotion
+    	return once mgmt accepted the request, without waiting for ready
 
 Advanced:
   -allow-missing-grants
-    	promote even if the preflight finds policy lines the preview's bundle needs missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)
+    	promote even if the preflight finds policy lines the bundle needs missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)
   -force-takeover
-    	as tw deploy --force-takeover
+    	the workload's current host is gone for good: move its Durable Objects anyway (audited; see takeover_unconfirmed); with --replace, confirms moving a stateful workload off a live host
   -host string
-    	pin the workload to this host (as tw deploy --host)
+    	pin the workload to this host (it must be live, in the tenant's pool and offer the tier)
   -replace
-    	re-place the workload (as tw deploy --replace); by default it stays on its host, with its Durable Object storage
+    	re-place the workload: move it to a clearly better host (smart placement: the best measured path to tailnet.connects) instead of keeping it on its host with its Durable Object storage
   -wait duration
     	how long to wait for ready (default 3m0s)
 
@@ -529,17 +529,17 @@ usage: tw rollback <workload> [<deployment>] [--no-wait]
 
 flags:
   -no-wait
-    	return once mgmt accepted the rollback
+    	return once mgmt accepted the request, without waiting for ready
 
 Advanced:
   -allow-missing-grants
-    	roll back even if the preflight finds policy lines the old bundle needs missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)
+    	roll back even if the preflight finds policy lines the bundle needs missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)
   -force-takeover
-    	as tw deploy --force-takeover
+    	the workload's current host is gone for good: move its Durable Objects anyway (audited; see takeover_unconfirmed); with --replace, confirms moving a stateful workload off a live host
   -host string
-    	pin the rolled-back workload to this host (as tw deploy --host)
+    	pin the workload to this host (it must be live, in the tenant's pool and offer the tier)
   -replace
-    	re-place the workload (as tw deploy --replace); by default it stays on its host, with its Durable Object storage
+    	re-place the workload: move it to a clearly better host (smart placement: the best measured path to tailnet.connects) instead of keeping it on its host with its Durable Object storage
   -wait duration
     	how long to wait for ready (default 3m0s)
 
