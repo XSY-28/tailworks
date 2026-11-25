@@ -161,9 +161,11 @@ func checkK1(in kInput) result {
 				if o.OK && o.MS > maxDown {
 					maxDown = o.MS
 				}
-				// The cap runs on the host's clock: a destroy() on a host
-				// that is stopped or cut off meanwhile takes longer.
-				if o.OK && time.Duration(o.MS)*time.Millisecond > ctrGrace+5*time.Second && nonRedeployFault(in.faults, o.Sent, o.Recv, 0) == "" {
+				// The cap is on SIGTERM → SIGKILL. A destroy() on a host
+				// that is stopped meanwhile, or of a container still
+				// booting after a fault (destroy waits for the start), takes
+				// longer; hostd logs the stop itself (stop_ms).
+				if o.OK && time.Duration(o.MS)*time.Millisecond > ctrGrace+5*time.Second && nonRedeployFault(in.faults, o.Sent, o.Recv, 20*time.Second) == "" {
 					r.fail("%s: destroy() took %d ms (grace cap %v)", obj, o.MS, ctrGrace)
 				}
 				continue
