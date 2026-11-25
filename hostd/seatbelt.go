@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rosskukulinski/tailworks/internal/procsb"
+	"github.com/rosskukulinski/tailworks/internal/wallclock"
 )
 
 // Process-tier sandboxes (Config.Sandbox).
@@ -165,8 +166,9 @@ func (inst *instance) workerdCommand() (*exec.Cmd, error) {
 	if inst.pyodide != "" {
 		trees = []string{inst.pyodide} // pyodide.go: read-only
 	}
+	_, clockFiles := wallclock.Workerd() // a test build's skewed clock; nil otherwise
 	cmd, err := inst.sandboxed(inst.h.cfg.WorkerdBin, args,
-		[]string{inst.dir, inst.doStorage}, []string{inst.h.cfg.WorkerdBin}, trees, bind, inst.loopPorts)
+		[]string{inst.dir, inst.doStorage}, append([]string{inst.h.cfg.WorkerdBin}, clockFiles...), trees, bind, inst.loopPorts)
 	if err != nil {
 		if f != nil {
 			f.Close()
