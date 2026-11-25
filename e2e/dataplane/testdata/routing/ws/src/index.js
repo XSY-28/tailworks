@@ -22,9 +22,15 @@ export class Echo extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.boot = crypto.randomUUID();
+    // The copy's ident, once per boot and before any event: awaiting an
+    // RPC in webSocketMessage would let the next message in first (the
+    // input gate stays open for I/O) and replies would leave out of order.
+    ctx.blockConcurrencyWhile(async () => {
+      this.id = await ident(ctx, env);
+    });
   }
   async fetch(req) {
-    const id = await ident(this.ctx, this.env);
+    const id = this.id;
     if (req.headers.get("upgrade") !== "websocket") return Response.json({ ...id, boot: this.boot, conns: this.ctx.getWebSockets().length });
     const [client, server] = Object.values(new WebSocketPair());
     this.ctx.acceptWebSocket(server);
@@ -37,7 +43,7 @@ export class Echo extends DurableObject {
     try {
       s = JSON.parse(msg).s;
     } catch {}
-    ws.send(JSON.stringify({ c, s, ...(await ident(this.ctx, this.env)), boot: this.boot }));
+    ws.send(JSON.stringify({ c, s, ...this.id, boot: this.boot }));
   }
   async webSocketClose(ws, code) {
     try {
