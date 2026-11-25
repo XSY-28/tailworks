@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
@@ -71,6 +72,39 @@ func deployApplyPolicy(ctx context.Context, mc *mgmtapi.Client, f *flags, tenant
 		return deployPolicyFallback(f, *pf, err)
 	case err != nil:
 		return err
+	}
+	*pf, res.Preflight, res.PolicyApplied = ar.Preflight, ar.Preflight, ar
+	ev.emit("policy", map[string]any{"changed": ar.Changed, "added": ar.Added, "manual": ar.Manual, "ok": pf.OK})
+	return nil
+}
+
+// deployAskPolicy is tw deploy's default on a terminal (issue #481): the
+// preflight found lines missing, so when mgmt says the write would go
+// through (canWrite), show them and ask. "y" writes as --apply-policy
+// does. "n", a plan mgmt refuses (a tenant admin: tenant_forbidden), a
+// write it can't make, or a failed write falls back to the snippet
+// (acl_denied), as without the flag.
+func deployAskPolicy(ctx context.Context, mc *mgmtapi.Client, f *flags, tenantID, workload string, tb []byte, pf *mgmt.PreflightResult, res *deployResult, ev *events) error {
+	plan, err := planAppPolicy(ctx, mc, tenantID, workload, tb) // policyapply.go
+	switch {
+	case err != nil:
+		return deployPolicyFallback(f, *pf, err)
+	case strings.TrimSpace(plan.Added) == "" || plan.CanWrite == nil:
+		return preflightFailure(*pf) // nothing tw writes, or a mgmt that doesn't say
+	case !*plan.CanWrite:
+		return deployPolicyFallback(f, *pf, fail("policy_write_denied", "the control plane would refuse the write (the tenant's OAuth client needs Policy File › Write)"))
+	}
+	printPolicyAdditions(*plan)
+	policyAskHint(os.Stdout, "tw deploy") // policy_ask.go
+	if err := confirmPolicyWrite(f, false, "tw deploy --apply-policy"); err != nil {
+		if policyDeclined(err) {
+			return deployPolicyFallback(f, *pf, fail("cancelled", "you answered no"))
+		}
+		return err
+	}
+	ar, err := writeAppPolicy(ctx, mc, f, tenantID, workload, tb, plan)
+	if err != nil {
+		return deployPolicyFallback(f, *pf, err)
 	}
 	*pf, res.Preflight, res.PolicyApplied = ar.Preflight, ar.Preflight, ar
 	ev.emit("policy", map[string]any{"changed": ar.Changed, "added": ar.Added, "manual": ar.Manual, "ok": pf.OK})

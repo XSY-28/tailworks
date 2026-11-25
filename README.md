@@ -66,8 +66,8 @@ In the admin console, open **Access controls** and add one line to
 ```
 
 The tag has to exist before step 3 can give it to the OAuth client. This
-is the only line you paste: `tw up --apply-policy` (step 4) and `tw deploy
---apply-policy` (step 5) write the rest, after showing you the lines.
+is the only line you paste: `tw up` (step 4) and `tw deploy` (step 5)
+offer to write the rest, after showing you the lines.
 
 <details>
 <summary>Or paste all of it now, if you'd rather not let tailworks write your policy</summary>
@@ -106,7 +106,7 @@ next step (it is shown only once).
 ### 4. Start tailworks
 
 ```sh
-tw up --apply-policy
+tw up
 ```
 
 Paste the Client Secret when asked. `tw up` saves it to
@@ -118,14 +118,16 @@ starts at login. It prints the admin console URL:
 redirects a browser there, and `tw link` and `tw whoami` print it on other
 machines.
 
-If you pasted the whole snippet in step 2, or chose **Policy File › Read**,
-run plain `tw up`: it prints any lines still missing.
+Answer `n` (or chose **Policy File › Read**, which never asks) and `tw up`
+prints the lines still missing for you to paste. Without a terminal it
+only prints them; scripts write with `tw up --apply-policy --yes`, and
+`--apply-policy=false` never asks.
 
 ### 5. Deploy an app
 
 ```sh
 tw init hello && cd hello
-tw deploy --apply-policy
+tw deploy
 ```
 
 `tw deploy` shows the lines this app needs in your policy, asks, writes

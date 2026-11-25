@@ -169,7 +169,7 @@ func cmdTenantAdd(args []string) error {
 	oauthFile := f.String("oauth-client-file", "", "this tailnet's OAuth client (mint mode \"oauth\"): 0600 file with TS_OAUTH_CLIENT_ID=… and TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:tw); read at use, never copied")
 	keyFile := f.String("api-key-file", "", "--control=headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied")
 	profile := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; the tailnet argument is its dns.base_domain)")
-	apply := f.Bool("apply-policy", false, "write the base policy snippet to the tailnet policy instead of printing it (additive, validated first, written with If-Match); shows the lines and asks first")
+	apply := f.Bool("apply-policy", false, "write the base policy snippet to the tailnet policy instead of printing it (additive, validated first, written with If-Match); shows the lines and asks first. Without the flag it asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes")
 	yes := yesFlagBefore(f, "--apply-policy writes the policy")
 	control := f.String("control-url", prodControl, "coordination server for this tailnet's nodes")
 	rpm := f.Int("registrations-per-minute", 0, "this tenant's node registration throttle (default 200/min)")
@@ -361,10 +361,11 @@ func cmdTenantAdd(args []string) error {
 	res.PolicyOK = miss.Empty() || !policyReadable
 	if !res.PolicyOK {
 		res.PolicyDiff = miss.HuJSON()
-		if *apply {
-			if err := confirmBootstrapWrite(f, *yes, "tw tenant add --apply-policy", *profile, miss, nil); err != nil { // up_policyapply.go
-				return err
-			}
+		write, err := bootstrapPolicyGate(ctx, api, f, policyModeOf(f, *apply, *yes), *yes, "tw tenant add", *profile, pol, snip, popts, miss, nil) // policy_ask.go
+		if err != nil {
+			return err
+		}
+		if write {
 			ar, err := policy.ApplyWith(ctx, api, snip, popts)
 			if err != nil {
 				return fail("policy_apply_failed", "could not apply the policy snippet", err.Error()).withFix("add it in "+policyHome(*profile)+":", res.PolicyDiff)
