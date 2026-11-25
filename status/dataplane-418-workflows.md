@@ -42,7 +42,16 @@ the #415 harness). Ledger: `e2e/dataplane/ledger/workflows.md`.
   `workflows` 10, 12, 14 (macOS), 20 (Linux arm64, lima twd-dev): pass.
   `workflows-move` 11, 13, 15 (macOS), 21 (Linux arm64): pass. Seeds 1–3
   (before the #561 fix and three harness fixes) failed: see the ledger.
-- See the PR for `make lint test` and `make e2e-dataplane`.
+- Final harness: `workflows-move` 20261125 (macOS, the nightly's seed),
+  `workflows` 22 and `workflows-move` 23 (Linux arm64): pass.
+- `make e2e-dataplane` (macOS): `TestDataplane` mixed 20261125 pass;
+  `TestDataplaneWorkflows` workflows-move 20261125 failed on two harness
+  bugs (W4 activation-lag lookahead, a slow nudger), fixed; replay and rerun
+  of the seed pass. The target takes about 10 minutes.
+- `make lint`: pass. `make test`: `test-js` pass; `test-go` pass except a
+  nil-pointer panic in the `hostd/connect_test.go` `serveWhoisTCP` test
+  helper (unrelated); `go test -race ./hostd/` rerun: pass.
+- `make changes-check`: ok (no fragment needed).
 
 ## Gaps
 

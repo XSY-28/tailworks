@@ -15,7 +15,8 @@ TW_DP_SCENARIO=workflows TW_DP_SEED=10 TW_DP_DURATION=3m \
 with today's date as the seed: `workflows` on an even date,
 `workflows-move` on an odd one, for 3 minutes (about 4 minutes in all).
 `TW_DP_SCENARIO=workflows|workflows-move` runs it alone, and any other
-scenario skips it.
+scenario skips it. `TW_DP_REPLAY=<results dir> go test -tags e2edataplane
+-run TestReplayWorkflows ./e2e/dataplane/` re-runs W1–W5 on a recorded run.
 
 ## The workload (`testdata/wf`)
 
@@ -62,8 +63,8 @@ scenarios once it lands.
 
 | Scenario | Clean seeds (consecutive) | Notes |
 |---|---|---|
-| workflows | 10, 12, 14 (macOS); 20 (Linux arm64) | with the #561 fix |
-| workflows-move | 11, 13, 15 (macOS); 21 (Linux arm64) | with the #561 fix; resumptions after a move back noted (#565) |
+| workflows | 10, 12, 14 (macOS); 20, 22 (Linux arm64) | with the #561 fix |
+| workflows-move | 11, 13, 15, 20261125 (macOS); 21, 23 (Linux arm64) | with the #561 fix; resumptions after a move back noted (#565) |
 
 Done (#418): 3 clean seeds per scenario, a Linux run each, the docs
 (`docs/approvals.md` "Under faults" and "Moves", `docs/locks.md`, COMPAT
@@ -117,3 +118,6 @@ rows) cite the test, and it runs nightly in `make e2e-dataplane`.
 | 20261125T065019Z-workflows-14 | workflows 14 | pass |
 | 20261125T065022Z-workflows-move-15 | workflows-move 15 | pass; 33 resumed |
 | Linux arm64 (lima twd-dev) | workflows-move 21 | pass; 31 resumed |
+| make e2e-dataplane (macOS), 20261125T070429Z-workflows-move-20261125 | workflows-move 20261125 | HARNESS-BROKEN: W4 8 false stale actions (the activation-lag check looked 10 s ahead and found the next move instead of the arrival; now "did the lease arrive within 10 s"); W5 2 stuck (the nudger read statuses one by one with a 10 s timeout from a stalled copy, so it reached them only at the end; now 16 at a time, 3 s). `TestReplayWorkflows` on it: W4 clean |
+| rerun after the harness fix | workflows-move 20261125 | pass; 28 resumed |
+| Linux arm64, final harness | workflows 22, workflows-move 23 | pass, pass |
