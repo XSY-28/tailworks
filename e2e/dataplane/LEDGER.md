@@ -3,6 +3,8 @@
 Issue #415. Process: `LOOP.md`. Findings are filed as GitHub issues
 labelled `dataplane-chaos`.
 
+- Deploys, rollback and secrets (#421, `deploys-*` scenarios): `ledger/deploys.md`.
+
 ## Status
 
 | Scenario | Clean seeds (consecutive) | Notes |
