@@ -27,7 +27,7 @@ flags:
   -service
     	run the supervisor as a service that starts at login: Linux systemd user unit (~/.config/systemd/user/tw.service), macOS LaunchAgent (~/Library/LaunchAgents/dev.tailworks.up.plist). Default: on for a new default state dir where available; an existing state dir keeps how it runs (--service=false runs it in the background without a service)
   -yes
-    	skip the confirmation before --apply-policy writes the policy (tw up asks nothing else); needed without a terminal and with --json
+    	skip the confirmation before --apply-policy writes the policy; needed without a terminal and with --json
 
 Control plane (Tailscale or Headscale):
   -api-key-file string
