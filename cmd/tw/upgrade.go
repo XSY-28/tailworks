@@ -370,6 +370,9 @@ type localResult struct {
 	// NotActiveBefore are deployments that weren't active before the
 	// upgrade: the health check didn't count them (issue #63).
 	NotActiveBefore []string `json:"notActiveBefore,omitempty"`
+
+	// AgentSkills is what the new tw's agent setup --refresh did (issue #490).
+	AgentSkills string `json:"agentSkills,omitempty"`
 }
 
 func homelabUpgrade(f *flags, s *state, want, from, prefixFlag string, planOnly, yes bool, healthTimeout time.Duration, noRollback bool,
@@ -380,11 +383,15 @@ func homelabUpgrade(f *flags, s *state, want, from, prefixFlag string, planOnly,
 	}
 	prefix := pc.Prefix
 	if in, npm := npmSelf(); npm && prefix == "" {
+		if planOnly {
+			return npmUpgradePlan(f, installChannel(), want) // install_channel.go
+		}
 		return npmUpgradeErr(in) // npm_install.go
 	}
 	if prefix == "" && !planOnly {
 		return fail("bad_request", "this tailworks doesn't run from an install.sh prefix (bin/, share/tailworks, VERSION), so it can't upgrade itself in place").
-			withFix("install a release with scripts/get.sh, or upgrade by hand: tar -xzf tw-<v>-…tar.gz && ./tw-<v>-…/install.sh",
+			withFix(installChannel().upgradeCommand(want), // install_channel.go
+				"or install a release by hand: tar -xzf tw-<v>-…tar.gz && ./tw-<v>-…/install.sh",
 				"or name the install to upgrade: tw upgrade --prefix <dir>")
 	}
 	if pc.Mismatch != "" && !planOnly {
@@ -425,6 +432,9 @@ func homelabUpgrade(f *flags, s *state, want, from, prefixFlag string, planOnly,
 	}
 	if pc.Mismatch != "" {
 		plan.Warnings = append(plan.Warnings, pc.Mismatch+": the run needs --prefix "+prefix)
+	}
+	if prefix == "" {
+		plan.Warnings = append(plan.Warnings, noPrefixUpgrade(want)) // install_channel.go
 	}
 	if s.supervisorAlive() {
 		plan.Warnings = append(plan.Warnings, notActiveWarnings(snapshotDeployments(s))...)
@@ -496,12 +506,16 @@ func homelabUpgrade(f *flags, s *state, want, from, prefixFlag string, planOnly,
 	}
 	if err == nil {
 		res.Upgraded, res.Health = true, "ok"
+		res.AgentSkills = refreshAfterUpgrade(plan, prefix, say) // agent_refresh.go
 		emit(f, res, func() {
 			fmt.Printf("✓ tw %s is up and healthy\n", meta.Version)
 			for _, l := range res.NotActiveBefore {
 				fmt.Println("  ! " + l + " (not checked; `tw deploy` it again)")
 			}
-			fmt.Println("  installed agent skills are stamped with the old version: re-run `tw agent setup` if you use them")
+			if res.AgentSkills != "" {
+				fmt.Println("  ✓ " + res.AgentSkills)
+			}
+			fmt.Println("  project agent skills (tw agent setup --scope project) keep the old version: re-run it in those projects")
 		})
 		return nil
 	}
@@ -610,6 +624,9 @@ func localPlanFor(cur string, meta releaseMeta, rel, source string, s *state) lo
 	if inst, _ := serviceOf(s); !inst && !s.supervisorAlive() {
 		// No health check then, so nothing is rolled back (homelabUpgrade).
 		p.Steps = append(p.Steps[:3], "tw is not running: install only (no health check, no automatic rollback)")
+	}
+	if st := agentRefreshStep(); st != "" { // agent_refresh.go
+		p.Steps = append(p.Steps, st)
 	}
 	if runtime.GOOS == "linux" {
 		if _, err := os.Stat("/etc/tailworks/setup.json"); err == nil {
