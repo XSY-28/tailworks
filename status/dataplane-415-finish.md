@@ -70,11 +70,14 @@ remain), and `TW_DP_FAULTS=skew,pause-takeover,cut-takeover,move` seed 7
 (pass).
 
 - `make lint`: pass.
-- `make test` (macOS, merged with origin/master): pass, except
-  `hostd:TestD1`, `TestPublicIngress` and `TestContainerPolyfill`, which
-  failed at load 30 with `upstream_unavailable` from the stall fence (1 s
-  fence window in those tests, #556). They passed on rerun at load 20.
-  Not touched by this branch.
+- `make test` (macOS): pass after the last merge of origin/master (which
+  brought #598). Before it, `hostd:TestD1`, `TestPublicIngress` and
+  `TestContainerPolyfill` failed once at load 30 with `upstream_unavailable`
+  from the stall fence (a 1 s fence window in those tests, #591) and passed
+  on rerun.
+- After that merge (which brought #418's workflows harness): a 60 s
+  `queues` run and a 45 s `workflows` run pass. The skew hook is off in
+  the workflows test (its cluster has no clocks).
 - `make lint-docs test-docs`: pass.
 
 ## Gaps
