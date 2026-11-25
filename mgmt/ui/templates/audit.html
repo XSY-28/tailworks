@@ -26,7 +26,7 @@
     <button type="submit">Filter</button>
     <a href="/ui/audit">Clear</a>
   </form>
-  <p class="small muted">Filters combine. Tenant, event, caller, object and trace are filtered by the API, like <span class="mono">tw audit</span>; the app filter is applied here, to each page{{if .Hidden}} (it hid {{.Hidden}} records on this page){{end}}.</p>
+  <p class="small muted">Filters combine. They are applied by the API (<span class="mono">GET /v1/audit</span>).</p>
 </section>
 
 <section>

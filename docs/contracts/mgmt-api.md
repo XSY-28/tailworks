@@ -148,7 +148,7 @@ What `tw`, the admin UI, tenant admins and agents call.
 | `GET` | `/v1/objects/{id}` | admin\|host\|tenant:read | no | `GetObject` | Read an object (lineage, children, kill record) |
 | `PATCH` | `/v1/objects/{id}` | admin\|host\|tenant:kill | yes | `UpdateObject` | Update an object (JSON Merge Patch) |
 | `DELETE` | `/v1/objects/{id}` | admin\|host\|tenant:kill | yes | `DeleteObject` | Kill an object |
-| `GET` | `/v1/objects/{id}/certificate` | admin\|host | no | `GetObjectCertificate` | Read the object's node certificate |
+| `GET` | `/v1/objects/{id}/certificate` | admin\|host | no | `GetObjectCertificate` | **Deprecated.** Read the object's node certificate |
 | `GET` | `/v1/releases` | admin | no | `ListReleases` | The release catalog |
 | `POST` | `/v1/releases` | admin | yes | `ImportReleases` | Import catalog entries (from a release's share/tailworks/catalog.json) |
 | `GET` | `/v1/releases/{version}/artifacts/{name}` | admin\|host | no | `GetReleaseArtifact` | Download a release tarball (hosts upgrading themselves) |
@@ -1381,6 +1381,8 @@ DO instances, agents and sub-agents, each with its own tailnet node.
 | `tenant` | query | string | no |  |
 | `workload` | query | string | no |  |
 | `namespace` | query | string | no | DO class name, or `_workload`. |
+| `tag` | query | string | no | Objects carrying this tag (the full `tag:<name>`, matched exactly). |
+| `human` | query | string | no | Objects whose `actingFor` is this principal (exact match, as on `GET /v1/audit`). |
 | `state` | query | array of `ObjectStatus` | no | Repeatable. Default is every state, tombstones included. |
 | `parent` | query | string | no | Direct children of this object ID. |
 | `root` | query | string | no | The whole tree under this root object ID. |
@@ -1540,13 +1542,12 @@ A later `GET` is `410 Gone` with the kill record. Replaces
 
 `GetObjectCertificate` · role **admin\|host** · audited: no
 
-The certificate mgmt signed at `ready` (re-issued on fetch when missing
-or within 1 h of expiry). The receiving netd verifies it against the
-tenant's `oboPublicKey` and narrows the caller's caps to `cert.lim`;
-a certificate that fails verification, names another node or cannot
-be fetched makes netd withhold the caller's caps. `410 killed` for
-tombstones. Replaces `GET /v0/certs/{nodeID}`; see also
-`GET /v1/certificates/{stableNodeID}` for lookup by node.
+**Deprecated:** use `GET /v1/certificates/{stableNodeID}?tenant=`
+with the object's `stableNodeID` and `tenantID` (both on `Object`).
+This route returns the same certificate, sends a `Deprecation` header
+and a `Link` to that route (`rel="successor-version"`), and will be
+removed no earlier than two releases later. `409 not_ready` when the
+object has no node yet; `410 killed` for tombstones.
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -1648,6 +1649,17 @@ The receiver-side lookup: "is the peer that just connected a tailworks
 object, and what is its `lim`?" `404 not_found` when no live object
 of the tenant has that node (the receiver then applies the WhoIs caps
 unchanged: the peer is not a tailworks object); `410 killed` for a tombstone.
+
+The certificate is the one mgmt signed at `ready` (re-issued on fetch
+when missing or within 1 h of expiry). The receiving netd verifies it
+against the tenant's `oboPublicKey` and narrows the caller's caps to
+`cert.lim`; a certificate that fails verification, names another node
+or cannot be fetched makes netd withhold the caller's caps.
+
+To read an object's certificate, pass the object's `stableNodeID` and
+`tenantID` (the admin UI's object page does). Replaces
+`GET /v0/certs/{nodeID}` and the deprecated
+`GET /v1/objects/{id}/certificate`.
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -2595,6 +2607,7 @@ Hash-chained, append-only audit log.
 | `trace` | query | string | no |  |
 | `tenant` | query | string | no |  |
 | `chain` | query | string | no | `mgmt` or `host:<hostID>`. |
+| `workload` | query | string | no | Records about this workload: records whose object belongs to it, and mgmt records that name it in their detail (deploy, undeploy, secrets). Combine with `tenant` when several tenants use the name. |
 | `kind` | query | array of `AuditKind` | no |  |
 | `since` | query | string | no | Records at or after this time (RFC 3339 or unix ms). |
 | `until` | query | string | no |  |

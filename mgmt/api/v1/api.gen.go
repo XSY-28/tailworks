@@ -4989,8 +4989,13 @@ type ListAuditParams struct {
 	Tenant *string `form:"tenant,omitempty" json:"tenant,omitempty"`
 
 	// Chain `mgmt` or `host:<hostID>`.
-	Chain *string      `form:"chain,omitempty" json:"chain,omitempty"`
-	Kind  *[]AuditKind `form:"kind,omitempty" json:"kind,omitempty"`
+	Chain *string `form:"chain,omitempty" json:"chain,omitempty"`
+
+	// Workload Records about this workload: records whose object belongs to it,
+	// and mgmt records that name it in their detail (deploy, undeploy,
+	// secrets). Combine with `tenant` when several tenants use the name.
+	Workload *string      `form:"workload,omitempty" json:"workload,omitempty"`
+	Kind     *[]AuditKind `form:"kind,omitempty" json:"kind,omitempty"`
 
 	// Since Records at or after this time (RFC 3339 or unix ms).
 	Since *string `form:"since,omitempty" json:"since,omitempty"`
@@ -5114,6 +5119,12 @@ type ListObjectsParams struct {
 
 	// Namespace DO class name, or `_workload`.
 	Namespace *string `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// Tag Objects carrying this tag (the full `tag:<name>`, matched exactly).
+	Tag *string `form:"tag,omitempty" json:"tag,omitempty"`
+
+	// Human Objects whose `actingFor` is this principal (exact match, as on `GET /v1/audit`).
+	Human *string `form:"human,omitempty" json:"human,omitempty"`
 
 	// State Repeatable. Default is every state, tombstones included.
 	State *[]ObjectStatus `form:"state,omitempty" json:"state,omitempty"`
@@ -5804,6 +5815,8 @@ type ServerInterface interface {
 	UpdateObject(w http.ResponseWriter, r *http.Request, id ObjectID, params UpdateObjectParams)
 	// GetObjectCertificate Read the object's node certificate
 	// (GET /v1/objects/{id}/certificate)
+	//
+	// Deprecated: this operation has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	GetObjectCertificate(w http.ResponseWriter, r *http.Request, id ObjectID)
 	// CreateObjectCredential Mint a single-use auth key for the object's node
 	// (POST /v1/objects/{id}/credentials)
@@ -6119,6 +6132,19 @@ func (siw *ServerInterfaceWrapper) ListAudit(w http.ResponseWriter, r *http.Requ
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "chain"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "chain", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "workload" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "workload", r.URL.Query(), &params.Workload, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "workload"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workload", Err: err})
 		}
 		return
 	}
@@ -7259,6 +7285,32 @@ func (siw *ServerInterfaceWrapper) ListObjects(w http.ResponseWriter, r *http.Re
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "namespace"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "tag" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "tag", r.URL.Query(), &params.Tag, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tag"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tag", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "human" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "human", r.URL.Query(), &params.Human, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "human"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "human", Err: err})
 		}
 		return
 	}
@@ -21633,6 +21685,8 @@ type StrictServerInterface interface {
 	UpdateObject(ctx context.Context, request UpdateObjectRequestObject) (UpdateObjectResponseObject, error)
 	// GetObjectCertificate Read the object's node certificate
 	// (GET /v1/objects/{id}/certificate)
+	//
+	// Deprecated: this operation has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	GetObjectCertificate(ctx context.Context, request GetObjectCertificateRequestObject) (GetObjectCertificateResponseObject, error)
 	// CreateObjectCredential Mint a single-use auth key for the object's node
 	// (POST /v1/objects/{id}/credentials)

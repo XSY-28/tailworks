@@ -1034,7 +1034,8 @@ func (a *v1api) ListObjects(w http.ResponseWriter, r *http.Request, params v1.Li
 		return
 	}
 	f := ObjectFilter{TenantID: tenant, Workload: str(params.Workload), Namespace: str(params.Namespace),
-		ParentID: str(params.Parent), RootID: str(params.Root), Page: pg}
+		ParentID: str(params.Parent), RootID: str(params.Root), Page: pg,
+		Tag: str(params.Tag), ActingFor: str(params.Human)}
 	if params.State != nil {
 		for _, s := range *params.State {
 			f.Status = append(f.Status, string(s))
@@ -1280,6 +1281,7 @@ func (a *v1api) CreateObjectCredential(w http.ResponseWriter, r *http.Request, i
 
 func (a *v1api) GetObjectCertificate(w http.ResponseWriter, r *http.Request, id v1.ObjectID) {
 	o, err := a.s.M.store.GetObject(r.Context(), id)
+	setObjectCertDeprecation(w, o, err) // deprecated_routes.go
 	if err != nil {
 		writeErr(w, r, err)
 		return
@@ -1353,7 +1355,8 @@ func (a *v1api) ListAudit(w http.ResponseWriter, r *http.Request, params v1.List
 		return
 	}
 	f := AuditFilter{ObjectID: str(params.Object), ActingFor: str(params.Human), TraceID: str(params.Trace), TenantID: tenant,
-		Chain: str(params.Chain), Since: normTS(str(params.Since)), Until: normTS(str(params.Until)), Page: pg}
+		Chain: str(params.Chain), Since: normTS(str(params.Since)), Until: normTS(str(params.Until)), Page: pg,
+		Workload: str(params.Workload)}
 	f.Desc = params.Order != nil && *params.Order == v1.Desc
 	if params.Kind != nil {
 		for _, k := range *params.Kind {

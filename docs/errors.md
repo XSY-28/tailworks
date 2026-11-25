@@ -236,10 +236,10 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 503 · cli. **When:** a linked developer machine cannot reach mgmt's node. **Fix:** is your Tailscale connected to the tailnet that runs tailworks, and does a grant let you reach `tag:tw-mgmt` on tcp:443/80?
 
 ### mint_mode_removed
-400 · mgmt, cli. **When:** a Tailscale API key (`--api-key-file` without `--control=headscale`) or workload identity federation was asked for, or a state dir or tenant an older tailworks set up in the `apikey` or `wif` mint mode tried to mint. Both modes were removed: tailworks mints with an OAuth client. **Fix:** create an OAuth client (INSTALL.md), then `tw up --oauth-client-file <file>` (keeps the tenant and its deployments), or `tw tenant set <tenant> --oauth-client-file <file>` for a tenant added with `tw tenant add`.
+400 · mgmt, cli. **When:** a Tailscale API key (`--api-key-file` with Tailscale's control URL and without `--control=headscale`, or with `--control=tailscale`) or workload identity federation was asked for, or a state dir or tenant an older tailworks set up in the `apikey` or `wif` mint mode tried to mint. Both modes were removed: tailworks mints with an OAuth client. **Fix:** create an OAuth client (INSTALL.md), then `tw up --oauth-client-file <file>` (keeps the tenant and its deployments), or `tw tenant set <tenant> --oauth-client-file <file>` for a tenant added with `tw tenant add`. On Headscale, add `--control-url <your Headscale server_url>` (and `--tailnet <base_domain>` for `tw up`).
 
 ### mint_mode_required
-400 · cli. **When:** `tw up` was given no credential. **Fix:** `tw up --oauth-client-file <file>` with an OAuth client of your tailnet (the error prints how to create one; INSTALL.md); on Headscale, `--control=headscale … --api-key-file <file>`.
+400 · cli. **When:** `tw up` was given no credential. **Fix:** `tw up --oauth-client-file <file>` with an OAuth client of your tailnet (the error prints how to create one; INSTALL.md); on Headscale, `tw up --control-url <server_url> --tailnet <base_domain>` with the API key in `~/.config/tailworks/headscale.env` or `--api-key-file <file>`.
 
 ### misdirected_request
 421 · mgmt. **When:** a request on mgmt's tailnet listeners (`:80`, `:443`, the `-tsnet-service` VIP, the operator console) whose `Host` header is neither one of mgmt's own names (its MagicDNS FQDN or short name, `-tsnet-hostname`, `-tsnet-service`) nor an IP literal. This is the DNS-rebinding guard: a web page on a domain rebound to mgmt's IP sends its own domain as `Host` (docs/ADMIN-UI.md). Refused before WhoIs, for every method. **Fix:** address mgmt by its tailnet name (`http(s)://tw-mgmt.<tailnet>/`, `tw whoami` prints it) or its tailnet IP; not through a CNAME or another DNS name that points at it. If you renamed the mgmt node, restart tw-mgmt so it learns the new name. A browser opening the admin UI by the wrong name gets an HTML page listing mgmt's own names.
@@ -300,7 +300,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 1 · cli. **When:** workerd, or create-tailworks (bundler and templates), is not where tailworks expects it. **Fix:** install from a release tarball (`install.sh`); in a checkout `make deps`, or `--workerd <path>` / `$TW_WORKERD`, `$TW_CREATE_TAILWORKS`.
 
 ### not_ready
-409 · mgmt. **When:** a node certificate was requested before the object is `ready`. **Fix:** wait for `identity_pending` to clear; hostd retries.
+409 · mgmt. **When:** a node certificate was requested through the deprecated `GET /v1/objects/{id}/certificate` before the object is `ready`. **Fix:** wait for the object to reach `ready`; better, switch to `GET /v1/certificates/{stableNodeID}?tenant=` with the object's `stableNodeID` and `tenantID`.
 
 ### not_running
 409 · cli. **When:** tailworks is set up in this state dir but its supervisor is not running. **Fix:** `tw up` (or `systemctl --user start tw`).

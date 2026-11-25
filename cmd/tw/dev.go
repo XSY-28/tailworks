@@ -272,6 +272,7 @@ func cmdDev(args []string) error {
 		emit(f, res, func() { fmt.Printf("tw dev · %s → %v\n", res.Serves, res.Smoke) })
 		return nil
 	}
+	devRefreshTypes(a, os.Stderr) // dev_types.go: before the snapshot, so its write is no edit
 	// Snapshot before ready is announced: an edit made right after it
 	// (a test's, an agent's) must still trigger a reload.
 	last := snapshot(a.Dir, a.assetsDir())
@@ -353,6 +354,9 @@ func cmdDev(args []string) error {
 			rs := time.Now()
 			if na, err := loadAppWith(a.Dir, a.Name, a.Opts); err == nil {
 				a = na
+			}
+			if devRefreshTypes(a, os.Stderr) { // dev_types.go
+				last = snapshot(a.Dir, a.assetsDir()) // the refresh is not an edit
 			}
 			if ran, err := db.run(a); ran {
 				last = snapshot(a.Dir, a.assetsDir()) // the build's own output is not an edit

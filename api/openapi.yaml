@@ -2990,6 +2990,14 @@ paths:
           in: query
           description: DO class name, or `_workload`.
           schema: { type: string }
+        - name: tag
+          in: query
+          description: Objects carrying this tag (the full `tag:<name>`, matched exactly).
+          schema: { type: string }
+        - name: human
+          in: query
+          description: Objects whose `actingFor` is this principal (exact match, as on `GET /v1/audit`).
+          schema: { type: string }
         - name: state
           in: query
           description: Repeatable. Default is every state, tombstones included.
@@ -3230,14 +3238,14 @@ paths:
       tags: [objects, credentials]
       operationId: GetObjectCertificate
       summary: Read the object's node certificate
+      deprecated: true
       description: |
-        The certificate mgmt signed at `ready` (re-issued on fetch when missing
-        or within 1 h of expiry). The receiving netd verifies it against the
-        tenant's `oboPublicKey` and narrows the caller's caps to `cert.lim`;
-        a certificate that fails verification, names another node or cannot
-        be fetched makes netd withhold the caller's caps. `410 killed` for
-        tombstones. Replaces `GET /v0/certs/{nodeID}`; see also
-        `GET /v1/certificates/{stableNodeID}` for lookup by node.
+        **Deprecated:** use `GET /v1/certificates/{stableNodeID}?tenant=`
+        with the object's `stableNodeID` and `tenantID` (both on `Object`).
+        This route returns the same certificate, sends a `Deprecation` header
+        and a `Link` to that route (`rel="successor-version"`), and will be
+        removed no earlier than two releases later. `409 not_ready` when the
+        object has no node yet; `410 killed` for tombstones.
       x-tw-role: admin|host
       responses:
         "200":
@@ -3267,6 +3275,17 @@ paths:
         object, and what is its `lim`?" `404 not_found` when no live object
         of the tenant has that node (the receiver then applies the WhoIs caps
         unchanged: the peer is not a tailworks object); `410 killed` for a tombstone.
+
+        The certificate is the one mgmt signed at `ready` (re-issued on fetch
+        when missing or within 1 h of expiry). The receiving netd verifies it
+        against the tenant's `oboPublicKey` and narrows the caller's caps to
+        `cert.lim`; a certificate that fails verification, names another node
+        or cannot be fetched makes netd withhold the caller's caps.
+
+        To read an object's certificate, pass the object's `stableNodeID` and
+        `tenantID` (the admin UI's object page does). Replaces
+        `GET /v0/certs/{nodeID}` and the deprecated
+        `GET /v1/objects/{id}/certificate`.
       x-tw-role: admin|host
       parameters:
         - name: stableNodeID
@@ -3358,6 +3377,13 @@ paths:
         - name: chain
           in: query
           description: "`mgmt` or `host:<hostID>`."
+          schema: { type: string }
+        - name: workload
+          in: query
+          description: |
+            Records about this workload: records whose object belongs to it,
+            and mgmt records that name it in their detail (deploy, undeploy,
+            secrets). Combine with `tenant` when several tenants use the name.
           schema: { type: string }
         - name: kind
           in: query
