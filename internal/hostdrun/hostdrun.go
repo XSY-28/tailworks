@@ -265,6 +265,9 @@ type Runtime struct {
 	log       *slog.Logger
 	// exit is the host's exit-node internet path, when it has one.
 	exit *hostd.ExitNodeInternet
+
+	// joinSrc says where the tsnet settings came from (joinenv.go).
+	joinSrc string
 }
 
 // New resolves the transport (joins the host's node when needed, waits for
@@ -281,6 +284,12 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		log = slog.New(slog.DiscardHandler)
 	}
 	home, _ := os.UserHomeDir()
+	joinSrc := "" // tsnet: where the host ID, mgmt and control URLs came from
+	if o.Client == nil && !o.LocalDev {
+		if joinSrc, err = resolveJoinSettings(&o, home); err != nil { // joinenv.go
+			return nil, err
+		}
+	}
 	if o.HostID == "" {
 		o.HostID, _ = os.Hostname()
 	}
@@ -315,7 +324,7 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 	if o.NodeBin == "" {
 		o.NodeBin = os.Getenv("TW_NODE")
 	}
-	rt = &Runtime{log: log, Workerd: wd}
+	rt = &Runtime{log: log, Workerd: wd, joinSrc: joinSrc}
 	defer func() {
 		if err != nil && rt.TS != nil {
 			rt.TS.Close()
@@ -341,12 +350,6 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		}
 	default:
 		rt.Transport = "tsnet"
-		if o.TSNetControlURL == "" {
-			return nil, errors.New("-tsnet-control-url is required (normal operation is tsnet only; -local-dev for the unix socket)")
-		}
-		if o.MgmtAddr == "" {
-			return nil, errors.New("-mgmt is required: http(s)://tw-mgmt.<tailnet>")
-		}
 		if o.TSNetDir == "" {
 			o.TSNetDir = filepath.Join(o.DataDir, "tsnet")
 		}
@@ -368,6 +371,9 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		cancel()
 		if err != nil {
 			return nil, fmt.Errorf("mgmt %s unreachable over the tailnet: %w (does the policy grant tag:tw-host → tag:tw-mgmt?)", o.MgmtAddr, err)
+		}
+		if err := SaveJoinSettings(o.TSNetDir, JoinSettings{HostID: o.HostID, MgmtURL: o.MgmtAddr, ControlURL: o.TSNetControlURL, KeyTagsOnly: o.TSNetKeyTagsOnly}); err != nil {
+			log.Warn("could not save the join settings beside the node state (pass the flags on the next start)", "err", err)
 		}
 	}
 	rt.Client, rt.mgmtAddr = mc, o.MgmtAddr
@@ -458,7 +464,7 @@ func (rt *Runtime) Start(ctx context.Context) error {
 	if err := rt.Host.Start(ctx); err != nil {
 		return err
 	}
-	rt.log.Info("hostd running", "host", rt.Host.Status().HostID, "mgmt", rt.mgmtAddr, "transport", rt.Transport, "push", rt.Host.PushSocket(), "workerd", rt.Workerd, "sandbox", rt.Host.SandboxInfo())
+	rt.log.Info("hostd running", "host", rt.Host.Status().HostID, "mgmt", rt.mgmtAddr, "transport", rt.Transport, "push", rt.Host.PushSocket(), "workerd", rt.Workerd, "sandbox", rt.Host.SandboxInfo(), "settings", rt.joinSrc)
 	return nil
 }
 

@@ -79,8 +79,7 @@ How it differs from a tarball install:
 
 `npm create tailworks` runs `tw init` when `tw` is on your PATH. Without
 it, it copies the template and names the app's workload and tags after the
-directory the same way; only `--tags`, `--object-tags` and `--keep-tags`
-need `tw`.
+directory the same way; only `--tags` and `--object-tags` need `tw`.
 
 To remove it: `tw uninstall`, then `npm uninstall -g tailworks` (which
 `tw uninstall` prints last). `tw uninstall` also deletes your state in
@@ -523,7 +522,7 @@ dir's entries. It deletes nothing else it finds there, and names it.
 | Entry | Written by | In `tw backup`? | Removed by uninstall? | Safe to delete by hand? |
 |---|---|---|---|---|
 | `bin/`, `share/`, `VERSION`, `install.sh` | `install.sh`, `tw upgrade` | no | yes | no: it is the install |
-| `bin.prev/`, `share.prev/`, `VERSION.prev` | `install.sh` on an upgrade: the previous release, for `install.sh --rollback` | no | yes | yes, if you won't roll back |
+| `bin.prev/`, `share.prev/`, `VERSION.prev` | `install.sh` on an upgrade: the previous release, for `tw upgrade rollback` (or `install.sh --rollback`) | no | yes | yes, if you won't roll back |
 
 `/tmp/tw-<hash>` (the sockets of a long state dir) goes too. Without a
 working `tw` binary, `install.sh --uninstall --purge` (from the prefix or a
@@ -802,7 +801,7 @@ enables and starts it. Logs go to the same `<state>/logs/` (`mgmt.log` and
 **One process by default; scale out with `tw host add`.** As on macOS,
 `tw up` adds one device to your tailnet (mgmt's node) and runs the host
 agent inside the same process; only when you add machines (`tw host add
-<id>`, then `tw-hostd join` + `tw-hostd` there) do hosts get their own
+<id>`, then `tw-hostd -join-token-file <id>.join.env` there) do hosts get their own
 `tag:tw-host` nodes, which is also what the printed `tag:tw-host` policy
 lines are for. `systemctl --user restart tw` brings tailworks back
 in a few seconds, and deployed workloads rejoin with the same tailnet nodes

@@ -396,7 +396,7 @@ flags:
   -name string
     	workload name (default: tailworks.jsonc name, then wrangler name, then the directory)
   -no-wait
-    	return once mgmt accepted the deploy
+    	return once mgmt accepted the request, without waiting for ready
   -preview
     	deploy as a preview next to the workload (<workload>--preview-<alias>), leaving the workload as it is; tw promote makes it the workload
   -preview-alias string
@@ -408,7 +408,7 @@ flags:
 
 Advanced:
   -allow-missing-grants
-    	deploy even if the preflight finds policy lines missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)
+    	deploy even if the preflight finds policy lines the bundle needs missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)
   -force-takeover
     	the workload's current host is gone for good: move its Durable Objects anyway (audited; see takeover_unconfirmed); with --replace, confirms moving a stateful workload off a live host
   -from-wrangler-out string
@@ -418,7 +418,7 @@ Advanced:
   -platform string
     	containers: arches to build Dockerfile images for (linux/amd64,linux/arm64; default: the arches of the tenant pool's container hosts)
   -replace
-    	re-place the workload: move it to a clearly better host (smart placement: the best measured path to tailnet.connects) instead of keeping it where it runs
+    	re-place the workload: move it to a clearly better host (smart placement: the best measured path to tailnet.connects) instead of keeping it on its host with its Durable Object storage
   -wait duration
     	how long to wait for ready (default 3m0s)
   -wait-public duration
@@ -501,17 +501,17 @@ flags:
   -keep-preview
     	leave the preview running (default: undeploy it once promoted)
   -no-wait
-    	return once mgmt accepted the promotion
+    	return once mgmt accepted the request, without waiting for ready
 
 Advanced:
   -allow-missing-grants
-    	promote even if the preflight finds policy lines the preview's bundle needs missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)
+    	promote even if the preflight finds policy lines the bundle needs missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)
   -force-takeover
-    	as tw deploy --force-takeover
+    	the workload's current host is gone for good: move its Durable Objects anyway (audited; see takeover_unconfirmed); with --replace, confirms moving a stateful workload off a live host
   -host string
-    	pin the workload to this host (as tw deploy --host)
+    	pin the workload to this host (it must be live, in the tenant's pool and offer the tier)
   -replace
-    	re-place the workload (as tw deploy --replace); by default it stays on its host, with its Durable Object storage
+    	re-place the workload: move it to a clearly better host (smart placement: the best measured path to tailnet.connects) instead of keeping it on its host with its Durable Object storage
   -wait duration
     	how long to wait for ready (default 3m0s)
 
@@ -529,17 +529,17 @@ usage: tw rollback <workload> [<deployment>] [--no-wait]
 
 flags:
   -no-wait
-    	return once mgmt accepted the rollback
+    	return once mgmt accepted the request, without waiting for ready
 
 Advanced:
   -allow-missing-grants
-    	roll back even if the preflight finds policy lines the old bundle needs missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)
+    	roll back even if the preflight finds policy lines the bundle needs missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)
   -force-takeover
-    	as tw deploy --force-takeover
+    	the workload's current host is gone for good: move its Durable Objects anyway (audited; see takeover_unconfirmed); with --replace, confirms moving a stateful workload off a live host
   -host string
-    	pin the rolled-back workload to this host (as tw deploy --host)
+    	pin the workload to this host (it must be live, in the tenant's pool and offer the tier)
   -replace
-    	re-place the workload (as tw deploy --replace); by default it stays on its host, with its Durable Object storage
+    	re-place the workload: move it to a clearly better host (smart placement: the best measured path to tailnet.connects) instead of keeping it on its host with its Durable Object storage
   -wait duration
     	how long to wait for ready (default 3m0s)
 
@@ -1313,44 +1313,61 @@ global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 upgrade tailworks on this machine or the fleet
 
 ```text
-tw upgrade: upgrade tailworks: on a tw up machine, back up, install a newer release and roll back if it isn't healthy; against a linked tw-mgmt (or --fleet), plan and run a fleet upgrade (status, pause, resume, abort)
+tw upgrade: upgrade tailworks: on a tw up machine, back up, install a newer release and roll back if it isn't healthy (tw upgrade rollback goes back by hand); tw upgrade fleet plans and runs a fleet upgrade through tw-mgmt (status, pause, resume, abort), from the release catalog that tw upgrade import fills and tw upgrade releases lists; on a linked machine tw upgrade is tw upgrade fleet
 
 subcommands:
-  tw upgrade [<version>] [flags]
-  tw upgrade status|pause|resume|abort [<run-id>]
+  tw upgrade [<version>] [--from <tarball|dir>] [--plan] [--yes] [--allow-unsigned]
+  tw upgrade fleet [<version>] [--plan] [--yes] [--hosts <host>,…] [--canary <host>] [--soak <d>] [--settle <d>] [--no-wait]
+  tw upgrade fleet status|pause|resume|abort [<run-id>]
+  tw upgrade import <tarball>…|<version> [--platform <os>-<arch>,…]
+  tw upgrade releases
+  tw upgrade rollback [<backup-dir>] [--restore] [--prefix <dir>] [--yes]
 
 flags:
   -allow-unsigned
-    	homelab: install a release that isn't signed by a pinned key (a build you made; TW_ALLOW_UNSIGNED=1)
-  -canary string
-    	fleet: the canary host (default: the first)
-  -fleet
-    	upgrade the fleet through tw-mgmt (an upgrade run) even on a tw up machine
+    	install a release that isn't signed by a pinned key (a build you made; TW_ALLOW_UNSIGNED=1)
   -from string
     	install this release tarball (tw-<v>-<os>-<arch>.tar.gz, with SHA256SUMS next to it) or extracted release directory instead of downloading
-  -health-timeout duration
-    	homelab: how long the upgraded tw may take to report healthy before it is rolled back (default 3m0s)
-  -hosts string
-    	fleet: only these hosts (comma-separated)
-  -no-rollback
-    	homelab: keep the new release even if the health check fails
-  -no-wait
-    	fleet: start the run and return (tw upgrade status follows it)
   -plan
     	print the plan and change nothing
-  -prefix string
-    	homelab: the install.sh prefix to upgrade (default: the one that owns --state-dir)
-  -settle duration
-    	fleet: how long a host may take to come back and settle (default 5m0s)
-  -soak duration
-    	fleet: watch the canary this long before the other hosts (default 5m0s)
   -yes
     	skip the confirmation before upgrading; needed without a terminal and with --json
+
+Advanced:
+  -health-timeout duration
+    	how long the upgraded tw may take to report healthy before it is rolled back (default 3m0s)
+  -no-rollback
+    	keep the new release even if the health check fails
+  -prefix string
+    	the install.sh prefix to upgrade (default: the one that owns --state-dir)
+
+also accepted, for one release (now tw upgrade fleet): --canary --fleet --hosts --no-wait --settle --soak
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
+```
+
+#### tw upgrade fleet
+
+```text
+flags:
+  -canary string
+    	the canary host (default: the first)
+  -hosts string
+    	only these hosts (comma-separated)
+  -no-wait
+    	start the run and return (tw upgrade fleet status follows it)
+  -plan
+    	print the plan and start nothing
+  -settle duration
+    	how long a host may take to come back and settle (default 5m0s)
+  -soak duration
+    	watch the canary this long before the other hosts (default 5m0s)
+  -yes
+    	skip the confirmation before starting the upgrade run; needed without a terminal and with --json
 
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 ```
 
-#### tw upgrade abort
+#### tw upgrade fleet abort
 
 ```text
 flags:
@@ -1359,17 +1376,47 @@ flags:
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 ```
 
-#### tw upgrade pause
+#### tw upgrade fleet pause
 
-Same flags as [tw upgrade abort](#tw-upgrade-abort).
+Same flags as [tw upgrade fleet abort](#tw-upgrade-fleet-abort).
 
-#### tw upgrade resume
+#### tw upgrade fleet resume
 
-Same flags as [tw upgrade abort](#tw-upgrade-abort).
+Same flags as [tw upgrade fleet abort](#tw-upgrade-fleet-abort).
 
-#### tw upgrade status
+#### tw upgrade fleet status
 
-Same flags as [tw upgrade abort](#tw-upgrade-abort).
+Same flags as [tw upgrade fleet abort](#tw-upgrade-fleet-abort).
+
+#### tw upgrade import
+
+```text
+flags:
+  -platform string
+    	with a version: import the tarballs for these platforms (comma-separated <os>-<arch>; default: the platforms of the hosts that upgrade themselves)
+
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
+```
+
+#### tw upgrade releases
+
+Same flags as [tw upgrade fleet abort](#tw-upgrade-fleet-abort).
+
+#### tw upgrade rollback
+
+```text
+flags:
+  -restore
+    	also put the store back from the backup tw upgrade took (default: only when the previous release can't open the store)
+  -yes
+    	skip the confirmation before rolling back; needed without a terminal and with --json
+
+Advanced:
+  -prefix string
+    	the install.sh prefix to roll back (default: the one that owns --state-dir)
+
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
+```
 
 ### tw version
 
@@ -1513,7 +1560,7 @@ tw host <subcommand> --help   its flags
 ```text
 flags:
   -out string
-    	write the join key (TS_AUTHKEY=…) and the one-time registration secret (TW_REGISTRATION_SECRET=…) here (default ./<host-id>.join.env)
+    	write the join file here (default ./<host-id>.join.env): the join key (TS_AUTHKEY=…), the one-time registration secret (TW_REGISTRATION_SECRET=…), and the host ID, mgmt URL and control URL tw-hostd -join-token-file reads
 
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · --tenant <tailnet|id> (default: the tw up tenant)
 ```
@@ -1616,31 +1663,6 @@ global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 #### tw custody migrate
 
 Same flags as [tw custody](#tw-custody).
-
-### tw release
-
-release catalog for fleet hosts that upgrade themselves
-
-```text
-tw release: tw-mgmt's release catalog: list known releases, import a release (its notes and tarball, for hosts that upgrade themselves)
-
-subcommands:
-  tw release ls
-  tw release import <tw-<v>-<os>-<arch>.tar.gz>…
-
-flags:
-  (none besides the global ones)
-
-global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
-```
-
-#### tw release import
-
-Same flags as [tw release](#tw-release).
-
-#### tw release ls
-
-Same flags as [tw release](#tw-release).
 
 ## Environment
 

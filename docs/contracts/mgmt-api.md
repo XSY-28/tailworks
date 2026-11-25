@@ -2636,7 +2636,7 @@ notes, contract migrations, protocols and workerd pin. `current` is this replica
 `ImportReleases` · role **admin** · audited: yes
 
 Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
-`tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
+`tw upgrade import <tarball>…|<version>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 `release_import`.
 
@@ -4014,6 +4014,8 @@ A single-use join key for a host's `tag:tw-host` node. Never logged.
 | `expiresAt` | integer (int64) | yes | unix ms |
 | `host` | `Host` | yes |  |
 | `hostname` | string | yes | `tw-host-<hostID>` |
+| `keyTagsOnly` | boolean | no | The host's node must advertise no tags; its join key carries `tag:tw-host` (Headscale, ADR-015). `tw-hostd -tsnet-key-tags-only`. |
+| `mgmtURL` | string (uri) | no | Where the host reaches mgmt over the tailnet (`tw-hostd -mgmt`): `http://tw-mgmt.<tailnet>`. Absent when mgmt doesn't know its own node name (local-dev). |
 | `registrationSecret` | string (password) | yes | One-time secret (32 random bytes, base64url) the host presents in its first `PUT /v1/hosts/{id}`; mgmt stores only its SHA-256 and clears it once the node is bound. |
 | `tags` | array of string | yes |  |
 | `tailnet` | string | no |  |
@@ -4459,11 +4461,23 @@ Why a deployment is on its host (smart placement, ADR-033).
 | `bundle` | string | yes | The bundle, as for `POST /v1/deployments`. |
 | `namespaces` | array of `ClassConfig` | no | Override the classes read from `tailworks.jsonc` (tests). |
 
+#### `PolicySnippet`
+
+Additions to a tailnet policy, in the policy file's own shape.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `autoApprovers` | object | no |  |
+| `grants` | array of object | no |  |
+| `nodeAttrs` | array of object | no |  |
+| `tagOwners` | object | no |  |
+
 #### `PreflightMissing`
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `dst` | string | yes |  |
+| `ip` | string | no | The grant's port (`tcp:5432`). |
 | `snippet` | string | yes | The grant to add (HuJSON). |
 | `src` | string | yes |  |
 
@@ -4481,6 +4495,7 @@ Why a deployment is on its host (smart placement, ADR-033).
 | `service` | string | no | The Tailscale Service the workload node would host (`tailnet.service`). |
 | `serviceSnippet` | string | no | The `autoApprovers` entry to add (HuJSON). |
 | `serviceUnapproved` | boolean | no | The policy's `autoApprovers.services` doesn't let the workload tags host `service`: the node would advertise it but control would never route it. `ok` is false. |
+| `snippet` | `PolicySnippet` | no | Everything above that is missing, as one typed policy snippet: the string fields (`tagOwnersSnippet`, `nodeAttrsSnippet`, `serviceSnippet`, each `missing[].snippet`) are renderings of its parts. Absent when nothing is missing. Never holds the caller grant (`PolicyApply.callerGrant`). |
 | `srcTags` | array of string | no | The tags checked (workload + object tags from the bundle). |
 | `tagOwnerProblems` | array of string | no | For a tenant with its own `ownerTag`, the tags its owner tag doesn't own, or that another tenant's owner tag on the tailnet owns. Makes `ok` false. |
 | `tagOwnersSnippet` | string | no |  |

@@ -321,6 +321,9 @@ hosts and mgmt, and changes the route list under load:
 
 - **Signing in tailnet users on public routes (tsidp).** tsidp refuses
   `/authorize` over Funnel and refuses tagged nodes. A later ADR covers it.
+  An OAuth client whose user signs in from a tailnet device (a hosted
+  assistant's MCP connector) works today:
+  [mcp-public.md](mcp-public.md).
 - **Others:** custom domains (Funnel serves `*.ts.net` only), a
   bring-your-own front door (Caddy, Cloudflare Tunnel), GeoIP, the Node
   process tier (`"runtime": "node"`), and inbound email or cron triggers.

@@ -66,4 +66,5 @@ var destructiveCommands = [][]string{
 	{"r2", "bucket", "rm", "photos", "--workload", "app"},
 	{"restore", "backup-dir"},
 	{"tenant", "rm", "other.example.ts.net"},
+	{"upgrade", "rollback", "--restore"},
 }

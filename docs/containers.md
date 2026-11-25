@@ -414,6 +414,9 @@ tw deploy                    /v2/  OCI registry                            no co
   upstreams for tests), unless it is a public base. The alias map applies per
   arch. Retagging the upstream after the deploy changes nothing that runs; the
   next deploy picks the new digest. Audited (`image_pin`, with every pin).
+  `tw deploy` prints a `✓ image` line per pin of a ref it did not build
+  (`<Class> <ref> linux/<arch> → <repository>@<digest> (<from>)`) once the
+  deployment is ready, and lists every pin in `--json`'s `images`.
 - **Public bases.** `tw image public add <ref> [--arch …]` mirrors an
   upstream image into `public/<registry>/<repo>` (or names a `tw.local` ref
   already in `public/`) and marks its per-arch digests public; deploys of every

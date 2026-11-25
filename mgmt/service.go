@@ -31,6 +31,7 @@ import (
 
 	"github.com/rosskukulinski/tailworks/internal/container"
 	"github.com/rosskukulinski/tailworks/internal/oci"
+	"github.com/rosskukulinski/tailworks/internal/policy"
 	"github.com/rosskukulinski/tailworks/internal/registry"
 	"github.com/rosskukulinski/tailworks/internal/tsapi"
 	"github.com/rosskukulinski/tailworks/internal/tssvc"
@@ -3083,13 +3084,17 @@ func (m *Mgmt) IngestAudit(ctx context.Context, hostID string, recs []json.RawMe
 		if err != nil {
 			return 0, ChainStatus{}, err
 		}
-		if first := parsed[0].PrevHash; first != head && first != "" {
+		// A batch the host re-sends (its POST failed after mgmt stored it)
+		// overlaps the stored chain: skip what is stored. That holds for
+		// a batch that starts a new segment (prevHash "") too: storing it
+		// twice would break the chain at the copy (#427).
+		if first := parsed[0].PrevHash; first != head {
 			for k := range parsed {
 				if parsed[k].Hash == head {
 					start = k + 1 // already stored up to here
 				}
 			}
-			if start == 0 {
+			if start == 0 && first != "" {
 				return 0, ChainStatus{}, errf(400, "bad_request", "record 0: prevHash does not link to the head of chain %s", chain)
 			}
 		}
@@ -3206,6 +3211,9 @@ type PreflightMissing struct {
 	Src     string `json:"src"`
 	Dst     string `json:"dst"`
 	Snippet string `json:"snippet"`
+
+	// IP is the grant's port ("tcp:5432"); older mgmt leaves it out.
+	IP string `json:"ip,omitempty"`
 }
 
 // PreflightResult is the preflight verdict.
@@ -3243,6 +3251,11 @@ type PreflightResult struct {
 	// them too (connectstags.go).
 	UndefinedConnects []string `json:"undefinedConnects,omitempty"`
 
+	// Snippet: everything above that is missing as one typed policy
+	// snippet (preflightsnippet.go, #535); the string fields are rendered
+	// from it. Never the caller grant.
+	Snippet *policy.Snippet `json:"snippet,omitempty"`
+
 	// workloadTags: the tags the workload node is deployed with, the only
 	// ones tw policy --apply lets host its Service (policyapply.go).
 	workloadTags []string
@@ -3267,21 +3280,13 @@ func (m *Mgmt) Preflight(ctx context.Context, tenantID string, r PreflightReques
 	if port == "" {
 		port = "tcp:80"
 	}
-	var owners []string
 	res.TagOwnerProblems = m.tagOwnerProblems(ctx, t, r.SrcTags, pol) // teams.go
 	for _, tag := range r.SrcTags {
 		if _, ok := pol.TagOwners[tag]; !ok && !slices.Contains(res.MissingTagOwners, tag) {
 			res.MissingTagOwners = append(res.MissingTagOwners, tag)
-			owners = append(owners, fmt.Sprintf("%q: %s", tag, tagOwnersFor(t)))
 		}
 	}
 	res.UndefinedConnects = undefinedConnectsTags(t, pol, r.Connects, r.SrcTags)
-	for _, tag := range res.UndefinedConnects {
-		owners = append(owners, fmt.Sprintf("%q: %s", tag, tagOwnersFor(t)))
-	}
-	if len(owners) > 0 {
-		res.TagOwnersSnippet = `"tagOwners": { ` + strings.Join(owners, ", ") + ` }`
-	}
 	for _, c := range r.Connects {
 		dst, ip := SplitConnect(c) // connects.go: "tag:db:5432"
 		if dst != "*" && !strings.HasPrefix(dst, "tag:") && !strings.HasPrefix(dst, "autogroup:") {
@@ -3294,18 +3299,18 @@ func (m *Mgmt) Preflight(ctx context.Context, tenantID string, r PreflightReques
 		}
 		for _, src := range r.SrcTags {
 			if !pol.HasIPGrantPort(src, dst, ip) {
-				res.Missing = append(res.Missing, PreflightMissing{Src: src, Dst: dst,
-					Snippet: fmt.Sprintf(`{ "src": [%q], "dst": [%q], "ip": [%q] }`, src, dst, want)})
+				res.Missing = append(res.Missing, missingGrant(src, dst, want)) // preflightsnippet.go
 			}
 		}
 	}
 	if r.Public && !pol.HasNodeAttr(PublicTag, "funnel") {
 		res.MissingNodeAttrs = append(res.MissingNodeAttrs, "funnel on "+PublicTag)
-		res.NodeAttrsSnippet = publicFunnelSnippet(t) // teams.go
 	}
 	if r.Service != "" {
 		servicePreflight(pol, &res, r.Service, r.WorkloadTags)
 	}
+	// The snippets for what is missing (preflightsnippet.go).
+	res.setSnippets(t)
 	res.AccessWarnings = m.accessWarnings(ctx, t, pol) // tenantscope_lint.go
 	// svccaps_lint.go: caps on the workload tags that calls through its Service lose (#155).
 	res.AccessWarnings = append(res.AccessWarnings, serviceCapWarnings(pol, res.Service, r.WorkloadTags)...)

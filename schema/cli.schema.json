@@ -1763,6 +1763,44 @@
         "ts"
       ]
     },
+    "deployImage": {
+      "type": "object",
+      "description": "one image of a container class, pinned by mgmt at deploy (ADR-032 D3): hosts pull repository@digest",
+      "properties": {
+        "class": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "description": "the class's wrangler images key (absent: the default image)"
+        },
+        "ref": {
+          "type": "string",
+          "description": "the image as the bundle names it"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "repository": {
+          "type": "string",
+          "description": "in tailworks' registry"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string",
+          "description": "what ref resolved through: \"alias <target>\", \"public <ref>\", or the upstream ref and its digest"
+        }
+      },
+      "required": [
+        "class",
+        "ref",
+        "arch",
+        "repository",
+        "digest"
+      ]
+    },
     "deploy": {
       "type": "object",
       "description": "the result, on stdout; progress is deploy.event lines on stderr",
@@ -1854,6 +1892,13 @@
             "type": "object"
           }
         },
+        "images": {
+          "type": "array",
+          "description": "container classes: what each image was pinned to",
+          "items": {
+            "$ref": "#/$defs/deployImage"
+          }
+        },
         "warnings": {
           "type": "array",
           "description": "wrangler config tailworks ignores, one line per key",
@@ -1937,6 +1982,13 @@
         },
         "url": {
           "type": "string"
+        },
+        "images": {
+          "type": "array",
+          "description": "ready: the container images' pins, as the result's images",
+          "items": {
+            "$ref": "#/$defs/deployImage"
+          }
         },
         "line": {
           "type": "string"
@@ -3553,7 +3605,7 @@
         "refused"
       ]
     },
-    "release ls": {
+    "upgrade releases": {
       "type": "object",
       "properties": {
         "current": {
@@ -3582,7 +3634,7 @@
         "items"
       ]
     },
-    "release import": {
+    "upgrade import": {
       "type": "object",
       "properties": {
         "versions": {
@@ -3660,7 +3712,7 @@
     },
     "upgrade": {
       "type": "object",
-      "description": "tw upgrade: on a tw up machine {plan, upgraded, backup?, rolledBack?, health?, notActiveBefore?, agentSkills?}; with --fleet or a linked mgmt, the plan (--plan: {from, to, steps, breaking, blockers, warnings}) or the upgrade run {id, to, state, steps}; tw upgrade status|pause|resume|abort print the run ({runs: []} when there is none).",
+      "description": "tw upgrade: on a tw up machine {plan, upgraded, backup?, rolledBack?, health?, notActiveBefore?, agentSkills?}; tw upgrade fleet (or tw upgrade on a linked machine): the plan (--plan: {from, to, steps, breaking, blockers, warnings}) or the upgrade run {id, to, state, steps}; tw upgrade fleet status|pause|resume|abort print the run ({runs: []} when there is none).",
       "properties": {
         "plan": {
           "type": "object"
@@ -3707,6 +3759,23 @@
           "type": "array"
         }
       }
+    },
+    "upgrade rollback": {
+      "type": "object",
+      "description": "tw upgrade rollback: the release it went back from and to, whether the store went back too (mode restore: the backup restored, the restore generation after the fence on SQLite), the state kept before the rollback, and what is left to do by hand (a Postgres store)",
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "prefix": { "type": "string" },
+        "mode": { "enum": ["binary", "restore"] },
+        "restored": { "type": "string" },
+        "store": { "enum": ["sqlite", "postgres"] },
+        "safetyBackup": { "type": "string" },
+        "restoreGeneration": { "type": "integer" },
+        "health": { "type": "string" },
+        "next": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["from", "to", "prefix", "mode"]
     },
     "host setup": {
       "type": "object",

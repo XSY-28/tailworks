@@ -3890,7 +3890,7 @@ paths:
       summary: Import catalog entries (from a release's share/tailworks/catalog.json)
       description: |
         Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
-        `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
+        `tw upgrade import <tarball>…|<version>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
         then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
         `release_import`.
       x-tw-role: admin
@@ -5306,6 +5306,13 @@ components:
         tags: { type: array, items: { type: string } }
         hostname: { type: string, description: "`tw-host-<hostID>`" }
         controlURL: { type: string, format: uri }
+        keyTagsOnly:
+          type: boolean
+          description: The host's node must advertise no tags; its join key carries `tag:tw-host` (Headscale, ADR-015). `tw-hostd -tsnet-key-tags-only`.
+        mgmtURL:
+          type: string
+          format: uri
+          description: "Where the host reaches mgmt over the tailnet (`tw-hostd -mgmt`): `http://tw-mgmt.<tailnet>`. Absent when mgmt doesn't know its own node name (local-dev)."
         tailnet: { type: string }
       x-tw-secret: true
     HostRegistration:
@@ -5880,6 +5887,7 @@ components:
         src: { type: string }
         dst: { type: string }
         snippet: { type: string, description: The grant to add (HuJSON). }
+        ip: { type: string, description: "The grant's port (`tcp:5432`)." }
     PreflightResult:
       type: object
       required: [ok, missing, missingTagOwners]
@@ -5914,6 +5922,12 @@ components:
             `tailnet.connects` tags in `tag:tw*` (another tailworks app's, not deployed yet) that have no `tagOwners`
             entry; the control plane rejects a grant to them. `tagOwnersSnippet` defines them too, so
             `tw policy --apply` writes them with the grants. Never set for a tenant with its own `ownerTag`. Makes `ok` false.
+        snippet:
+          $ref: "#/components/schemas/PolicySnippet"
+          description: >-
+            Everything above that is missing, as one typed policy snippet: the string fields (`tagOwnersSnippet`,
+            `nodeAttrsSnippet`, `serviceSnippet`, each `missing[].snippet`) are renderings of its parts. Absent when
+            nothing is missing. Never holds the caller grant (`PolicyApply.callerGrant`).
         accessWarnings:
           type: array
           items: { type: string }
@@ -5921,6 +5935,25 @@ components:
             Grants to `tag:tw-mgmt` that don't do what they look like: values on `github.com/rosskukulinski/tailworks/cap/admin` (they don't narrow it),
             invalid `github.com/rosskukulinski/tailworks/cap/tenant-admin` values or unknown tenant IDs in them, and, on a tailnet with several tenants,
             `github.com/rosskukulinski/tailworks/cap/mcp` or `github.com/rosskukulinski/tailworks/cap/approve` grants (they apply to every tenant). Never make `ok` false.
+    PolicySnippet:
+      type: object
+      description: Additions to a tailnet policy, in the policy file's own shape.
+      properties:
+        tagOwners:
+          type: object
+          additionalProperties: { type: array, items: { type: string } }
+        grants:
+          type: array
+          items: { type: object, additionalProperties: true }
+        nodeAttrs:
+          type: array
+          items: { type: object, additionalProperties: true }
+        autoApprovers:
+          type: object
+          properties:
+            services:
+              type: object
+              additionalProperties: { type: array, items: { type: string } }
     PolicyApplyCreate:
       type: object
       required: [bundle]

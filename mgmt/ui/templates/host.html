@@ -64,7 +64,7 @@
   {{if .Host.Cordoned}}
   <p>Cordoned{{if .Host.CordonedAt}} {{since .Host.CordonedAt}} <span class="muted small">({{stamp .Host.CordonedAt}})</span>{{end}}{{if .Host.CordonedBy}} by <span class="mono">{{.Host.CordonedBy}}</span>{{end}}. It keeps what it runs and its leases; nothing new is placed there.</p>
   {{if .Host.CordonedByUpgrade}}
-  <p class="small muted">An upgrade run cordoned this host and uncordons it when its step is done; see <span class="mono">tw upgrade status</span>. Uncordoning it here would let placement use it mid-upgrade.</p>
+  <p class="small muted">An upgrade run cordoned this host and uncordons it when its step is done; see <span class="mono">tw upgrade fleet status</span>. Uncordoning it here would let placement use it mid-upgrade.</p>
   {{else}}
   <form method="post" action="/ui/hosts/{{.Host.HostID}}/cordon"
         data-confirm="Uncordon host {{.Host.HostID}}? Placement may choose it again.">

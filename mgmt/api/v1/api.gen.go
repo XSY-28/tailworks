@@ -2760,6 +2760,12 @@ type HostJoin struct {
 	// Hostname `tw-host-<hostID>`
 	Hostname string `json:"hostname"`
 
+	// KeyTagsOnly The host's node must advertise no tags; its join key carries `tag:tw-host` (Headscale, ADR-015). `tw-hostd -tsnet-key-tags-only`.
+	KeyTagsOnly *bool `json:"keyTagsOnly,omitempty"`
+
+	// MgmtURL Where the host reaches mgmt over the tailnet (`tw-hostd -mgmt`): `http://tw-mgmt.<tailnet>`. Absent when mgmt doesn't know its own node name (local-dev).
+	MgmtURL *string `json:"mgmtURL,omitempty"`
+
 	// RegistrationSecret One-time secret (32 random bytes, base64url) the host presents in its first `PUT /v1/hosts/{id}`; mgmt stores only its SHA-256 and clears it once the node is bound.
 	RegistrationSecret string   `json:"registrationSecret"`
 	Tags               []string `json:"tags"`
@@ -3351,9 +3357,22 @@ type PolicyApplyCreate struct {
 	Namespaces *[]ClassConfig `json:"namespaces,omitempty"`
 }
 
+// PolicySnippet Additions to a tailnet policy, in the policy file's own shape.
+type PolicySnippet struct {
+	AutoApprovers *struct {
+		Services *map[string][]string `json:"services,omitempty"`
+	} `json:"autoApprovers,omitempty"`
+	Grants    *[]map[string]interface{} `json:"grants,omitempty"`
+	NodeAttrs *[]map[string]interface{} `json:"nodeAttrs,omitempty"`
+	TagOwners *map[string][]string      `json:"tagOwners,omitempty"`
+}
+
 // PreflightMissing defines model for PreflightMissing.
 type PreflightMissing struct {
 	Dst string `json:"dst"`
+
+	// IP The grant's port (`tcp:5432`).
+	IP *string `json:"ip,omitempty"`
 
 	// Snippet The grant to add (HuJSON).
 	Snippet string `json:"snippet"`
@@ -3385,6 +3404,9 @@ type PreflightResult struct {
 
 	// ServiceUnapproved The policy's `autoApprovers.services` doesn't let the workload tags host `service`: the node would advertise it but control would never route it. `ok` is false.
 	ServiceUnapproved *bool `json:"serviceUnapproved,omitempty"`
+
+	// Snippet Everything above that is missing, as one typed policy snippet: the string fields (`tagOwnersSnippet`, `nodeAttrsSnippet`, `serviceSnippet`, each `missing[].snippet`) are renderings of its parts. Absent when nothing is missing. Never holds the caller grant (`PolicyApply.callerGrant`).
+	Snippet *PolicySnippet `json:"snippet,omitempty"`
 
 	// SrcTags The tags checked (workload + object tags from the bundle).
 	SrcTags *[]string `json:"srcTags,omitempty"`

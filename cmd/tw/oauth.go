@@ -62,11 +62,7 @@ func tagOwnersPart() policy.Snippet {
 // section, it would be a second key and the policy would not parse
 // (issue #389).
 func snippetLines(s policy.Snippet) []string {
-	out := []string{"    // merge into your policy: put each entry inside the existing section of the same name (don't add a second one)"}
-	for _, l := range strings.Split(strings.TrimSpace(s.HuJSON()), "\n") {
-		out = append(out, "    "+l)
-	}
-	return out
+	return pasteLines(s, nil, "    ") // policysnippet.go
 }
 
 // policyMissingTagOwners is the typed error for "the control plane refused
@@ -109,8 +105,7 @@ func tagOwnersFix(pol []byte) []string {
 			}
 			owners = append(slices.Clone(cur), policy.TwTagPrefix)
 		}
-		b, _ := json.Marshal(owners)
-		lines = append(lines, fmt.Sprintf("    %q: %s,", tag, b))
+		lines = append(lines, fmt.Sprintf("    %q: %s,", tag, policy.ListHuJSON(owners)))
 	}
 	return lines
 }

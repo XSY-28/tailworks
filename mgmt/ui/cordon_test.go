@@ -54,7 +54,7 @@ func TestHostCordon(t *testing.T) {
 
 	rec["cordonedBy"] = "upgrade:up_1"
 	b = get(t, h, "/ui/hosts/h1").Body.String()
-	if !strings.Contains(b, "upgrade:up_1") || !strings.Contains(b, "tw upgrade status") || strings.Contains(b, `name="uncordon"`) {
+	if !strings.Contains(b, "upgrade:up_1") || !strings.Contains(b, "tw upgrade fleet status") || strings.Contains(b, `name="uncordon"`) {
 		t.Errorf("upgrade-cordoned host page: want the warning and no Uncordon form")
 	}
 }
