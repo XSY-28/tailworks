@@ -77,6 +77,9 @@ type Options struct {
 	// QueueVisibility is passed to hostd (how long a claimed queue batch
 	// stays hidden; short in tests of crash recovery).
 	QueueVisibility time.Duration
+
+	// PyodideDir is passed to hostd (Python Workers' Pyodide bundles).
+	PyodideDir string
 	// Telemetry is passed to hostd (ADR-045).
 	Telemetry hostd.TelemetryOptions
 
@@ -200,6 +203,8 @@ func hostConfig(o Options, dir, wd string, log *slog.Logger, hc *mgmtapi.Client)
 		R2:        o.R2,
 
 		QueueVisibility: o.QueueVisibility,
+
+		PyodideDir: o.PyodideDir,
 	}
 }
 

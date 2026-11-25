@@ -204,8 +204,6 @@ func upstreamProjects() []*Project {
 			p.AddDeps = map[string]string{"@ai-sdk/react": "^4.0.0"}
 			p.Workarounds = []string{agentsPin + `; likewise "@cloudflare/ai-chat" 0.12.3 and "@cloudflare/codemode" 0.5.6; @ai-sdk/react (a peer the monorepo root provides) added at the root's ^4.0.0`}
 			p.Build = viteBuild
-			p.Expect = Expect{Kind: ExpectProbeFail, Compat: "do-rpc",
-				Why: "it starts, and 8 of the 9 demo families the probe covers pass; the multi-agent demo's `SupervisorAgent.createChild` (an agent calling another agent's method over Durable Object RPC after `getAgentByName`) fails with `Could not serialize object of type \"RpcPromise\"`. A smaller app bundled by the built-in bundler with the same two classes and calls passes"}
 			p.Probe = probePlayground
 		}),
 
@@ -695,8 +693,8 @@ type NotRun struct {
 	Why  string
 }
 
-// UpstreamNotRun lists every example of the three upstream projects that
-// has no Project, so the published tables account for all of them.
+// UpstreamNotRun lists every example of the upstream projects that has no
+// Project, so the published tables account for all of them.
 func UpstreamNotRun() []NotRun {
 	ag := func(why string, dirs ...string) NotRun {
 		return NotRun{Section: SectionAgents, Repo: "cloudflare/agents", Commit: agentsCommit, Base: "examples/", Dirs: dirs, Why: why}
@@ -704,7 +702,7 @@ func UpstreamNotRun() []NotRun {
 	ai := func(why string, dirs ...string) NotRun {
 		return NotRun{Section: SectionVercel, Repo: "vercel/ai", Commit: vercelAICommit, Base: "examples/", Dirs: dirs, Why: why}
 	}
-	return []NotRun{
+	return append(pythonNotRun(), []NotRun{ // python.go
 		ag("needs Workers AI (`env.AI`, an `ai` binding in its wrangler config), which tailworks doesn't provide. A scripted `env.AI` isn't possible without changing each example: tailworks ignores the `ai` binding (`env.AI` is undefined), so there is no binding to point at a stub, and one would have to be wired into each example: its config, or a wrapper around each of its agent classes (they read `this.env.AI` inside their Durable Objects)",
 			"a2a", "agents-as-tools", "auth-agent", "chat-sdk-messenger", "codemode-browser", "context-overflow-recovery", "deploy-churn",
 			"dynamic-tools", "mcp-rpc-transport", "multi-ai-chat", "resumable-stream-chat", "structured-input", "think-chat-sdk",
@@ -734,5 +732,5 @@ func UpstreamNotRun() []NotRun {
 			"next-openai-upstash-rate-limits", "next-workflow", "nuxt-openai", "sveltekit-openai", "xai-tts-demo"),
 		ai("scripts and a terminal UI, not servers; they call model providers with API keys",
 			"ai-functions", "harness-e2e-tui"),
-	}
+	}...)
 }

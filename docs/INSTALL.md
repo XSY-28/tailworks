@@ -14,7 +14,9 @@ here: [trying an app without a tailnet](#try-it-without-a-tailnet), how
 workloads are [isolated](#isolation), and [tuning](#tuning-how-fast-a-new-objects-own-node-comes-up).
 The words (tenant, workload, tier, …) are explained in
 [concepts.md](concepts.md). Where each platform is tested, and what was
-measured there: [install-testing.md](install-testing.md).
+measured there: [install-testing.md](install-testing.md). What `tw up` runs,
+the ports and devices it adds and the files it writes, on one page:
+[footprint.md](footprint.md).
 
 ## Prerequisites
 

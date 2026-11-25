@@ -22,7 +22,8 @@ Tailscale Inc.
 ## Quick start
 
 You need macOS 14+ on Apple silicon or Linux (arm64/amd64, glibc ≥ 2.35),
-and admin rights on a Tailscale tailnet. No Go.
+and admin rights on a Tailscale tailnet. No Go. Windows isn't supported,
+not even for the `tw` CLI alone.
 [Prerequisites](docs/INSTALL.md#prerequisites) has the details; Headscale works too
 ([docs/headscale.md](docs/headscale.md)).
 
@@ -219,12 +220,12 @@ and the tests behind each row: [docs/COMPAT.md](docs/COMPAT.md).
 |---|---|---|---|
 | Runtime | [`fetch` handler, outbound `fetch()`](docs/COMPAT.md#fetch) | ⚠️ | outbound reaches tailnet peers from the workload's (or object's) own node, and public internet hosts from the host's network (on by default; `tailnet.egress.internet: false` turns it off, [call an internet API](docs/recipes.md#call-an-internet-api)) |
 | Runtime | [WebSockets](docs/COMPAT.md#websockets) | ✅ | |
-| Runtime | [TCP sockets (`connect()`)](docs/COMPAT.md#connect) | ⚠️ | to tailnet peers and the internet with the object's identity; no `secureTransport` TLS |
+| Runtime | [TCP sockets (`connect()`)](docs/COMPAT.md#connect) | ⚠️ | to tailnet peers and the internet with the object's identity; no `secureTransport` TLS; `ctx.tailnet.connect()` not in plain-DO objects |
 | Runtime | [WebAssembly](docs/COMPAT.md#wasm) | ✅ | |
 | Runtime | [`nodejs_compat`](docs/COMPAT.md#nodejs-compat) | ✅ | |
-| Runtime | [Python Workers](docs/COMPAT.md#python) | ❌ | Python runs in containers |
+| Runtime | [Python Workers](docs/COMPAT.md#python) | ⚠️ | Pyodide, as on Cloudflare; Python Durable Objects have no node of their own; no Python Workflows yet ([docs/python.md](docs/python.md)) |
 | Runtime | [Node.js apps (`runtime: "node"`)](docs/COMPAT.md#node-runtime) | ✅ | tw-only |
-| Durable Objects | [One tailnet node per object](docs/COMPAT.md#do-identity) | ✅ | tw-only: own name, tags, grants, egress |
+| Durable Objects | [One tailnet node per object](docs/COMPAT.md#do-identity) | ✅ | tw-only: own name, tags, grants, egress; objects need a name (no `newUniqueId()` in facet mode) |
 | Durable Objects | [Storage (KV API, SQLite)](docs/COMPAT.md#do-storage) | ✅ | one host, no replication |
 | Durable Objects | [Alarms](docs/COMPAT.md#alarms) | ✅ | |
 | Durable Objects | [Hibernation](docs/COMPAT.md#hibernation) | ✅ | |
@@ -232,7 +233,7 @@ and the tests behind each row: [docs/COMPAT.md](docs/COMPAT.md).
 | Durable Objects | [RPC](docs/COMPAT.md#do-rpc) | ⚠️ | no cross-Worker `script_name` |
 | Durable Objects | [Facets, `subAgent()`](docs/COMPAT.md#facets) | ❌ | use `ctx.tailnet.spawn` |
 | Bindings | [KV](docs/COMPAT.md#kv) | ⚠️ | per workload; values ≤ 2 MiB |
-| Bindings | [R2](docs/COMPAT.md#r2) | ⚠️ | bytes on the host's disk or an S3-compatible service |
+| Bindings | [R2](docs/COMPAT.md#r2) | ⚠️ | bytes on the host's disk or an S3-compatible service; no `tw r2 object get`/`put` yet |
 | Bindings | [R2 multipart upload](docs/COMPAT.md#r2-multipart) | ⚠️ | unfinished uploads are kept |
 | Bindings | [D1](docs/COMPAT.md#d1) | ⚠️ | one workload's database; survives host moves |
 | Bindings | [D1 sessions](docs/COMPAT.md#d1-sessions) | ⚠️ | bookmarks are journal positions |
@@ -257,7 +258,7 @@ and the tests behind each row: [docs/COMPAT.md](docs/COMPAT.md).
 | Platform | [Workflow approvals by tailnet identity](docs/COMPAT.md#approvals) | ✅ | tw-only: `tw approve`, decided under `github.com/rosskukulinski/tailworks/cap/approve` grants |
 | Platform | [Placement](docs/COMPAT.md#placement) | ⚠️ | at deploy, by tailnet path; never moves on its own |
 | Platform | [Public routes](docs/COMPAT.md#public-routes) | ⚠️ | opt-in paths over Funnel; tailnet-only by default |
-| Platform | [Containers, Sandbox SDK](docs/COMPAT.md#containers) | ⚠️ | one microVM per container |
+| Platform | [Containers, Sandbox SDK](docs/COMPAT.md#containers) | ⚠️ | one microVM per container; no snapshots or `exposePort` preview URLs yet |
 | Platform | [Logs and tail](docs/COMPAT.md#logs) | ⚠️ | `tw logs`: a structured line per request; no Tail Workers |
 | Platform | [Metrics](docs/COMPAT.md#metrics) | ⚠️ | Prometheus `/metrics` on the tailnet, and OTLP; no CPU time |
 | Platform | [Tracing (`traceparent`)](docs/COMPAT.md#traces) | ⚠️ | across DO calls and egress; not DO RPC |

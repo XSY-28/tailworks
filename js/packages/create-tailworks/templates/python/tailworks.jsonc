@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/rosskukulinski/tailworks/master/schema/tailworks.schema.json",
+  "name": "python",
+  "tailnet": {
+    // the workload node's tags (your policy must let tag:tw own them)
+    "tags": ["tag:tw-wl-python"],
+    // tags this app calls, e.g. ["tag:db"]; `tw deploy` checks your policy grants them
+    "connects": []
+  }
+}

@@ -5228,6 +5228,16 @@ components:
         nodeID: { type: string, description: "Stable node ID of the host's `tag:tw-host` tsnet node (bound at registration)." }
         dnsName: { type: string, description: "`tw-host-<hostID>.<tailnet>`." }
         auditPubKey: { type: string, description: base64 ed25519; verifies `hostSig`. }
+        auditHead:
+          type: string
+          description: |
+            Only in the answer to `PUT /v1/hosts/{id}`: the hash of the last
+            record mgmt stores on the host's audit chain (`host:<hostID>`);
+            absent when the chain is empty. A restarted host continues its
+            chain from this head only when it matches the last record the
+            host itself chained and flushed before a clean shutdown;
+            otherwise it starts a new segment (`prevHash: ""`), which
+            verification reports as a break.
         push: { $ref: "#/components/schemas/HostPush" }
         liveNodes: { type: integer }
         leases: { type: array, items: { $ref: "#/components/schemas/Lease" }, description: Namespace leases the host currently holds. }

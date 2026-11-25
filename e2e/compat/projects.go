@@ -48,7 +48,10 @@ const redirectWorkaround = "deploys the Vite plugin's output directory with --wr
 
 // Projects is the suite. Order is the run order (cheap ones first).
 func Projects() []*Project {
-	return append(append(cloudflareProjects(), upstreamProjects()...), upstreamMoreProjects()...)
+	ps := append(cloudflareProjects(), pythonDeployedOnly()...) // python.go
+	ps = append(ps, upstreamProjects()...)
+	ps = append(ps, upstreamMoreProjects()...) // upstream_more.go
+	return append(ps, pythonProjects()...)
 }
 
 // cloudflareProjects are the example projects of issue #305; upstream.go
@@ -183,11 +186,12 @@ func cloudflareProjects() []*Project {
 			}
 		}),
 		with(c3("c3-python", "hello-world/py"), func(p *Project) {
-			p.What = "C3 Python Worker"
+			p.What = "C3 Python Worker: a sibling module (Pyodide, issue #292)"
 			p.Exercises = []string{"python"}
 			p.Install = InstallNone
-			p.Expect = Expect{Kind: ExpectRefused, Compat: "python", Error: "Python Workers are not supported",
-				Why: "Python Workers (python_workers, main: *.py) aren't supported; tw deploy must say so"}
+			p.Probe = func(r *Run) error {
+				return r.Get("/").Want(200, "Hello World!")
+			}
 		}),
 
 		// --- cloudflare/templates (the Workers dashboard / deploy-button templates) ---

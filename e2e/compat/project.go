@@ -18,12 +18,13 @@ import (
 // Repos the suite takes projects from, with their licenses. Sources are
 // fetched at run time (CacheDir), never vendored.
 var Repos = map[string]string{
-	"cloudflare/templates":   "MIT",
-	"cloudflare/workers-sdk": "Apache-2.0 OR MIT",
-	"cloudflare/agents":      "MIT",
-	"cloudflare/ai":          "MIT",
-	"vercel/ai":              "Apache-2.0",
-	"vercel/mcp-handler":     "Apache-2.0",
+	"cloudflare/templates":               "MIT",
+	"cloudflare/workers-sdk":             "Apache-2.0 OR MIT",
+	"cloudflare/agents":                  "MIT",
+	"cloudflare/ai":                      "MIT",
+	"cloudflare/python-workers-examples": "Apache-2.0",
+	"vercel/ai":                          "Apache-2.0",
+	"vercel/mcp-handler":                 "Apache-2.0",
 }
 
 // Install says how a project's npm dependencies are installed.
