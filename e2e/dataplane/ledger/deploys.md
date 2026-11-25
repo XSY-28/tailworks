@@ -8,9 +8,13 @@ Postgres (`TW_DP_MGMT=pg3`) unless a row says otherwise.
 
 | Scenario | Clean seeds (consecutive) | Notes |
 |---|---|---|
-| deploys-hosts | see run log | |
-| deploys-mgmt | 1 | |
-| deploys-mixed | see run log | |
+| deploys-hosts | 2, 3, 4 | seed 1 found F2 and F4 (fixed / known since) |
+| deploys-mgmt | 1, 2, 3 | seed 1's first run found F3 |
+| deploys-mixed | 1, 2 (on replay after the checker fix), 3, 4 | |
+
+The issue's stop condition is met on macOS with mgmt on Postgres: 3
+consecutive clean seeds per scenario. Nightly runs `deploys-mixed` with the
+date as the seed (`make e2e-dataplane-deploys`).
 
 Runs carry the fixes for F1 (#563), F2 (#578) and F3 (#584) until those
 PRs land. F4 (#577) is open and needs a decision: the checkers report it
@@ -58,3 +62,12 @@ as a note naming the issue (`known_deploys_test.go`), not a failure.
 | …-deploys-hosts-1 (rerun, 23:00 PT) | deploys-hosts 1 | V4: F2. F4 again (821 answers `410 killed`) |
 | 20261125T071204Z-deploys-mgmt-1 | deploys-mgmt 1 | V1: F3. V3/V4 harness (store clock). F4 |
 | …-deploys-mgmt-1 (rerun, 23:22 PT) | deploys-mgmt 1, F1–F3 fixed | pass (F4 as a note) |
+| …-deploys-hosts-2 | deploys-hosts 2 | pass (F4 note) |
+| …-deploys-mixed-1 | deploys-mixed 1 | pass |
+| …-deploys-hosts-3 | deploys-hosts 3 | pass |
+| …-deploys-mgmt-2 | deploys-mgmt 2 | pass |
+| …-deploys-mixed-2 | deploys-mixed 2 | V3 false positive: one answer at epoch 0 (`self()` failed while a moved copy's object was not ready; the lock template refuses then). Epoch-0 answers are now counted, not judged. Clean on replay |
+| …-deploys-mgmt-3 | deploys-mgmt 3 | pass |
+| …-deploys-mixed-3 | deploys-mixed 3 | pass |
+| …-deploys-hosts-4 | deploys-hosts 4 | pass |
+| …-deploys-mixed-4 | deploys-mixed 4 | pass |
