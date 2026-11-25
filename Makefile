@@ -111,7 +111,7 @@ e2e-dataplane: deps
 .PHONY: e2e-dataplane-cron
 e2e-dataplane-cron: deps
 	for s in $${TW_DP_SCENARIO:-cron alarms}; do \
-		TW_DP_SCENARIO=$$s $(GO) test -tags e2edataplane -count=1 -v -timeout 25m -run TestDataplane ./e2e/dataplane/... || exit 1; \
+		TW_DP_SCENARIO=$$s $(GO) test -tags e2edataplane -count=1 -v -timeout 25m -run 'TestCronCheckers|TestDataplane$$' ./e2e/dataplane/... || exit 1; \
 	done
 
 ## e2e-locks: locks and leader election on DO leases (docs/locks.md), hermetic: real tw-mgmt + two
