@@ -2945,6 +2945,14 @@ paths:
           in: query
           description: DO class name, or `_workload`.
           schema: { type: string }
+        - name: tag
+          in: query
+          description: Objects carrying this tag (the full `tag:<name>`, matched exactly).
+          schema: { type: string }
+        - name: human
+          in: query
+          description: Objects whose `actingFor` is this principal (exact match, as on `GET /v1/audit`).
+          schema: { type: string }
         - name: state
           in: query
           description: Repeatable. Default is every state, tombstones included.
@@ -3313,6 +3321,13 @@ paths:
         - name: chain
           in: query
           description: "`mgmt` or `host:<hostID>`."
+          schema: { type: string }
+        - name: workload
+          in: query
+          description: |
+            Records about this workload: records whose object belongs to it,
+            and mgmt records that name it in their detail (deploy, undeploy,
+            secrets). Combine with `tenant` when several tenants use the name.
           schema: { type: string }
         - name: kind
           in: query

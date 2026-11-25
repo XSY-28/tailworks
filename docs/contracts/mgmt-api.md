@@ -1366,6 +1366,8 @@ DO instances, agents and sub-agents, each with its own tailnet node.
 | `tenant` | query | string | no |  |
 | `workload` | query | string | no |  |
 | `namespace` | query | string | no | DO class name, or `_workload`. |
+| `tag` | query | string | no | Objects carrying this tag (the full `tag:<name>`, matched exactly). |
+| `human` | query | string | no | Objects whose `actingFor` is this principal (exact match, as on `GET /v1/audit`). |
 | `state` | query | array of `ObjectStatus` | no | Repeatable. Default is every state, tombstones included. |
 | `parent` | query | string | no | Direct children of this object ID. |
 | `root` | query | string | no | The whole tree under this root object ID. |
@@ -2548,6 +2550,7 @@ Hash-chained, append-only audit log.
 | `trace` | query | string | no |  |
 | `tenant` | query | string | no |  |
 | `chain` | query | string | no | `mgmt` or `host:<hostID>`. |
+| `workload` | query | string | no | Records about this workload: records whose object belongs to it, and mgmt records that name it in their detail (deploy, undeploy, secrets). Combine with `tenant` when several tenants use the name. |
 | `kind` | query | array of `AuditKind` | no |  |
 | `since` | query | string | no | Records at or after this time (RFC 3339 or unix ms). |
 | `until` | query | string | no |  |

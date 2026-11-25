@@ -142,10 +142,12 @@ spec.
   never returned by the API and so never shown), object counts by status,
   deployments (each with a logs link), objects, and **Delete tenant** (force checkbox).
 - **`/ui/objects`**: every object, newest first, 50 a page (Newer / Older
-  links). Filters: tenant, app (workload) and status go to
-  `GET /v1/objects` (`tenant`, `workload`, `state`); tag and acting-for
-  (`human`, as on the audit page) are filtered by the UI, over the first 5000 matches (the page says when
-  that limit was reached).
+  links). Filters: tenant, app (workload), status, tag and acting-for go to
+  `GET /v1/objects` (`tenant`, `workload`, `state`, `tag`, `human`). The tag
+  may be given without its `tag:` prefix; acting-for is the exact login, as
+  on the audit page. The status choices are the spec's `ObjectStatus`
+  values. `/v1/objects` lists oldest first, so the page reads up to 5000
+  matches to show the newest first, and says when it reached that limit.
 - **`/ui/approvals`**: the Workflow approvals waiting, oldest first (the
   longest wait on top). By default: every tenant for an admin; for anyone
   else the tenants on the caller's own tailnet, from `GET /v1/whoami`
@@ -166,9 +168,9 @@ spec.
   admins don't see the Overview, Objects and Audit links.
 - **`/ui/audit`**: newest first (`GET /v1/audit?order=desc`), with
   `nextCursor` paging (Older →, ← Newest) that keeps the filters. Filters
-  combine: tenant, event kind, caller (the `human` the records act for),
-  object and trace go to the API; app (workload) is filtered by the UI
-  within each page, which says how many records it hid. Page size; the
+  combine and all go to the API: tenant, app (`workload`), event kind
+  (suggested from the spec's `AuditKind` values), caller (the `human` the
+  records act for), object and trace. Page size; the
   verification report and the per-chain status (`ok`, `signature ok` for
   host chains, `BROKEN at <seq>`). Tenant-written notes are rendered as
   `~tenant_note` and labelled unverified (RT-02).
@@ -177,7 +179,7 @@ Every activity list (overview, object page, audit) is newest first; the
 approvals list is oldest first because the oldest wait is the most urgent.
 
 Vocabulary and status colours follow the CLI: ready / live / running
-green, pending / minted / stale amber, killed / stopped / superseded grey,
+green, pending / minted / stale amber, killed / stopped / superseded / transferred grey,
 failed red. IDs are monospace; the full ID is in the cell's tooltip when
 abbreviated. Light and dark follow `prefers-color-scheme`.
 

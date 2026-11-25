@@ -18,11 +18,11 @@
       </select>
     </label>
     <label>Tag <input type="text" name="tag" class="mono" value="{{.Tag}}" placeholder="tag:agent"></label>
-    <label>Acting for <input type="text" name="human" value="{{.Human}}" placeholder="login (contains)"></label>
+    <label>Acting for <input type="text" name="human" value="{{.Human}}" placeholder="login the objects act for"></label>
     <button type="submit">Filter</button>
     <a href="/ui/objects">Clear</a>
   </form>
-  <p class="small muted">Tenant, app and status are filtered by the API. Tag and acting-for are filtered here{{if .Truncated}}, over the first 5000 objects: narrow by tenant, app or status for a complete answer{{end}}.</p>
+  {{if .Truncated}}<p class="small muted">Showing the newest of the first 5000 matches: narrow the filters for a complete answer.</p>{{end}}
 </section>
 
 {{range .Errors}}<div class="flash bad">{{.}}</div>{{end}}
