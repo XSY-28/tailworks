@@ -43,34 +43,15 @@ There is no login, no cookie and no token: the tailnet connection is the
 credential, so the UI shows exactly what the API would show the same
 caller.
 
-## Public API only
-
-The UI is an ordinary client of the public `/v1` API, so it could be
-moved into its own process later without changes. `ui.Handler` takes an
-`*http.Client` and the API's base URL, and the UI:
-
-- calls only operations, query parameters and headers documented in
-  `api/openapi.yaml` (`docs/contracts/mgmt-api.md`), and reads only the
-  documented JSON;
-- never imports `mgmt`, and decides admission itself from
-  `GET /v1/whoami` (`admin` and not `kind: host`). mgmt's own gate on
-  `/ui/` (the table above) stays as a second layer;
-- never sends the browser to the API: pages contain no `/v1` URLs, and
-  mutations are form posts to the UI, which makes the `/v1` call
-  server-side.
-
-Embedded in mgmt, the client's transport (`mgmt/uiclient.go`) serves
-each request with the API handler directly, without a socket, using the
-browser request's context. Each call therefore carries the browser's
-principal, and the role gate applies to it as to any other caller. A UI
-running as its own process would use a network transport instead. How
-that process would act on behalf of the browser's user is not decided
-yet; it would need a delegation mechanism in the API.
-
-`mgmt/ui/public_api_test.go` (`TestUsesOnlyPublicAPI`) enforces the first
-and third points. It records every request the UI sends while rendering
-every page and submitting every form, and checks each one against the
-spec.
+**Guards you will notice.** Open the UI only at mgmt's own MagicDNS name
+or tailnet IP: a CNAME, another DNS name you own, or a reverse proxy with
+its own hostname gets 421
+[`misdirected_request`](errors.md#misdirected_request). Actions must come
+from the UI's own pages; a form posted from another origin gets 403
+[`forbidden`](errors.md#forbidden) ("cross-site request refused"). The UI
+stores nothing in the browser. It is an ordinary client of the public
+API ([Public API only](#public-api-only)); the guards and their rationale
+are in [Browser-origin guard](#browser-origin-guard-csrf-dns-rebinding).
 
 ## Pages
 
@@ -215,6 +196,35 @@ left alone until the selection is cleared. Pages are complete and
 readable with JavaScript off; only the live refresh and the confirmation
 dialog need it.
 
+## Public API only
+
+The UI is an ordinary client of the public `/v1` API, so it could be
+moved into its own process later without changes. `ui.Handler` takes an
+`*http.Client` and the API's base URL, and the UI:
+
+- calls only operations, query parameters and headers documented in
+  `api/openapi.yaml` (`docs/contracts/mgmt-api.md`), and reads only the
+  documented JSON;
+- never imports `mgmt`, and decides admission itself from
+  `GET /v1/whoami` (`admin` and not `kind: host`). mgmt's own gate on
+  `/ui/` (the admission table above) stays as a second layer;
+- never sends the browser to the API: pages contain no `/v1` URLs, and
+  mutations are form posts to the UI, which makes the `/v1` call
+  server-side.
+
+Embedded in mgmt, the client's transport (`mgmt/uiclient.go`) serves
+each request with the API handler directly, without a socket, using the
+browser request's context. Each call therefore carries the browser's
+principal, and the role gate applies to it as to any other caller. A UI
+running as its own process would use a network transport instead. How
+that process would act on behalf of the browser's user is not decided
+yet; it would need a delegation mechanism in the API.
+
+`mgmt/ui/public_api_test.go` (`TestUsesOnlyPublicAPI`) enforces the first
+and third points. It records every request the UI sends while rendering
+every page and submitting every form, and checks each one against the
+spec.
+
 ## Browser-origin guard (CSRF, DNS rebinding)
 
 The API has no cookies, so a classic CSRF cannot carry a credential; the
@@ -273,7 +283,9 @@ Every UI response carries
 `X-Frame-Options: DENY` and `Cache-Control: no-store`. The UI stores nothing
 client-side: no cookies, no localStorage, no tokens.
 
-**Why plain HTTP on :80.** mgmt always serves the API and UI on `:80` over
+### Why plain HTTP on :80
+
+mgmt always serves the API and UI on `:80` over
 the tailnet. Hosts reach mgmt there, and so does `tw link` on tailnets
 without HTTPS certificates. The connection is WireGuard-encrypted and
 WhoIs-authenticated, so TLS would add no confidentiality between tailnet
