@@ -396,6 +396,10 @@
           "type": "boolean",
           "description": "every chain's hashes and host signatures verify"
         },
+        "truncated": {
+          "type": "boolean",
+          "description": "bare tw audit stopped at -n; older records exist (tw audit --all)"
+        },
         "chains": {
           "type": "array",
           "items": {

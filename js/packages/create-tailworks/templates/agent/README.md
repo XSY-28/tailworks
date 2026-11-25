@@ -24,7 +24,7 @@ tw deploy
 ```
 
 On a tailnet, `tw ls` lists every agent with its node, `tw audit <object>`
-shows who created and called it, and `tw kill <object> --cascade` stops it
+shows who created and called it, and `tw kill <object>` stops it
 and its sub-agents.
 
 ## What to change

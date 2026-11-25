@@ -136,7 +136,7 @@ func mcpToolList() []mcpTool {
 			Input: obj([]string{"workload"}, map[string]any{"tenant": tenantArg, "workload": strProp("the workload"), "bundle": strProp("base64 bundle tar (optional)"),
 				"replace": boolProp("re-place the workload on a better host"), "dryRun": boolProp("only preflight the bundle against the tailnet policy")}), run: mcpDeploy},
 		{Name: "kill", Kind: "destructive", Description: "Kill an object: cut it off the tailnet in under a second and delete its node. No undo. Only after the user agreed to kill this object.",
-			Input: obj([]string{"object", "reason"}, map[string]any{"object": strProp("the object ID (from ls)"), "cascade": boolProp("also kill everything it spawned"), "reason": strProp("why (recorded in the audit trail)")}), run: mcpKill},
+			Input: obj([]string{"object", "reason"}, map[string]any{"object": strProp("the object ID (from ls)"), "cascade": boolProp("also kill everything it spawned (the tw kill CLI does by default; without it the reaper kills them within seconds)"), "reason": strProp("why (recorded in the audit trail)")}), run: mcpKill},
 		{Name: "undeploy", Kind: "destructive", Description: "Stop a workload: kill all its objects and release its host. No undo. Only after the user agreed to undeploy this workload.",
 			Input: obj([]string{"workload", "reason"}, map[string]any{"tenant": tenantArg, "workload": strProp("the workload"), "reason": strProp("why (recorded in the audit trail)")}), run: mcpUndeploy},
 	}

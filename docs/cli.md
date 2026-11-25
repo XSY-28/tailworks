@@ -1587,9 +1587,9 @@ flags:
 the hash-chained audit trail
 
 ```text
-tw audit: show the hash-chained audit trail
+tw audit: show the hash-chained audit trail: the newest -n records, or every record of an object (and its descendants), a principal, a trace or the tenant (--all)
 
-usage: tw audit [--tenant <tailnet>] <object> | --human <login> | --trace <id> | --all
+usage: tw audit [--tenant <tailnet>] [-n 50] | <object> | --human <login> | --trace <id> | --all
 
 flags:
   -all
@@ -1598,6 +1598,8 @@ flags:
     	records acting for this principal (login or caller node)
   -json
     	machine-readable output
+  -n int
+    	bare tw audit: the newest records (an object, --human, --trace and --all are always complete) (default 50)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
@@ -1611,7 +1613,7 @@ flags:
 request records and console lines; daemon logs
 
 ```text
-tw logs: show a workload's request records (one line per request with its console.* lines; --json, filters; --console for the raw app output), else the daemons' logs
+tw logs: show a workload's request records (one line per request with its console.* lines; --json, filters; --console for the raw app output); default workload: the app in the current directory, else your only workload; --component for the daemons' logs
 
 usage: tw logs [workload] [--tenant <tailnet>] [--component mgmt|hostd|supervisor] [--host <id>] [-n 50] [-f] [--json] [--console] [--object <id|Class/name>] [--status 5xx] [--outcome exception] [--errors] [--caller <login|node>] [--trace <id>]
 
@@ -1619,7 +1621,7 @@ flags:
   -caller string
     	only callers whose login or node name contains this (public: Funnel requests)
   -component string
-    	mgmt | hostd | supervisor (default: hostd, or workerd for a workload)
+    	mgmt | hostd | supervisor: the daemons' logs
   -console
     	the app's raw output (workerd.log, the node tier's app.log, the microVM console) instead of request records
   -errors
@@ -1649,16 +1651,16 @@ flags:
 
 ### tw kill
 
-kill an object (--cascade: its sub-agents)
+kill an object and its sub-agents
 
 ```text
-tw kill: kill an object (and with --cascade its sub-agents)
+tw kill: kill an object and its sub-agents (--cascade=false kills only the object; the reaper kills its sub-agents within seconds)
 
-usage: tw kill <object> [--tenant <tailnet>] [--cascade] [--reason <text>]
+usage: tw kill <object> [--tenant <tailnet>] [--reason <text>] [--cascade=false]
 
 flags:
   -cascade
-    	also kill every descendant (sub-agents)
+    	also kill every descendant (sub-agents); --cascade=false leaves them to the reaper (default true)
   -json
     	machine-readable output
   -reason string

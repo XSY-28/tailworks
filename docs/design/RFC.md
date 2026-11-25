@@ -452,7 +452,7 @@ No bucket credential enters the guest, and no storage service is shared across t
 | 2 | tw-mgmt deletes the device. Peers drop it on the next netmap | seconds (to measure) | Lifecycle credential |
 | 3 | Set `custom:tw-live=false`, so every grant with `srcPosture: posture:tw-live` stops matching. Applies per object or to a whole tag | netmap propagation (unpublished; to measure) | Lifecycle credential and custom-posture plan; not on Headscale |
 
-- **Cascade.** `--cascade` follows `lineage.root`.
+- **Cascade.** `tw kill` cascades by default (`--cascade=false` opts out; the reaper then kills the orphans), following `lineage.root`.
 - **Bypasses closed.** In-VM bindings are policy-checked (§4.5), and assertions expire within 60 s.
 
 ## 5. Sequence diagrams

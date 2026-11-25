@@ -31,8 +31,8 @@ its own node on your tailnet, with its own name and tags
   tools a caller may run ([COMPAT.md](COMPAT.md#mcp)).
 - **Sub-agents are narrowed.** An object created with `ctx.tailnet.spawn()`
   gets at most its parent's grants ([concepts](concepts.md#sub-agent)).
-- **Kill is per node.** `tw kill` takes one object off the tailnet;
-  `--cascade` takes its sub-agents too ([concepts](concepts.md#kill)).
+- **Kill is per node.** `tw kill` takes an object and its sub-agents off
+  the tailnet ([concepts](concepts.md#kill)).
 - **Approvals are decided by a tailnet identity**, not by whichever code
   holds a binding ([approvals.md](approvals.md)).
 - **The audit trail is hash-chained**, so truncation and gaps show

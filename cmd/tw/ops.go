@@ -242,7 +242,7 @@ type killResult struct {
 
 func cmdKill(args []string) error {
 	f := newFlags("kill")
-	cascade := f.Bool("cascade", false, "also kill every descendant (sub-agents)")
+	cascade := f.Bool("cascade", true, "also kill every descendant (sub-agents); --cascade=false leaves them to the reaper")
 	reason := f.String("reason", "", "why (recorded in audit)")
 	tenantF := tenantFlag(f)
 	pos, err := f.parse(args)
@@ -286,10 +286,7 @@ func cmdKill(args []string) error {
 	}
 	ks := time.Now()
 	var kr mgmt.KillResult
-	q := url.Values{"reason": {r}}
-	if *cascade {
-		q.Set("cascade", "true")
-	}
+	q := url.Values{"reason": {r}, "cascade": {fmt.Sprint(*cascade)}}
 	if err := s.mgmt().DoHeaders(ctx, "DELETE", "/v1/objects/"+o.ID+"?"+q.Encode(), nil,
 		&kr, map[string]string{"Tw-Actor": actor()}); err != nil {
 		return err
@@ -417,6 +414,9 @@ type auditResult struct {
 	Lines    []auditLine        `json:"records"`
 	Verified bool               `json:"verified"`
 	Chains   []mgmt.ChainStatus `json:"chains"`
+
+	// Truncated: the bare listing stopped at -n; older records exist.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 func cmdAudit(args []string) error {
@@ -424,6 +424,8 @@ func cmdAudit(args []string) error {
 	human := f.String("human", "", "records acting for this principal (login or caller node)")
 	trace := f.String("trace", "", "records of one trace")
 	all := f.Bool("all", false, "every record of the tenant")
+	// limits.md#audit-n
+	n := f.Int("n", 50, "bare tw audit: the newest records (an object, --human, --trace and --all are always complete)")
 	tenantF := tenantFlag(f)
 	pos, err := f.parse(args)
 	if err != nil {
@@ -436,8 +438,9 @@ func cmdAudit(args []string) error {
 	if err := s.requireUp(); err != nil {
 		return err
 	}
-	if len(pos) != 1 && *human == "" && *trace == "" && !*all {
-		return fail("bad_request", "tw audit needs an object, --human, --trace or --all", "usage: tw "+usageOf("audit"))
+	recent := len(pos) == 0 && *human == "" && *trace == "" && !*all // the newest -n records
+	if len(pos) > 1 || recent && *n < 1 {
+		return fail("bad_request", "tw audit takes one object, --human, --trace, --all, or nothing for the newest -n (≥ 1) records", "usage: tw "+usageOf("audit"))
 	}
 	tn, err := s.tenant(*tenantF)
 	if err != nil {
@@ -456,9 +459,10 @@ func cmdAudit(args []string) error {
 	res := auditResult{Tenant: tn.Tailnet, TenantID: tn.TenantID, Lines: []auditLine{}, Verified: true}
 	seen := map[string]bool{}
 	var recs []mgmt.AuditRecord
+	limit := 0 // > 0: stop after this many records (bare tw audit)
 	query := func(q string) error {
 		// Always scoped to the tenant: one tenant's audit never shows
-		// another's. Every page is followed.
+		// another's. Every page is followed (up to limit).
 		cursor := ""
 		for {
 			var ar struct {
@@ -467,7 +471,11 @@ func cmdAudit(args []string) error {
 				Chains     []mgmt.ChainStatus `json:"chains"`
 				Verified   bool               `json:"verified"`
 			}
-			u := "/v1/audit?limit=500&tenant=" + url.QueryEscape(tn.TenantID)
+			pageN := 500
+			if limit > 0 {
+				pageN = min(pageN, limit-len(recs))
+			}
+			u := "/v1/audit?limit=" + fmt.Sprint(pageN) + "&tenant=" + url.QueryEscape(tn.TenantID)
 			if q != "" {
 				u += "&" + q
 			}
@@ -491,6 +499,10 @@ func cmdAudit(args []string) error {
 				}
 			}
 			if ar.NextCursor == nil || *ar.NextCursor == "" {
+				return nil
+			}
+			if limit > 0 && len(recs) >= limit {
+				res.Truncated = true
 				return nil
 			}
 			cursor = *ar.NextCursor
@@ -517,6 +529,12 @@ func cmdAudit(args []string) error {
 		if err := query(""); err != nil {
 			return err
 		}
+	case recent:
+		limit = *n
+		if err := query("order=desc"); err != nil {
+			return err
+		}
+		slices.Reverse(recs) // oldest first, like every other mode
 	default:
 		if err := query("trace=" + url.QueryEscape(*trace)); err != nil {
 			return err
@@ -571,6 +589,9 @@ func cmdAudit(args []string) error {
 			v = "NOT VERIFIED"
 		}
 		fmt.Printf("chain %s: %d records · %s\n", v, len(res.Lines), strings.Join(cs, " · "))
+		if res.Truncated {
+			fmt.Println("older records: tw audit --all (verifies every chain)")
+		}
 	})
 	if !res.Verified {
 		return fail("audit_unverified", "an audit chain failed verification")
@@ -582,7 +603,7 @@ func cmdAudit(args []string) error {
 
 func cmdLogs(args []string) error {
 	f := newFlags("logs")
-	comp := f.String("component", "", "mgmt | hostd | supervisor (default: hostd, or workerd for a workload)")
+	comp := f.String("component", "", "mgmt | hostd | supervisor: the daemons' logs")
 	// limits.md#logs-n
 	n := f.Int("n", 50, "lines")
 	follow := f.Bool("f", false, "follow")
@@ -597,20 +618,27 @@ func cmdLogs(args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(pos) != 1 && !lo.filter.Empty() {
-		return fail("bad_request", "the record filters need a workload: tw logs <workload> --errors")
-	}
 	s, err := openState(*f.stateDir)
 	if err != nil {
 		return err
+	}
+	if !s.remote() && !s.configured() {
+		return fail("not_up", "tw is not set up in "+s.Dir)
+	}
+	if len(pos) == 0 && *comp == "" {
+		w, err := defaultLogsWorkload(s, *tenantF) // logs_default.go: never a daemon's log
+		if err != nil {
+			return err
+		}
+		pos = []string{w}
+	}
+	if len(pos) != 1 && !lo.filter.Empty() {
+		return fail("bad_request", "the record filters need a workload: tw logs <workload> --errors")
 	}
 	out, flush := logsOut(*f.json, pos, *comp, s.remote()) // agentjson.go: NDJSON with --json
 	defer flush()
 	if s.remote() {
 		return remoteLogs(out, s, pos, *comp, *tenantF, *hostF, *n, *follow, lo) // logs_remote.go
-	}
-	if !s.configured() {
-		return fail("not_up", "tw is not set up in "+s.Dir)
 	}
 	var path string
 	switch {
@@ -643,9 +671,6 @@ func cmdLogs(args []string) error {
 		}
 	default:
 		c := *comp
-		if c == "" {
-			c = "hostd"
-		}
 		if !slices.Contains([]string{"mgmt", "hostd", "supervisor"}, c) {
 			return fail("bad_request", "unknown component "+c)
 		}
