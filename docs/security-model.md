@@ -480,9 +480,11 @@ The red team's open items are tracked in
   caller (ledger H08, F5). Three more limits apply. A `cf` passed as
   plain data, rather than on a `Request`, isn't checked. A `Request` passed
   as an RPC argument is checked for facet objects but not for plain DOs
-  (`"egress": "workload"`). And plain DOs run in the same isolate as the
+  (`"egress": "workload"`, and internal classes: `"node": false` or not
+  in `tailnet.objects`). And plain DOs run in the same isolate as the
   Worker, so code that rewrites that isolate's JavaScript built-ins can
-  defeat any check made there. Facet objects (the default) each get
+  defeat any check made there. Facet objects (classes listed in
+  `tailnet.objects` with tags, in the default egress mode) each get
   their own isolate.
 - **Isolates are not a side-channel boundary inside a workload.** The
   objects of one workload and the platform wrapper that holds its key

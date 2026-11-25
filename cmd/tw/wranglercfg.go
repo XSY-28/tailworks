@@ -372,26 +372,11 @@ func esbuildWranglerOptions(w map[string]any, o *esbundle.Options) error {
 }
 
 // defaultTwConfig is the tailworks.jsonc used when an app has only a wrangler
-// config: the workload node tagged tag:tw-wl-<name>, and every Durable
-// Object class internal ("node": false, as on Cloudflare: reachable through
-// its binding, with no tailnet node of its own).
-func defaultTwConfig(name string, w map[string]any) []byte {
-	objects := map[string]any{}
-	if dos, ok := w["durable_objects"].(map[string]any); ok {
-		bs, _ := dos["bindings"].([]any)
-		for _, b := range bs {
-			if m, ok := b.(map[string]any); ok {
-				if c, _ := m["class_name"].(string); c != "" {
-					objects[c] = map[string]any{"node": false}
-				}
-			}
-		}
-	}
-	tn := map[string]any{"tags": []string{"tag:tw-wl-" + name}}
-	if len(objects) > 0 {
-		tn["objects"] = objects
-	}
-	b, _ := json.MarshalIndent(map[string]any{"name": name, "tailnet": tn}, "", "  ")
+// config: the workload node tagged tag:tw-wl-<name>. Every Durable Object
+// class is made internal ("node": false) after, as for any tailworks.jsonc
+// that leaves it out of tailnet.objects (defaultInternalClasses).
+func defaultTwConfig(name string) []byte {
+	b, _ := json.MarshalIndent(map[string]any{"name": name, "tailnet": map[string]any{"tags": []string{"tag:tw-wl-" + name}}}, "", "  ")
 	return b
 }
 

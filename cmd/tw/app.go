@@ -222,7 +222,7 @@ func loadAppWith(dir, name string, o appOpts) (*app, error) {
 	}
 	if twErr != nil {
 		// A wrangler-only project: tailworks' defaults stand in for tailworks.jsonc.
-		raw = defaultTwConfig(workloadLabel(a.Name), a.Wrangler)
+		raw = defaultTwConfig(workloadLabel(a.Name))
 		a.Warnings = append(a.Warnings, fmt.Sprintf("no tailworks.jsonc: using defaults (workload node tag:tw-wl-%s; Durable Object classes internal, no node of their own); add a tailworks.jsonc to change them", workloadLabel(a.Name)))
 	}
 	a.TwRaw = raw
@@ -237,6 +237,9 @@ func loadAppWith(dir, name string, o appOpts) (*app, error) {
 		return nil, fail("bad_request", fmt.Sprintf("workload name %q is not a DNS label", a.Name)).withFix("tw deploy --name " + wl)
 	}
 	if err := a.defaultWorkloadTags(); err != nil { // defaulttags.go
+		return nil, err
+	}
+	if err := a.defaultInternalClasses(); err != nil { // defaultobjects.go
 		return nil, err
 	}
 	a.Warnings = append(a.Warnings, a.nameNotes(name, top.Name)...) // appname.go
