@@ -917,7 +917,7 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	classes = withPublicNamespace(classes, pub)
 	for _, c := range classes {
 		if c.Class == "" || len(c.Tags) == 0 {
-			return resp, errf(400, "bad_request", "namespace %q needs tags", c.Class)
+			return resp, errf(400, "bad_request", "namespace %q needs tags (or \"node\": false for an internal class with no node)", c.Class)
 		}
 		for _, tag := range c.Tags {
 			if e := validateObjectTag(c.Class, tag); e != nil {

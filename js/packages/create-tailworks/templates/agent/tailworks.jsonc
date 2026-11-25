@@ -1,6 +1,5 @@
 {
   "$schema": "https://raw.githubusercontent.com/rosskukulinski/tailworks/master/schema/tailworks.schema.json",
-  "name": "agent",
   "tailnet": {
     "tags": ["tag:tw-wl-agent"],
     "objects": {

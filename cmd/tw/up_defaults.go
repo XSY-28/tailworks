@@ -56,8 +56,11 @@ func promptOAuthSecret(path string, out io.Writer) (ok bool, err error) {
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return false, nil
 	}
-	fmt.Fprintf(out, "tw up needs a Tailscale OAuth client (admin console › Settings › Trust credentials; see the README).\n")
-	fmt.Fprintf(out, "Paste its Client Secret (tskey-client-…; input is hidden): ")
+	fmt.Fprintln(out, "tw up needs a Tailscale OAuth client of your tailnet (its secret stays in a 0600 file on this machine). In the admin console:")
+	for _, s := range oauthConsoleSteps() { // oauth.go
+		fmt.Fprintln(out, "  "+s)
+	}
+	fmt.Fprintf(out, "  4. Paste its Client Secret (tskey-client-…; input is hidden): ")
 	b, err := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Fprintln(out)
 	if err != nil {

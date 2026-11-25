@@ -30,9 +30,8 @@ In `tailworks.jsonc`:
     // path patterns: "/x" (exact), "/x/*" (/x and below), "/*" (everything)
     "routes": ["/webhooks/*", "/oauth/callback"],
     // routes that may upgrade to WebSocket/SSE (default: none)
-    "upgrade": [],
-    // optional: override the defaults (up to the ceilings below)
-    "limits": { "rps": 50, "ipRps": 10, "maxBodyBytes": 1048576 }
+    "upgrade": []
+    // optional: "limits" overrides the defaults, up to the ceilings (Limits, below)
   },
   "tailnet": {
     "objects": {
@@ -215,6 +214,11 @@ netd enforces these on the public listener. Each is overridable in
 | `maxConns` (per workload) | 256 | 4096 | connection closed |
 | `maxConnsPerIp` (per client address) | 32 | 1024 | connection closed |
 | `upgradeLifetimeSeconds` | 3600 | 86400 | upgraded connection closed |
+
+`burst` and `ipBurst` are spike sizes; sustained traffic is admitted at
+`rps` and `ipRps`. When you raise `rps` (or `ipRps`) and leave its burst
+unset, the burst is two seconds' worth of the rate, never below the
+default and never above the ceiling: `"rps": 200` gets a burst of 400.
 
 Upgrades on a route not listed in `upgrade` get `403 upgrade_not_allowed`.
 
