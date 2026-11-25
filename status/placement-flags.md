@@ -15,3 +15,7 @@ either lands first. The preflight `policy_unavailable` fallback stays per
 command (not in scope of this half).
 
 ## Tests
+- `go test ./cmd/tw -run 'TestPlacement|TestCLIReferenceUpToDate|TestCompletion|TestFlagGroups|TestCLIJSONContract|TestAgentEval'`: ok.
+- `make cli-docs`: docs/cli.md updated (promote/rollback now show deploy's full flag texts).
+- `make lint`: ok. `make test` (local): one failure, `TestLimitsDocCitations` (docs/limits.md cited `cmd/tw/app.go:-wait`); fixed by citing `cmd/tw/placementflags.go:-wait`, `go test ./docs` ok. Everything else passed.
+- Merged with PR #617's head locally: clean merge, `go vet ./cmd/tw` and `TestPlacement*` ok.
