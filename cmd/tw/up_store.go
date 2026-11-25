@@ -94,7 +94,7 @@ func (sf storeFlags) apply(s *state) error {
 		if c.Custody == "setec" || len(secrets) > 0 {
 			move := "or start a new install (another --state-dir) with --custody " + custodyName(newCustody) + ", and move workloads to it"
 			if newCustody == "setec" {
-				move = "or move file custody to setec: tw down, then tw custody migrate --to setec --setec-url <url>   (docs/postgres.md)"
+				move = "or move file custody to setec: tw down, then " + custodyMigrateCmd(*sf.setecURL, s.Dir) + ", then tw up (docs/postgres.md)" // custody.go
 			}
 			return fail("state_conflict", "this install keeps its secrets and store keys in "+custodyName(c.Custody)+" custody; tw up can't move them to "+custodyName(newCustody)+" custody",
 				"the store's data is sealed with keys in custody, so switching would make it unreadable").

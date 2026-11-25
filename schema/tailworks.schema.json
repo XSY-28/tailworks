@@ -55,16 +55,16 @@
       "properties": {
         "mode": { "type": "string", "enum": ["smart", "off"], "description": "Default \"smart\" when tailnet.connects or targets are set." },
         "targets": { "type": "array", "items": { "type": "string" }, "description": "Peers (tags or names) to place close to. Default: tailnet.connects." },
-        "aggregate": { "type": "string", "enum": ["worst", "sum"], "description": "How several targets combine." },
-        "region": { "type": "string", "description": "Cloudflare hint; ignored." },
-        "host": { "type": "string", "description": "Cloudflare hint: one target." },
-        "hostname": { "type": "string", "description": "Cloudflare hint: one target." }
+        "aggregate": { "type": "string", "enum": ["worst", "sum"], "description": "Advanced: how several targets combine (default \"worst\")." },
+        "region": { "type": "string", "deprecated": true, "description": "Cloudflare hint, accepted and ignored." },
+        "host": { "type": "string", "deprecated": true, "description": "Cloudflare hint: the same as targets: [host]." },
+        "hostname": { "type": "string", "deprecated": true, "description": "Cloudflare hint: the same as targets: [hostname]." }
       }
     },
     "public": { "$ref": "#/$defs/public" },
     "containers": {
       "type": ["array", "object"],
-      "description": "Container classes (docs/containers.md): wrangler's array form, or per-class image pins that tw deploy writes."
+      "description": "Container classes (docs/containers.md): wrangler's array form, or per-class image refs you pin; mgmt records the digests it resolves in the deployment."
     },
     "tailnet": {
       "type": "object",
@@ -93,7 +93,8 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "internet": { "type": ["boolean", "array"], "items": { "type": "string" }, "description": "Internet egress for Worker code and containers (docs/tailworks-jsonc.md#tailnetegressinternet). Absent: Workers may reach any public host, containers none. true: both may reach any public host. false or []: neither. A list of hosts (\"*.suffix\", IPs, CIDRs, each with an optional :port): both only those; an entry with a port covers that port only. TCP port 25 is refused unless an entry names it (\"smtp.example.com:25\"). Private, link-local, loopback and tailnet addresses are always refused." }
+            "internet": { "type": ["boolean", "array"], "items": { "type": "string" }, "description": "Internet egress for Worker code and containers (docs/tailworks-jsonc.md#tailnetegressinternet). Absent: Workers may reach any public host, containers none. true: both may reach any public host. false or []: neither. A list of hosts (\"*.suffix\", IPs, CIDRs, each with an optional :port): both only those; an entry with a port covers that port only. TCP port 25 is refused unless an entry names it (\"smtp.example.com:25\"). Private, link-local, loopback and tailnet addresses are always refused." },
+            "via": { "type": "string", "enum": ["exit-node"], "description": "\"exit-node\": run only on a host whose internet egress leaves through a tailnet exit node (docs/tailworks-jsonc.md#tailnetegressvia). Absent: whatever the host offers." }
           }
         },
         "spawn": {
@@ -120,9 +121,9 @@
       "properties": {
         "tags": { "type": "array", "items": { "type": "string", "pattern": "^tag:" }, "description": "Tags of each instance's node." },
         "agent": { "type": "boolean", "description": "An Agents SDK Agent class." },
-        "ttl": { "type": "string", "description": "Idle lifetime, e.g. \"10m\"." },
-        "node": { "type": "boolean", "description": "false: an internal class with no tailnet node." },
-        "egress": { "type": "string", "enum": ["object", "workload"], "description": "\"object\" (default, facet mode): egress leaves from each instance's own node. \"workload\": plain-DO mode, egress leaves as the workload node." },
+        "ttl": { "type": "string", "description": "Lifetime from creation, e.g. \"10m\"; the default for spawn()." },
+        "node": { "type": "boolean", "description": "false: an internal class with no tailnet node; its egress leaves as the workload node." },
+        "egress": { "type": "string", "enum": ["object", "workload"], "description": "\"object\" (default, facet mode): egress leaves from each instance's own node. \"workload\": plain-DO mode, egress leaves as the workload node. \"node\": false implies \"workload\"; don't set both." },
         "fence": { "type": "string", "enum": ["never"], "description": "\"never\": instances tolerate running on two hosts, so mgmt may move it without --force-takeover." },
         "public": {
           "type": "object",

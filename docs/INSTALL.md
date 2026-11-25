@@ -352,7 +352,7 @@ on `tag:tw-mgmt`). Install tailworks there too (steps 1–2), then:
 
 ```sh
 tw link tw-mgmt.<tailnet>.ts.net       # https first, then http on :80; or just `tw link`: finds tw-mgmt through MagicDNS
-tw init support --template agent        # or hello, mcp, ai-agent (needs mcp deployed), lock; node-workflow needs Node.js
+tw init support --template agent        # or hello, mcp, static-site; tw init --list for every template
 cd support && tw dev                    # optional: run it locally against an embedded control plane
 tw deploy                               # bundles here (built-in esbuild), uploads to mgmt over the tailnet, waits until the node is ready
 tw ls · tw audit <object> · tw kill <object> --cascade
@@ -440,9 +440,13 @@ With more than one host, mgmt picks the host at deploy
 {
   "tailnet": { "tags": ["tag:api"], "connects": ["tag:db"] },
   "placement": { "mode": "smart" }   // the default when connects is set; "off" to disable
-  // "placement": { "targets": ["pg-primary"], "aggregate": "worst" }  // or "sum" over several targets
 }
 ```
+
+Advanced: `"placement": { "targets": ["pg-primary"] }` places close to other
+peers than `tailnet.connects`, and with several targets `"aggregate"` picks
+how their paths combine: `"worst"` (the default) or `"sum"`
+([tailworks-jsonc.md](tailworks-jsonc.md#placement)).
 
 ```
 $ tw deploy

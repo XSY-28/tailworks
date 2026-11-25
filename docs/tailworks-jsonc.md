@@ -50,7 +50,7 @@ schema. `tw init` writes this line for you:
 | key | type | default | what it does |
 |---|---|---|---|
 | `$schema` | string | | the schema, for your editor; tailworks ignores it |
-| `name` | string | wrangler `name`, then the directory name | the workload name, a DNS label. `tw deploy --name` overrides it |
+| `name` | string | wrangler `name`, then the directory name | the workload name, a DNS label. `tw deploy --name` overrides it. Leave it out when the wrangler config has a `name` (the templates do); when both set one and they differ, this one wins and `tw` says so |
 | `runtime` | `"workerd"` \| `"node"` | `"workerd"` | `"node"` runs a Node.js app in the Node process tier ([node-tier.md](node-tier.md)); then there is no `wrangler.jsonc` |
 | `main` | string | | `runtime: "node"` only: the entry file, e.g. `"src/server.ts"` |
 | `node` | object | | `runtime: "node"` only: `env` (string map), `listen`, `health`, `args` ([node-tier.md](node-tier.md)) |
@@ -58,7 +58,7 @@ schema. `tw init` writes this line for you:
 | `replicas` | integer ≥ 1 | 1 | run a stateless workload on this many hosts ([services.md](services.md)) |
 | `placement` | object | | which host runs the workload; [below](#placement) |
 | `public` | object | | paths reachable from the public internet over Funnel; [below](#public) |
-| `containers` | array or object | | container classes ([containers.md](containers.md)); `tw deploy` also writes image pins here |
+| `containers` | array or object | | container classes ([containers.md](containers.md)): wrangler's array form, or per-class image refs you pin; mgmt records the digests it resolves in the deployment |
 | `tailnet` | object | | the workload's tailnet identity; [below](#tailnet) |
 
 ## `tailnet`
@@ -222,8 +222,8 @@ A class listed here with no matching binding is an error.
 | `tags` | `["tag:…"]` | | tags of each instance's own node |
 | `agent` | boolean | `false` | the class is an Agents SDK `Agent` |
 | `ttl` | string, e.g. `"10m"` | | lifetime from creation: then the object (and its sub-agents) is killed. The default for `spawn()`, which can set its own |
-| `node` | boolean | `true` | `false`: an internal class with no tailnet node (implies `"egress": "workload"`) |
-| `egress` | `"object"` \| `"workload"` | `"object"` | whose node outbound `fetch()` leaves from ([egress-modes.md](egress-modes.md)). Changing it later empties the class's storage |
+| `node` | boolean | `true` | `false`: an internal class with no tailnet node. Its outbound `fetch()` leaves as the workload node, so it needs no `egress` |
+| `egress` | `"object"` \| `"workload"` | `"object"` (`"workload"` with `"node": false`) | whose node outbound `fetch()` leaves from, for a class with its own node ([egress-modes.md](egress-modes.md)). Changing it later empties the class's storage |
 | `fence` | `"never"` | | instances tolerate running on two hosts at once, so mgmt can move the workload off a dead host without `--force-takeover` |
 | `public.create` | boolean | `false` | public requests may create new objects of this class ([public-ingress.md](public-ingress.md)) |
 | `public.maxObjects` | integer | | required with `create`: the most objects public requests may create |
@@ -237,9 +237,13 @@ How mgmt picks a host when there is more than one
 |---|---|---|---|
 | `mode` | `"smart"` \| `"off"` | `"smart"` when there are targets | `"off"` places by free capacity only |
 | `targets` | `[tag or name]` | `tailnet.connects` | the peers to place close to |
-| `aggregate` | `"worst"` \| `"sum"` | `"worst"` | how several targets combine |
-| `host`, `hostname` | string | | Cloudflare's placement hints: one target |
-| `region` | string | | accepted for Cloudflare compatibility and ignored |
+
+Advanced: `aggregate` (`"worst"`, the default, or `"sum"`) is how several
+targets combine. Cloudflare's placement hints `host`, `hostname` and
+`region` still work here but the schema marks them deprecated: `host` and
+`hostname` are a one-element `targets`, and `region` is ignored. Without a
+`placement` here, the wrangler config's `placement` is read instead, hints
+and all.
 
 ## `public`
 

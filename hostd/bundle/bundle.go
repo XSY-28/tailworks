@@ -192,8 +192,9 @@ type twConfig struct {
 		Args   []string          `json:"args"`
 	} `json:"node"`
 	// Containers is parsed by internal/container (only its presence here):
-	// an array like wrangler's, or {"<Class>": {"image", "images"}}, the
-	// pins tw deploy writes once it has built them (ADR-032 D3).
+	// an array like wrangler's, or {"<Class>": {"image", "images"}},
+	// per-class image refs you pin; mgmt records the digests it resolves
+	// in the deployment (ADR-032 D3).
 	Containers json.RawMessage `json:"containers"`
 	Tailnet    struct {
 		Tags     []string `json:"tags"`
