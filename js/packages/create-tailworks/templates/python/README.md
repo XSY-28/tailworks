@@ -20,8 +20,8 @@ runs start in a second or two.
   tells you who is calling (node, user, tags, capabilities); there are no
   tokens to check.
 - Packages: add them to a `pyproject.toml`, run `uv run pywrangler sync` to
-  vendor them into `python_modules/`, and `tw deploy` ships them. Only
-  pure-Python packages work.
+  vendor them into `python_modules/`, and `tw deploy` ships them (pywrangler
+  picks Pyodide builds of packages with native code).
 - `tailworks.jsonc` `tailnet.tags`: the workload node's tag, named after your
   app by `tw init`.
 

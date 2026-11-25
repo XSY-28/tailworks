@@ -10,8 +10,8 @@
 #            (scripts/test-pg.sh uses TW_TEST_POSTGRES_DSN instead of
 #            starting its own). Also runs on PRs that touch the store.
 #            e2e-compat-dev (issue #325) runs the upstream examples of
-#            cloudflare/agents, vercel/mcp-handler and the Vercel AI SDK
-#            under `tw dev` and writes the tables it gets to the job summary.
+#            cloudflare/agents, vercel/mcp-handler, the Vercel AI SDK and
+#            cloudflare/python-workers-examples (needs uv) under `tw dev` and writes the tables it gets to the job summary.
 #   report   on a scheduled run with a failure, comments on (or opens) the
 #            "nightly suites failing" issue so a red night is not missed;
 #            a green scheduled run closes that issue ("passing again").
@@ -107,6 +107,10 @@ jobs:
         with:
           node-version: ${{ matrix.node || '22' }}
           cache: npm
+      # e2e-compat-dev's Python examples vendor their packages with
+      # `uv run pywrangler sync` (e2e/compat/python.go).
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        if: matrix.target == 'e2e-compat-dev'
       - name: make deps
         run: make deps
       - name: known failure
