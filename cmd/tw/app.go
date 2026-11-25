@@ -36,7 +36,6 @@ func cmdInit(args []string) error {
 	tmpl := f.String("template", "hello", startingPoints(" | ")+" (tw init --list: every template)")
 	list := f.Bool("list", false, "list every template: the starting points, then demos and patterns (templates.go)")
 	name := f.String("name", "", "workload name (default: the directory name)")
-	keepTags := f.Bool("keep-tags", false, "keep the template's object class tags instead of naming them after the app (tag:tw-<workload>-<class>); the workload tag follows the app either way (--tags sets it)")
 	tags := f.String("tags", "", "use these existing tags for the workload node instead of a new per-app tag (comma-separated, e.g. tag:tw-app); see docs/tailworks-jsonc.md#tags-and-tw-init")
 	var objectTags repeated
 	f.Var(&objectTags, "object-tags", "use existing tags for the Durable Object classes with their own node: tag:a,tag:b for every class, or <Class>=tag:a,tag:b for one (repeatable)")
@@ -118,7 +117,7 @@ func cmdInit(args []string) error {
 			// A template var that names the app (refund-approval's approve hint).
 			b = regexp.MustCompile(`("APP_NAME"\s*:\s*)"[^"]*"`).ReplaceAll(b, []byte(`${1}"`+wl+`"`))
 		}
-		if fn == "tailworks.jsonc" && !*keepTags {
+		if fn == "tailworks.jsonc" {
 			if nb, _, err := appTags(b, wl); err == nil {
 				b = nb
 			}

@@ -306,7 +306,7 @@ func TestDevJSONEvents(t *testing.T) {
 	work := t.TempDir()
 	app := filepath.Join(work, "hello")
 	e := &cliflow.Env{T: t, BinDir: bin, StateDir: filepath.Join(work, "state"), WorkDir: work}
-	e.MustJSON(nil, "init", app, "--template", "hello", "--keep-tags")
+	e.MustJSON(nil, "init", app, "--template", "hello")
 	cmd := exec.Command(filepath.Join(bin, "tw"), "dev", app, "--port", "0", "--json")
 	cmd.Env = os.Environ()
 	out, _ := cmd.StdoutPipe()
