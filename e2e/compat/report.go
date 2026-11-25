@@ -336,6 +336,9 @@ func RenderSection(section string, pub *Published) string {
 		switch {
 		case p.Expect.Kind != ExpectPass:
 			result, shown, note = "fail", "**fail**", upperFirst(p.Expect.Why)
+		case p.ExpectDev.Kind != ExpectPass:
+			result, shown = "fail", "**fail** under `tw dev` ("+passed+" deployed)"
+			note = "Under `tw dev`: " + p.ExpectDev.Why
 		case p.ExpectDeployed.Kind != ExpectPass:
 			result, shown = "fail", "**fail** deployed ("+passed+" under `tw dev`)"
 			note = "Deployed: " + p.ExpectDeployed.Why

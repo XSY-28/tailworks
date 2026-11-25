@@ -1803,6 +1803,11 @@ function callCtx(ctx, cf) {
     }
   });
 }
+var PY_RPC = /* @__PURE__ */ Symbol.for("tailworks.pyRpc");
+function pyCallCf(scf) {
+  const { tw: _tw, ...rest } = scf ?? {};
+  return rest;
+}
 function bindingDispatcher(T, bindings) {
   const target = (ep) => {
     const H = ep ? T[ep] : T.default;
@@ -1819,6 +1824,9 @@ function bindingDispatcher(T, bindings) {
   return {
     async fetch(ctx, env, req) {
       const ep = String(req?.cf?.tw?.binding?.entrypoint ?? "");
+      if (ep && typeof T.default?.[PY_RPC] === "function" && !(ep in T)) {
+        return new TailnetError("service_not_found", `entrypoint ${ep} of a Python Worker answers RPC calls, not fetch(); bind the default entrypoint for fetch()`).toResponse();
+      }
       let t;
       try {
         t = target(ep);
@@ -1837,6 +1845,15 @@ function bindingDispatcher(T, bindings) {
       const tw = env?.__TW;
       const sealed = await sealedRequest(tw, { cf });
       const scf = sealed?.cf ?? {};
+      const py = T.default?.[PY_RPC];
+      if (typeof py === "function") {
+        if (typeof method !== "string" || method in Object.prototype || HANDLER_METHODS.includes(method) || method === "constructor") {
+          throw new TypeError(`The RPC receiver does not implement the method "${method}".`);
+        }
+        const ticket2 = typeof scf?.tw?.ticket === "string" && scf.tw.ticket ? scf.tw.ticket : void 0;
+        const genv = guardEnv(env, bindings, "tailnet", admitter(tw, { ticket: ticket2 }));
+        return await py(genv, ep || "", method, args, pyCallCf(scf));
+      }
       const t = target(ep);
       if (typeof t.H !== "function") throw new TypeError(`entrypoint ${t.name} is not a WorkerEntrypoint class; RPC needs one`);
       const cctx = callCtx(ctx, scf);

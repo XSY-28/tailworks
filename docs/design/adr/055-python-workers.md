@@ -142,6 +142,21 @@ microVM tier (decision 9).
    a Python Worker's VM is active about 4 s after the deploy, and its first
    request takes about 50 ms; workerd with one Python Worker and one object
    is about 250 MiB, inside the default 512 MiB guest.
+10. **RPC into a Python Worker goes through the front too** (#430). A
+    service binding's RPC call reaches the front's `__tw_binding`
+    dispatcher, which unseals the caller and refuses handler names as for
+    a JavaScript Worker, then calls `TailworksRpc.call()` in `tenant-py`
+    over a second front-only binding (`__TW_PY_RPC`) with the entrypoint,
+    the method, the arguments and the call's verified `cf` (no create
+    ticket). `tenant-py`'s main module is generated (`_tw_main.py`): it
+    re-exports the app's main module, so workerd finds the same classes
+    and handlers, and adds `TailworksRpc`, which finds the entrypoint class
+    and a public method on it, sets `ctx.cf` so `get_caller(self.ctx)`
+    names the caller, and runs the method. A caller can't name
+    `TailworksRpc` as an entrypoint. workerd's own RPC into a Python
+    `WorkerEntrypoint` would need a binding per entrypoint, and no
+    per-call value reaches the callee's `ctx` across it (props are fixed
+    in the config), so the caller couldn't be named.
 
 ## Consequences
 

@@ -144,6 +144,8 @@ func TestGeneratePython(t *testing.T) {
 	for _, want := range []string{
 		`(name = "tenant-py", worker = .tenantPy)`,
 		`(name = "__TW_PY", service = "tenant-py")`,
+		`(name = "__TW_PY_RPC", service = (name = "tenant-py", entrypoint = "TailworksRpc"))`,
+		`(name = "_tw_main.py", pythonModule = embed "py/_tw_main.py")`,
 		`(name = "entry.py", pythonModule = embed "py/entry.py")`,
 		`(name = "python_modules/tinypkg/__init__.py", pythonModule = embed "py/python_modules/tinypkg/__init__.py")`,
 		`(name = "python_modules/tinypkg/data.txt", data = embed "py/python_modules/tinypkg/data.txt")`,
@@ -158,8 +160,24 @@ func TestGeneratePython(t *testing.T) {
 	if strings.Contains(tenant, ".py") || strings.Contains(tenant, "python") {
 		t.Errorf("the JavaScript front has Python modules or flags:\n%s", tenant)
 	}
-	if strings.Index(cfg, `(name = "entry.py"`) > strings.Index(cfg, `(name = "helper.py"`) {
-		t.Error("the main module is not tenant-py's first module")
+	if strings.Index(cfg, `(name = "_tw_main.py"`) > strings.Index(cfg, `(name = "entry.py"`) {
+		t.Error("the generated main module (pyrpc.go) is not tenant-py's first module")
+	}
+}
+
+// TestGeneratePythonReservedMain: the app can't have a module named as
+// tenant-py's generated main module.
+func TestGeneratePythonReservedMain(t *testing.T) {
+	files := pythonFiles()
+	files["src/_tw_main.py"] = []byte("x = 1\n")
+	app, err := bundle.Parse(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	_, err = gen.Generate(app, gen.Options{Dir: dir + "/i", DOStorage: dir + "/do", DeploymentID: "d1", Workload: app.Name})
+	if err == nil || !strings.Contains(err.Error(), "_tw_main.py is a reserved module name") {
+		t.Fatalf("err = %v", err)
 	}
 }
 
