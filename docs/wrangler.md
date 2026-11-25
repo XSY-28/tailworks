@@ -116,7 +116,10 @@ the way `wrangler --env staging` does:
 
 So `staging` and production are two workloads with two tailnet nodes. If
 `tailworks.jsonc` exists, it is shared by every environment. It has no `env`
-section, so both get the same tags and grants.
+section, so tags it lists are the same in both, and so are their grants. An
+omitted `tailnet.tags` follows the workload name (`tag:tw-wl-<workload>`),
+so then each environment gets its own tag (`tag:tw-wl-shop-staging`), and
+`tw policy` prints its `tagOwners` line.
 
 Secrets belong to a workload, so give an environment's secrets its name:
 `tw secret put API_KEY --workload shop-staging`. Run in the app

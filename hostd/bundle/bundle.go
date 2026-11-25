@@ -147,7 +147,6 @@ type DOBinding struct {
 type Class struct {
 	Name   string
 	Tags   []string
-	Agent  bool
 	Egress string // EgressObject | EgressWorkload
 	TTL    string
 	// Node is false for internal classes (`"node": false`): no tailnet node,
@@ -201,7 +200,6 @@ type twConfig struct {
 		Connects []string `json:"connects"`
 		Objects  map[string]struct {
 			Tags   []string              `json:"tags"`
-			Agent  bool                  `json:"agent"`
 			Egress string                `json:"egress"`
 			TTL    string                `json:"ttl"`
 			Node   *bool                 `json:"node"`
@@ -371,7 +369,7 @@ func Parse(files map[string][]byte) (*App, error) {
 		if c == nil {
 			return nil, fmt.Errorf("bundle: tailworks.jsonc tailnet.objects.%s has no durable_objects binding", name)
 		}
-		c.Tags, c.Agent, c.TTL = o.Tags, o.Agent, o.TTL
+		c.Tags, c.TTL = o.Tags, o.TTL
 		if err := o.Public.Validate(name); err != nil {
 			return nil, fmt.Errorf("bundle: tailworks.jsonc %w", err)
 		}

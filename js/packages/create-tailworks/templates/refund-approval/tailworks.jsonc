@@ -7,7 +7,7 @@
     "tags": ["tag:tw-wl-refunds"],
     "objects": {
       // one node per customer's agent
-      "RefundAgent": { "tags": ["tag:tw-agent-refunds"], "agent": true }
+      "RefundAgent": { "tags": ["tag:tw-agent-refunds"] }
     }
   }
 }

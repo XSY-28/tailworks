@@ -270,6 +270,10 @@ func TestCLILink(t *testing.T) {
 	// A second tw up (supervisor running) must not touch the node.
 	host.MustJSON(nil, "up", "--oauth-client-file", keyFile, "--tailnet", "ttest.ts.net", "--yes", "--ephemeral", "--control-url", ctl.URL,
 		"--tsapi-url", api.URL, "--hostname-prefix", "tw-l-", "--mgmt-hostname", "tw-mgmt")
+	// tw status names the saved --ephemeral (#456); nothing unsafe is saved.
+	if st := checkStatus(t, host, "› saved       --ephemeral"); st["unsafeFlags"] == nil || len(st["unsafeFlags"].([]any)) != 0 {
+		t.Fatalf("host status unsafeFlags: %v", st["unsafeFlags"])
+	}
 
 	// The developer box: linked through its own tsnet node (test transport;
 	// the product path is the machine's Tailscale). No HTTPS on testcontrol.
@@ -316,6 +320,10 @@ func TestCLILink(t *testing.T) {
 	dev.MustJSON(&ls, "ls")
 	if len(ls.Deployments) != 1 || ls.Deployments[0].DeployedBy != lk.Actor || !strings.Contains(ls.Deployments[0].DeployedBy, "ttest-dev") && !strings.Contains(ls.Deployments[0].DeployedBy, "@") {
 		t.Fatalf("remote ls deployedBy: %+v (actor %q)", ls.Deployments, lk.Actor)
+	}
+	// Linked tw status: a count per tenant, and the same $defs/status (#455).
+	if st := checkStatus(t, dev, "1 deployment (tw ls)"); st["stateDir"] == "" || st["linked"] == nil {
+		t.Fatalf("linked status: stateDir %v linked %v", st["stateDir"], st["linked"])
 	}
 	// The workload's log, read by mgmt from the host over the push channel.
 	if _, se, _, err := dev.Tw("logs", ls.Deployments[0].Workload, "-n", "5"); err != nil {

@@ -116,7 +116,7 @@ func run() error {
 		ctrImages  = flag.String("container-image-dir", "", "containers: dir of image tarballs with an images.json index (tests and hosts without a registry; deployments with pinned images pull from mgmt's registry instead)")
 		ctrPublic  = flag.String("container-public-images", "", "containers: comma-separated image refs cached once for all tenants (public bases; -container-image-dir only: pinned images take their scope from the pin)")
 		ctrImgMB   = flag.Int64("container-image-max-mib", image.DefaultMaxImageBytes>>20, "containers: cap on one image's uncompressed layers while converting it (also 128 layers, 1 Mi entries); an image over it fails to convert")
-		ctrCacheMB = flag.Int64("container-image-cache-max-mib", 0, "containers: cap on the converted image cache; past it the least recently used images not in use are removed (0 = no cap)")
+		ctrCacheMB = flag.Int64("container-image-cache-max-mib", hostdrun.DefaultImageCacheMiB, "containers: cap on the converted image cache; past it the least recently used images not in use are removed (images in use stay, even past it; 0 = no cap)")
 		ctrIdle    = flag.Duration("container-idle", hostd.DefaultContainerIdle, "containers: default inactivity timeout (setInactivityTimeout overrides, ≤ 6 h)")
 		ctrMaxLife = flag.Duration("container-max-lifetime", hostd.DefaultContainerMaxLife, "containers: hard max lifetime of a container")
 		ctrGrace   = flag.Duration("container-stop-grace", hostd.DefaultContainerGrace, "containers: cap on destroy()'s SIGTERM → SIGKILL grace")

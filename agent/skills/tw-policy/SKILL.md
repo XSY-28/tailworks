@@ -6,7 +6,8 @@ description: Use when a tailworks workload needs tailnet policy changes - tagOwn
 # Tailnet policy for a tailworks workload
 
 On tailworks, access control is the user's Tailscale tailnet policy, not code.
-Each workload node carries the tags from `tailworks.jsonc` `tailnet.tags`; each
+Each workload node carries the tags from `tailworks.jsonc` `tailnet.tags`
+(default `tag:tw-wl-<workload>`); each
 Durable Object class with its own nodes carries its class's tags. Grants
 between tags decide who can call whom.
 
