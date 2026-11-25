@@ -99,6 +99,8 @@ func cmdInit(args []string) error {
 	}
 	// Name the workload after the directory (tailworks.jsonc and wrangler.jsonc),
 	// and the npm package too (its first "name" is the top-level one).
+	// create-tailworks without tw does the same (lib/init.mjs); keep them in
+	// step (TestCreateTailworksRenamesLikeInit).
 	for _, fn := range []string{"package.json", "tailworks.jsonc", "wrangler.jsonc"} {
 		p := filepath.Join(dir, fn)
 		b, err := os.ReadFile(p)
