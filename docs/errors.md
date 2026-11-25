@@ -10,6 +10,12 @@ surfaces:
   `TailnetError` with `.code`, `.status`, `.missing`, `.snippet`, `.docUrl`.
 - **From the mgmt REST API** (`/v1`, `docs/contracts/mgmt-api.md`): the same
   body; `trace_id` correlates with `tw audit --trace <id>`.
+- **From mgmt to a browser** opening `/` or the admin UI (`/ui/...`): when
+  a `GET` or `HEAD` there prefers `text/html` to JSON (`*/*` alone or a tie
+  stays JSON), the refusal is an HTML page with the same status and
+  `tw-error` header, the code, the message, the `snippet`, a fix and the
+  link here ([ADMIN-UI.md](ADMIN-UI.md#url-and-who-gets-in)). `/v1`,
+  `/mcp` and the CLI always get JSON.
 - **From the `tw` CLI**: `error [code]: message`, detail lines, `fix:` and a
   link to this page. With `--json`, one line on stderr:
   `{"error": {code, message, hint, doc_url, detail?, fix?, trace_id?}}`
@@ -233,7 +239,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 400 · cli. **When:** `tw up` was given no credential. **Fix:** `tw up --oauth-client-file <file>` with an OAuth client of your tailnet (the error prints how to create one; INSTALL.md); on Headscale, `--control=headscale … --api-key-file <file>`.
 
 ### misdirected_request
-421 · mgmt. **When:** a request on mgmt's tailnet listeners (`:80`, `:443`, the `-tsnet-service` VIP, the operator console) whose `Host` header is neither one of mgmt's own names (its MagicDNS FQDN or short name, `-tsnet-hostname`, `-tsnet-service`) nor an IP literal. This is the DNS-rebinding guard: a web page on a domain rebound to mgmt's IP sends its own domain as `Host` (docs/ADMIN-UI.md). Refused before WhoIs, for every method. **Fix:** address mgmt by its tailnet name (`http(s)://tw-mgmt.<tailnet>/`, `tw whoami` prints it) or its tailnet IP; not through a CNAME or another DNS name that points at it. If you renamed the mgmt node, restart tw-mgmt so it learns the new name.
+421 · mgmt. **When:** a request on mgmt's tailnet listeners (`:80`, `:443`, the `-tsnet-service` VIP, the operator console) whose `Host` header is neither one of mgmt's own names (its MagicDNS FQDN or short name, `-tsnet-hostname`, `-tsnet-service`) nor an IP literal. This is the DNS-rebinding guard: a web page on a domain rebound to mgmt's IP sends its own domain as `Host` (docs/ADMIN-UI.md). Refused before WhoIs, for every method. **Fix:** address mgmt by its tailnet name (`http(s)://tw-mgmt.<tailnet>/`, `tw whoami` prints it) or its tailnet IP; not through a CNAME or another DNS name that points at it. If you renamed the mgmt node, restart tw-mgmt so it learns the new name. A browser opening the admin UI by the wrong name gets an HTML page listing mgmt's own names.
 
 ### missing_tools
 1 · cli. **When:** `tw host setup --microvm` needs `ip`, `cryptsetup`, `losetup`, `mkfs.ext4` and one is missing. **Fix:** `apt-get install iproute2 cryptsetup-bin util-linux e2fsprogs` (Debian/Ubuntu) or `dnf install iproute cryptsetup util-linux e2fsprogs` (Fedora).
@@ -254,7 +260,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 503 · mgmt. **When:** a deployment has no live host to run on (none registered, none in the tenant's pool, or all stale). **Fix:** `tw status` on the host; `tw host ls`.
 
 ### no_identity
-401 · netd, mgmt, hostd. **When:** WhoIs failed for the connection: the request carries no verified tailnet caller (a non-tailnet source, or the egress proxy's credentials are stale). **Fix:** call over the tailnet; from a developer machine use `tw link`.
+401 · netd, mgmt, hostd. **When:** WhoIs failed for the connection: the request carries no verified tailnet caller (a non-tailnet source, or the egress proxy's credentials are stale). **Fix:** call over the tailnet; from a developer machine use `tw link`. In a browser (the admin UI), open it from a device on the tailnet.
 
 ### no_kvm
 1 · cli. **When:** `/dev/kvm` does not exist, so this machine cannot run microVMs. **Fix:** bare metal or a VM with nested virtualization; the process tier works without it.
@@ -275,7 +281,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 1 · cli. **When:** building a `"runtime": "node"` app needs Node.js on this machine. **Fix:** install Node.js ≥ 24 (and run `npm install` in the app), or deploy from a machine that has it.
 
 ### not_admin
-403 · mgmt, cli. **When:** a tailnet caller without the `github.com/rosskukulinski/tailworks/cap/admin` capability called an admin endpoint (`tw link`), or `/mcp` without `github.com/rosskukulinski/tailworks/cap/admin` or `github.com/rosskukulinski/tailworks/cap/mcp`. **Fix:** add the printed grant (`snippet`) from your user/group/tag to `tag:tw-mgmt`.
+403 · mgmt, cli. **When:** a tailnet caller without the `github.com/rosskukulinski/tailworks/cap/admin` capability called an admin endpoint (`tw link`), or `/mcp` without `github.com/rosskukulinski/tailworks/cap/admin` or `github.com/rosskukulinski/tailworks/cap/mcp`. **Fix:** add the printed grant (`snippet`) from your user/group/tag to `tag:tw-mgmt`. Opening the admin UI in a browser shows the same grant on an HTML page: ask your tailnet admin to add it (members of `autogroup:admin` already have it), or use `tw` on the host.
 
 ### not_found
 404 · mgmt. **When:** no such record (deployment, host, object, volume). **Fix:** check the ID (`tw ls --all`, `tw host ls`).
