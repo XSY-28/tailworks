@@ -88,9 +88,6 @@ lives somewhere else, such as an extracted tarball, `tw upgrade` stops with
 0.1.0, which has no `tw upgrade`, is in the
 [0.2.0 upgrade guide](https://github.com/rosskukulinski/tailworks/blob/v0.2.0/docs/upgrading.md#the-first-upgrade-from-a-release-without-tw-upgrade).
 
-<<<<<<< HEAD
-### Roll back by hand
-=======
 **Not `get.sh` or `install.sh`.** While tailworks runs from the prefix,
 `get.sh` and `install.sh` refuse to install another version over it, since
 they would swap the binaries under it with no backup, health check or
@@ -99,8 +96,7 @@ tailworks first (`tw down`) to install by hand, or pass `--force`
 (`TW_INSTALL_FORCE=1` for `get.sh`) to swap anyway. Re-running the same
 version (a repair) is always allowed.
 
-### The first upgrade from a release without `tw upgrade`
->>>>>>> origin/master
+### Roll back by hand
 
 When `tw upgrade` could not roll back
 ([`upgrade_failed`](errors.md#upgrade_failed)), put the backup it took
