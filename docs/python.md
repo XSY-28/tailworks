@@ -63,8 +63,37 @@ class Default(WorkerEntrypoint):
 `get_caller` returns a dict with `getCaller`'s fields from
 `@tailworks/tailnet`: `nodeId`, `tags`, `hostname`, `node`, `addrs`, `user`
 (`{"login": …}` for a person, `None` for a tagged node), `capMap`,
-`objectId` and `traceId`. It reads `request.js_object.cf.tailscale.caller`;
+`objectId` and `traceId`. It reads `request.js_object.cf.tailscale.caller`
+(in an RPC method, `get_caller(self.ctx)` reads `self.ctx.cf`, below);
 copy the file into your own project to use it there.
+
+## RPC from other Workers
+
+Another workload can call a Python Worker's methods over a
+[service binding](wrangler.md#service-bindings), as it calls a
+JavaScript `WorkerEntrypoint`'s:
+
+```python
+class Default(WorkerEntrypoint):
+    async def highlight(self, code, language=None):
+        who = get_caller(self.ctx)  # the calling workload's node
+        return {"html": render(code, language), "for": who["hostname"]}
+```
+
+```js
+// the caller's wrangler.jsonc: "services": [{ "binding": "PY", "service": "my-py" }]
+const r = await env.PY.highlight("print(1)", "python");
+```
+
+A public method of the `Default` class, or of a named `WorkerEntrypoint`
+class (a binding with `"entrypoint": "Admin"`), can be called. Handler
+names (`fetch`, `scheduled`, `queue`, …) and names starting with `_` can't.
+Arguments arrive as Python values and the return value goes back as the
+`workers` SDK converts them (a `dict` reaches JavaScript as a `Map` with
+the built-in SDK). An exception reaches the caller as an `Error` with the
+Python exception in its message. `get_caller(self.ctx)` names the caller,
+as `getCaller(this.ctx)` does in JavaScript: tailworks puts the verified
+caller in `self.ctx.cf` for the call.
 
 ## Cron triggers, Queues and static assets
 
@@ -206,11 +235,11 @@ one with a message naming it:
 - Workflows and containers ([#424](https://github.com/rosskukulinski/tailworks/issues/424));
 - `--wrangler` and `--from-wrangler-out`: they bundle JavaScript.
 
-Not supported yet, without a refusal at deploy: **RPC into a Python
-Worker** over a service binding. Another workload's `env.SVC.fetch()` to a
-Python Worker works, but calling its methods (`await env.SVC.highlight(…)`)
-fails with "not a WorkerEntrypoint class"
-([#430](https://github.com/rosskukulinski/tailworks/issues/430)).
+A named entrypoint of a Python Worker (a binding with `entrypoint`) answers
+RPC calls but not `fetch()`, which gets `service_not_found`; bind the
+default entrypoint for `fetch()`. The generated main module is named
+`_tw_main.py`, so the app can't have a module of that name, and its main
+module can't define a `TailworksRpc`.
 
 Also different from Cloudflare: no memory snapshots, so every cold start
 loads Pyodide (about a second on a laptop;

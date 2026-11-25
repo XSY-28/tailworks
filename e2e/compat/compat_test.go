@@ -55,6 +55,8 @@ func Policy() policy.Snippet {
 	s := cliflow.Policy()
 	s.TagOwners[CompatTag] = []string{"autogroup:admin", "tag:tw"}
 	s.Grants = append(s.Grants, map[string]any{"src": []string{cliflow.TestTag}, "dst": []string{CompatTag}, "ip": []string{"tcp:80"}})
+	// A Worker calls its Companions over service bindings (a tailnet call).
+	s.Grants = append(s.Grants, map[string]any{"src": []string{CompatTag}, "dst": []string{CompatTag}, "ip": []string{"tcp:80"}})
 	return s
 }
 
@@ -346,6 +348,9 @@ func runProject(t *testing.T, pr *Prepared, tw twFunc, client *nettest.Node) Res
 	}
 	if pr.Err != nil {
 		return fail("prepare: %v", pr.Err)
+	}
+	if err := deployCompanions(p, tw); err != nil { // companions_test.go
+		return fail("%v", err)
 	}
 	for name, v := range p.Secrets {
 		if _, se, _, err := tw(pr.DeployDir, v, "secret", "put", name, "--workload", p.ID); err != nil {

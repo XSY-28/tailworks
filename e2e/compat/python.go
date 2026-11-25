@@ -139,6 +139,24 @@ func pythonProjects() []*Project {
 				return r.Get("/favicon.ico").Want(200)
 			}
 		}),
+		pyEx("py-js-api-pygments", "js-api-pygments", func(p *Project) {
+			// The example is two Workers: ts/ calls py/'s highlight_code()
+			// over the PYTHON_RPC service binding (service "py-rpc-server").
+			p.Dir = "js-api-pygments/ts"
+			p.What = "a TypeScript Worker calling a Python Worker's RPC method (Pygments) over a service binding"
+			p.Exercises = []string{"python", "service-bindings"}
+			p.Companions = []*Project{pyPkg("py-rpc-server", "js-api-pygments/py", func(c *Project) {
+				c.Section = ""
+				c.What = "the Python RPC server of js-api-pygments"
+				c.Probe = func(r *Run) error { return r.Get("/").Want(200, "Python RPC server is running") }
+			})}
+			p.Workarounds = []string{uvWorkaround + ", in py/", "py/ is deployed first, as the workload py-rpc-server its wrangler config names"}
+			p.ExpectDev = Expect{Kind: ExpectProbeFail, Compat: "service-bindings",
+				Why: "`tw dev` runs one Worker and has no binding to another workload, so env.PYTHON_RPC reaches nothing"}
+			p.Probe = func(r *Run) error {
+				return r.Get("/").Want(200, "Language Detected:</strong> TypeScript", `<div class="highlight">`, "fetchUserData", ".highlight .k")
+			}
+		}),
 		pyPkg("py-url-shortener", "url-shortener", func(p *Project) {
 			p.What = "Python Worker on KV, compatibility_date 2026-09-01 (the vendored workers SDK)"
 			p.Exercises = []string{"python", "kv"}
@@ -273,8 +291,6 @@ func pythonNotRun() []NotRun {
 		return NotRun{Section: SectionPython, Repo: "cloudflare/python-workers-examples", Commit: pythonExamplesCommit, Dirs: dirs, Why: why}
 	}
 	return []NotRun{
-		py("a TypeScript Worker calling the Python Worker's RPC method over a service binding; RPC into a Python Worker isn't supported yet (fetch is)",
-			"js-api-pygments"),
 		py("needs Workers AI (an `ai` binding), which tailworks doesn't provide",
 			"image-redraw", "langchain", "vectorize-rag", "workers-ai"),
 		py("needs Hyperdrive", "hyperdrive-batched-counter"),
