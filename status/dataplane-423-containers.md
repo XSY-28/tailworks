@@ -15,9 +15,10 @@ snapshot restore. Builds on the `e2e/dataplane` harness (#415).
 - `make e2e-dataplane-vm` (macOS vz, or Linux KVM with the test binary as
   root; not in the nightly). `make lint` vets the new tags for darwin and
   linux.
-- Harness: two fields on `cluster` (`workloadName`, `hostArgs`), so the
-  shared faults (`kill-host`, `move`, takeovers) restart hosts with the
-  microVM flags and move this loop's workload.
+- Harness: uses `cluster.workload` and `cluster.hostArgs` (from master),
+  so the shared faults (`kill-host`, `move`, takeovers) restart hosts with
+  the microVM flags and move this loop's workload. No change to the shared
+  harness files.
 - Ledger: `e2e/dataplane/ledger/containers.md` (status, findings, run log);
   one pointer line in `LEDGER.md`.
 

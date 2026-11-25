@@ -56,6 +56,10 @@ func TestReplay(t *testing.T) {
 			var o d1Op
 			dec(&o)
 			h.d1s = append(h.d1s, o)
+		case "kv":
+			var o kvOp
+			dec(&o)
+			h.kvs = append(h.kvs, o)
 		case "pulse":
 			var o pulseEv
 			dec(&o)
@@ -74,7 +78,7 @@ func TestReplay(t *testing.T) {
 			h.deps = append(h.deps, o)
 		}
 	}
-	for _, r := range []result{checkD1(h), checkReg(h), checkD2(h), checkD3(h), checkD6(h)} {
+	for _, r := range []result{checkD1(h), checkReg(h), checkD2(h), checkD3(h), checkKV(h), checkD6(h)} {
 		mark := "✓"
 		if !r.Pass {
 			mark = "✗"

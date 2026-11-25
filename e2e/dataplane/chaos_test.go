@@ -43,6 +43,9 @@ func TestDataplane(t *testing.T) {
 		t.Skip("node not available (needed to bundle the app)")
 	}
 	scenario := envOr("TW_DP_SCENARIO", "mixed")
+	if strings.HasPrefix(scenario, "r2-") {
+		t.Skipf("TestR2 runs %s (r2_test.go)", scenario)
+	}
 	if strings.HasPrefix(scenario, "workflows") {
 		t.Skip("TestDataplaneWorkflows runs " + scenario)
 	}
@@ -66,7 +69,16 @@ func TestDataplane(t *testing.T) {
 			}
 		}
 	}
+	clockLib, names := setupSkew(t, names) // skew_test.go
 	t.Logf("scenario %s, seed %d, duration %v, faults %v", scenario, seed, dur, names)
+	if cronScenarios[scenario] { // cron_test.go: its own workloads and checkers
+		runCron(t, wd, scenario, names, seed, dur)
+		return
+	}
+	if strings.HasPrefix(scenario, "deploys") { // deploys_test.go (#421)
+		testDeploys(t, scenario, names, seed, dur)
+		return
+	}
 
 	root, _ := filepath.Abs("results")
 	rdir := filepath.Join(root, fmt.Sprintf("%s-%s-%d", time.Now().UTC().Format("20060102T150405Z"), scenario, seed))
@@ -90,9 +102,10 @@ func TestDataplane(t *testing.T) {
 	}
 	t.Cleanup(ctl.Close)
 
-	c := &cluster{t: t, bin: cliflow.BuildBinaries(t), dir: rdir, work: work, ctl: ctl, tsURL: fakeTS(t).URL,
+	c := &cluster{t: t, bin: cliflow.BuildBinariesTags(t, "twtestclock"), dir: rdir, work: work, ctl: ctl, tsURL: fakeTS(t).URL,
 		sock: filepath.Join(work, "mgmt.sock"), workerd: wd, hosts: []string{"h1", "h2", "h3"},
-		proxies: map[string]*sockProxy{}, pids: pids, procs: map[string]*proc{}, stopped: map[string]bool{}}
+		proxies: map[string]*sockProxy{}, pids: pids, procs: map[string]*proc{}, stopped: map[string]bool{},
+		clocks: &hostClocks{lib: clockLib, off: map[string]time.Duration{}}}
 	t.Cleanup(c.stopAll)
 	c.hc = &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", c.sock)
@@ -183,8 +196,10 @@ func TestDataplane(t *testing.T) {
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
+	checkSkewHook(t, c, w.cli, d.Host, d.Endpoint.MagicDNS) // skew_test.go
 	w.watch()
 	w.run(150 * time.Millisecond)
+	w.runKV() // kv_test.go
 
 	// Warm up, then the nemesis.
 	time.Sleep(10 * time.Second)
@@ -272,6 +287,7 @@ func TestDataplane(t *testing.T) {
 	for _, id := range all.IDs {
 		final[id] = true
 	}
+	w.kvFinal() // kv_test.go
 
 	// D7: no workerd outlives its hostd's restart (#432).
 	d7 := result{ID: "D7", Pass: true}
@@ -283,7 +299,7 @@ func TestDataplane(t *testing.T) {
 	c.mu.Unlock()
 
 	h.mu.Lock()
-	res := []result{checkD1(h), checkReg(h), checkD2(h), checkD3(h), checkD4(h, final, ferr), d5, checkD6(h), d7}
+	res := []result{checkD1(h), checkReg(h), checkD2(h), checkD3(h), checkD4(h, final, ferr), checkKV(h), d5, checkD6(h), d7}
 	writeJSON(rdir, "faults.json", h.faults)
 	writeJSON(rdir, "store.json", fs.Snapshot())
 	h.mu.Unlock()

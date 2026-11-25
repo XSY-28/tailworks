@@ -339,6 +339,9 @@ type Host struct {
 	// next run can reap any a crash left behind (childreap.go, #432).
 	children *childLedger
 
+	// cronLasts: each workload's last cron minute, kept across restarts (cronlast.go, #594).
+	cronLasts *cronLastStore
+
 	// consume: queue consumers' context, cancelled on self-fence (queuefence.go).
 	consume consumeGate
 
@@ -489,6 +492,7 @@ func New(cfg Config) (*Host, error) {
 		return nil, err
 	}
 	h.children = openChildLedger(cfg.DataDir, h.log) // childreap.go: before anything is spawned
+	h.cronLasts = openCronLast(cfg.DataDir, h.log)
 	h.pubCreates = newPublicCreates(h.publicCreatesPath())
 	h.admits = map[string]time.Time{}
 	os.Chmod(cfg.DataDir, 0o700)

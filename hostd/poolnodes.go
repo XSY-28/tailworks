@@ -227,12 +227,14 @@ func (h *Host) assignNode(o *object, from string) {
 	if len(info.IPs) > 0 {
 		o.IP = info.IPs[0]
 	}
+	gen := o.nodeGen
 	h.mu.Unlock()
 	var epoch int64
 	if w := h.workloadOf(o); w != nil {
 		epoch = w.epochNow()
 	}
-	err = h.mgmt.Ready(ctx, o.ID, mgmtapi.ReadyRequest{NodeID: info.NodeID, StableNodeID: info.NodeID, MagicDNS: o.MagicDNS, Epoch: epoch})
+	req := mgmtapi.ReadyRequest{NodeID: info.NodeID, StableNodeID: info.NodeID, MagicDNS: o.MagicDNS, Epoch: epoch}
+	err = h.mgmt.Ready(ctx, o.ID, req)
 	h.noteReport(o, info.NodeID, err) // egressgate.go (#331)
 	if err != nil {
 		h.log.Warn("mgmt ready failed", "object", o.ID, "err", err)
@@ -240,6 +242,9 @@ func (h *Host) assignNode(o *object, from string) {
 			closeOnce(ch)
 			go h.killLocal(o.ID, "killed during assignment")
 			return
+		}
+		if retryableReady(err) {
+			go h.retryReady(o, req, gen) // readyretry.go (#604)
 		}
 	}
 	closeOnce(ch)

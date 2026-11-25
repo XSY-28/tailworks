@@ -51,10 +51,10 @@ import (
 const (
 	ctrWorkload = "ctrs"
 	ctrGrace    = 3 * time.Second // -container-stop-grace
-	// fenceBound: how long after a lease change (or the end of a fault on
+	// ctrFenceBound: how long after a lease change (or the end of a fault on
 	// that host) the old host may still run a container: FenceAfter (30 s)
 	// plus a heartbeat (3 s), with slack for the stop itself.
-	fenceBound = 45 * time.Second
+	ctrFenceBound = 45 * time.Second
 )
 
 // ---- the fake Tailscale API, with a stall switch ----
@@ -936,7 +936,7 @@ func TestContainers(t *testing.T) {
 	c := &cluster{t: t, bin: cliflow.BuildBinaries(t), dir: rdir, work: work, ctl: ctl, tsURL: ts.srv.URL,
 		sock: filepath.Join(work, "mgmt.sock"), workerd: wd, hosts: hosts,
 		proxies: map[string]*sockProxy{}, pids: pids, procs: map[string]*proc{}, stopped: map[string]bool{},
-		workloadName: ctrWorkload, hostArgs: hostArgs}
+		workload: ctrWorkload, hostArgs: func(string) []string { return hostArgs }}
 	t.Cleanup(c.stopAll)
 	c.hc = &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", c.sock)

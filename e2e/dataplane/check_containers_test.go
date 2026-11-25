@@ -52,7 +52,7 @@ func firstLabel(s string) string {
 
 // holderWindow returns, for host h at time t, the earliest time h may still
 // run a container although another host holds the lease: the later of the
-// lease leaving h and the end of the last fault on h, plus fenceBound. ok is
+// lease leaving h and the end of the last fault on h, plus ctrFenceBound. ok is
 // false when h holds the lease at t.
 func holderWindow(in kInput, h string, t time.Time) (until time.Time, ok bool) {
 	holder, since := "", time.Time{}
@@ -73,7 +73,7 @@ func holderWindow(in kInput, h string, t time.Time) (until time.Time, ok bool) {
 			from = f.End
 		}
 	}
-	return from.Add(fenceBound), true
+	return from.Add(ctrFenceBound), true
 }
 
 // nonRedeployFault reports whether a fault other than a redeploy (or a

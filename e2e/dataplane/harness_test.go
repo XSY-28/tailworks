@@ -145,15 +145,23 @@ type cluster struct {
 	pids     *os.File
 	tenantID string
 
+	// pg, when set (TW_DP_MGMT=pg3), runs mgmt as replicas on Postgres
+	// (mgmtpg_test.go) instead of one tw-mgmt on SQLite.
+	pg *mgmtPG
+
+	// workload is the workload deploy names ("dp" if empty).
+	workload string
+
+	// hostArgs adds flags to a host's tw-hostd (the R2 backend: r2_test.go).
+	hostArgs func(id string) []string
+
 	mu      sync.Mutex
 	procs   map[string]*proc
 	token   string
 	stopped map[string]bool // names currently SIGSTOPped (whole group or hostd only)
 	orphans []int           // workerds that outlived a crashed hostd
 
-	// Set by the loops that share this harness (containers_test.go).
-	workloadName string   // what deploy posts ("" = "dp")
-	hostArgs     []string // extra tw-hostd flags
+	clocks *hostClocks // skew_test.go
 }
 
 func (c *cluster) record(name string, pid int) {
@@ -169,14 +177,13 @@ func (c *cluster) start(name string, args ...string) {
 		c.t.Fatal(err)
 	}
 	bin := "tw-hostd"
-	if name == "mgmt" {
+	if strings.HasPrefix(name, "mgmt") { // "mgmt", or "mgmt-r<i>" (mgmtpg_test.go)
 		bin = "tw-mgmt"
-	} else {
-		args = append(args, c.hostArgs...)
 	}
 	cmd := exec.Command(filepath.Join(c.bin, bin), args...)
 	cmd.Stdout, cmd.Stderr = lf, lf
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Env = append(os.Environ(), c.clockEnv(name)...) // skew_test.go
 	if err := cmd.Start(); err != nil {
 		c.t.Fatal(err)
 	}
@@ -366,6 +373,10 @@ func (c *cluster) stopAll() {
 }
 
 func (c *cluster) startMgmt(first bool) {
+	if c.usePG(first) {
+		c.startMgmtPG(first) // mgmtpg_test.go
+		return
+	}
 	args := []string{"-local-dev", "-socket", c.sock, "-host-token-file", filepath.Join(c.work, "token"),
 		"-state-dir", filepath.Join(c.work, "mgmt"), "-tsapi-url", c.tsURL, "-reap-interval", "1h"}
 	if first {
@@ -396,10 +407,14 @@ func (c *cluster) startMgmt(first bool) {
 
 func (c *cluster) startHost(id string) {
 	hd := filepath.Join(c.work, id)
-	c.start(id, "-local-dev", "-mgmt", "unix://"+filepath.Join(c.work, id+"-mgmt.sock"), "-mgmt-token-file", filepath.Join(c.work, "token"),
+	args := []string{"-local-dev", "-mgmt", "unix://" + filepath.Join(c.work, id+"-mgmt.sock"), "-mgmt-token-file", filepath.Join(c.work, "token"),
 		"-host-id", id, "-data-dir", filepath.Join(hd, "data"), "-run-dir", filepath.Join(hd, "run"),
 		"-control-url", c.ctl.URL, "-ephemeral", "-queue-visibility", "5s",
-		"-sandbox", "none", "-workerd", c.workerd, "-hostname-prefix", id+"-", "-log-level", "debug")
+		"-sandbox", "none", "-workerd", c.workerd, "-hostname-prefix", id + "-", "-log-level", "debug"}
+	if c.hostArgs != nil {
+		args = append(args, c.hostArgs(id)...)
+	}
+	c.start(id, args...)
 }
 
 // try is one mgmt API call; err is a transport failure.
@@ -507,7 +522,7 @@ func (c *cluster) waitHostsLive(ids ...string) {
 // deploy posts one deployment of the dp workload; st is the HTTP status.
 func (c *cluster) deploy(bundle, host string, replace, force bool) (deployment, int, []byte, error) {
 	var d deployment
-	wl := c.workloadName
+	wl := c.workload
 	if wl == "" {
 		wl = "dp"
 	}
