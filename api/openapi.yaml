@@ -5920,6 +5920,9 @@ components:
         callerGrant:
           type: string
           description: The grant in `added` that lets every user of the tailnet call the app (`autogroup:member` to the workload's own tags, `tcp:80`), as JSON. Absent when `added` has none.
+        canWrite:
+          type: boolean
+          description: With `dryRun`, when `added` is not empty — the control plane accepted the policy with `added` merged in, so the write would go through (Tailscale refuses a client without Policy File write). `tw deploy` on a terminal offers to write the lines only when it is true. Absent otherwise.
         oldETag: { type: string, description: The policy's ETag before the write. }
         newETag: { type: string, description: Its ETag after. }
         preflight: { $ref: "#/components/schemas/PreflightResult" }

@@ -117,10 +117,12 @@ is shared by every tenant on a tailnet. mgmt gives each name one owner:
   and without a trailing dot. Give every tenant on one tailnet the same
   tailnet name (its MagicDNS suffix): two tenants that name the same tailnet
   differently can't see each other's claims.
-- **Releasing.** `GET /v1/tenants/{id}/public-names` lists a tenant's names.
-  `DELETE /v1/tenants/{id}/public-names/{name}` releases one once nothing
-  serves it (else `409 public_name_in_use`). Deleting a tenant releases all
-  of its names. Claims and releases are audited (`public_name_claim`,
+- **Releasing.** `tw expose names` lists the tenant's names.
+  `tw expose release <name>` releases one once nothing serves it (else
+  `409 public_name_in_use`: undeploy the workload, or remove `"public"` and
+  redeploy, first). After a release any tenant on the tailnet can deploy
+  public routes under the name. A team tenant's names carry its prefix,
+  as its URLs do. Deleting a tenant releases all of its names. Claims and releases are audited (`public_name_claim`,
   `public_name_release`), and a refusal is a `deny` record with code
   `public_name_owned` whose detail names the owner.
 - **Upgrading.** Names served before ownership existed have no claim yet.
@@ -252,6 +254,8 @@ Errors your own code returns are passed through unchanged.
 ```sh
 tw expose off <workload>    # close the public listener now; survives redeploys
 tw expose on  <workload>
+tw expose names             # the public names this tenant owns
+tw expose release <name>    # give one up, once nothing serves it
 ```
 
 - **`off`:** closes the Funnel listener and resets in-flight public

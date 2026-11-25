@@ -36,7 +36,6 @@ func cmdInit(args []string) error {
 	tmpl := f.String("template", "hello", startingPoints(" | ")+" (tw init --list: every template)")
 	list := f.Bool("list", false, "list every template: the starting points, then demos and patterns (templates.go)")
 	name := f.String("name", "", "workload name (default: the directory name)")
-	keepTags := f.Bool("keep-tags", false, "keep the template's object class tags instead of naming them after the app (tag:tw-<workload>-<class>); the workload tag follows the app either way (--tags sets it)")
 	tags := f.String("tags", "", "use these existing tags for the workload node instead of a new per-app tag (comma-separated, e.g. tag:tw-app); see docs/tailworks-jsonc.md#tags-and-tw-init")
 	var objectTags repeated
 	f.Var(&objectTags, "object-tags", "use existing tags for the Durable Object classes with their own node: tag:a,tag:b for every class, or <Class>=tag:a,tag:b for one (repeatable)")
@@ -99,6 +98,8 @@ func cmdInit(args []string) error {
 	}
 	// Name the workload after the directory (tailworks.jsonc and wrangler.jsonc),
 	// and the npm package too (its first "name" is the top-level one).
+	// create-tailworks without tw does the same (lib/init.mjs); keep them in
+	// step (TestCreateTailworksRenamesLikeInit).
 	for _, fn := range []string{"package.json", "tailworks.jsonc", "wrangler.jsonc"} {
 		p := filepath.Join(dir, fn)
 		b, err := os.ReadFile(p)
@@ -118,7 +119,7 @@ func cmdInit(args []string) error {
 			// A template var that names the app (refund-approval's approve hint).
 			b = regexp.MustCompile(`("APP_NAME"\s*:\s*)"[^"]*"`).ReplaceAll(b, []byte(`${1}"`+wl+`"`))
 		}
-		if fn == "tailworks.jsonc" && !*keepTags {
+		if fn == "tailworks.jsonc" {
 			if nb, _, err := appTags(b, wl); err == nil {
 				b = nb
 			}
@@ -401,7 +402,7 @@ func cmdDeploy(args []string) error {
 	f := newFlags("deploy")
 	name := f.String("name", "", "workload name (default: tailworks.jsonc name, then wrangler name, then the directory)")
 	allowMissing := f.Bool("allow-missing-grants", false, "deploy even if the preflight finds policy lines missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)")
-	applyPolicy := f.Bool("apply-policy", false, "when the preflight finds tagOwners, grants, funnel nodeAttrs or Service auto-approval missing, write them to the tailnet policy first (as tw policy --apply)")
+	applyPolicy := f.Bool("apply-policy", false, "when the preflight finds tagOwners, grants, funnel nodeAttrs or Service auto-approval missing, write them to the tailnet policy first (as tw policy --apply; shows the lines and asks, --yes to skip). Without the flag tw deploy asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes")
 	yes := yesFlagBefore(f, "--apply-policy writes the policy")
 	noWait := f.Bool("no-wait", false, "return once mgmt accepted the deploy")
 	forceTakeover := f.Bool("force-takeover", false, "the workload's current host is gone for good: move its Durable Objects anyway (audited; see takeover_unconfirmed); with --replace, confirms moving a stateful workload off a live host")
@@ -492,7 +493,7 @@ func cmdDeploy(args []string) error {
 		if policyUnavailable != "" {
 			fmt.Printf("› preflight  skipped: mgmt can't read the tailnet policy (%s)\n             give the OAuth client the Policy File › Read scope to preflight grants; tags are still checked by Tailscale at mint\n", firstLine(policyUnavailable))
 		} else {
-			printPreflight(a, pf, *applyPolicy)
+			printPreflight(a, pf, policyModeOf(f, *applyPolicy, *yes) != policyPrintOnly)
 			printPublicPreflight(pf)
 		}
 	}
@@ -500,13 +501,15 @@ func cmdDeploy(args []string) error {
 	if !*f.json {
 		printNodeBudget("✓ preflight  nodes: ", "! preflight  nodes: ", tn.Tailnet, res.Nodes)
 	}
-	if !pf.OK && *applyPolicy {
-		ar, err := applyAppPolicy(ctx, mc, f, tn.TenantID, a.Name, tb, *yes, "tw deploy --apply-policy")
-		if err != nil {
+	if !pf.OK && !*allowMissing && policyModeOf(f, *applyPolicy, *yes) == policyAskFirst {
+		if err := deployAskPolicy(ctx, mc, f, tn.TenantID, a.Name, tb, &pf, &res, ev); err != nil { // deploy_policy.go (#481)
 			return err
 		}
-		pf, res.Preflight, res.PolicyApplied = ar.Preflight, ar.Preflight, ar
-		ev.emit("policy", map[string]any{"changed": ar.Changed, "added": ar.Added, "manual": ar.Manual, "ok": pf.OK})
+	}
+	if !pf.OK && *applyPolicy {
+		if err := deployApplyPolicy(ctx, mc, f, tn.TenantID, a.Name, tb, *yes, *allowMissing, &pf, &res, ev); err != nil { // deploy_policy.go
+			return err
+		}
 	}
 	if !pf.OK && !*allowMissing {
 		return preflightFailure(pf)

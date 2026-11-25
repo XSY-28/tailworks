@@ -156,16 +156,17 @@ func cmdKV(args []string) error {
 	workload := *o.workload
 	var a *app
 	if workload == "" || group == "key" {
-		if a, err = loadApp(".", ""); err != nil {
+		var appErr error
+		if a, appErr = loadApp(".", ""); appErr != nil {
 			a = nil
 		}
 		if workload == "" {
 			if a == nil {
-				fix := []string{"cd <app dir> && tw kv " + verb + " …", "tw kv " + verb + " … --workload <workload>"}
+				extra := ""
 				if group == "key" {
-					fix[1] += " --namespace <NAME>"
+					extra = " --namespace <NAME>"
 				}
-				return fail("bad_request", "no app in the current directory to take the workload from").withFix(fix...)
+				return appWorkloadErr(".", "kv "+verb, appErr, extra) // appworkload.go
 			}
 			workload = a.Name
 		}

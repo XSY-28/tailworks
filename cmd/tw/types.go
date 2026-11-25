@@ -10,19 +10,15 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/rosskukulinski/tailworks/hostd/bundle"
-	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
 )
 
 // typesFile is where `tw types` writes by default (wrangler's name).
@@ -45,8 +41,6 @@ func cmdTypes(args []string) error {
 	f := newFlags("types")
 	out := f.String("out", typesFile, "the declaration file to write, relative to the app directory")
 	check := f.Bool("check", false, "write nothing; fail (types_stale) if the file is missing or differs from what tw types would write (for CI)")
-	remote := f.Bool("remote", false, "also declare the workload's secrets from mgmt (the names `tw secret ls` lists); needs a running or linked tw")
-	tenantF := tenantFlag(f)
 	o := &appOpts{}
 	f.StringVar(&o.Env, "env", "", "wrangler environment: type env.<name> from the wrangler config, as `tw deploy --env` deploys it")
 	pos, err := f.parse(args)
@@ -67,13 +61,6 @@ func cmdTypes(args []string) error {
 	secrets, err := typesSecrets(a)
 	if err != nil {
 		return err
-	}
-	if *remote {
-		names, err := remoteSecretNames(*f.stateDir, *tenantF, a.Name)
-		if err != nil {
-			return err
-		}
-		secrets = append(secrets, names...)
 	}
 	path := *out
 	if !filepath.IsAbs(path) {
@@ -163,8 +150,10 @@ func inTsconfig(dir, path string) bool {
 	return false
 }
 
-// typesSecrets are the secret names known locally: .dev.vars,
-// .dev.vars.example and the wrangler config's secrets.required.
+// typesSecrets are the secret names tw types declares: .dev.vars,
+// .dev.vars.example and the wrangler config's secrets.required. They are all
+// local files, so the output is the same on every machine with the same
+// checkout (no secrets from mgmt: `tw secret ls --json` lists those).
 func typesSecrets(a *app) ([]string, error) {
 	var out []string
 	for _, fn := range []string{DevVarsFile, typesExampleVars} {
@@ -187,34 +176,6 @@ func typesSecrets(a *app) ([]string, error) {
 				out = append(out, n)
 			}
 		}
-	}
-	return out, nil
-}
-
-// remoteSecretNames lists the workload's secrets from mgmt, as
-// `tw secret ls` does.
-func remoteSecretNames(stateDir, tenant, workload string) ([]string, error) {
-	s, err := openState(stateDir)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.requireUp(); err != nil {
-		return nil, err
-	}
-	tn, err := s.tenant(tenant)
-	if err != nil {
-		return nil, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	base := "/v1/tenants/" + url.PathEscape(tn.TenantID) + "/workloads/" + url.PathEscape(workload) + "/secrets"
-	items, err := listAll[mgmtapi.SecretMeta](ctx, s.mgmt(), base, 0)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]string, 0, len(items))
-	for _, m := range items {
-		out = append(out, m.Name)
 	}
 	return out, nil
 }
@@ -298,7 +259,7 @@ func genTypes(a *app, outDir string, secrets []string) ([]byte, []string) {
 			sec[s] = "string"
 		}
 	}
-	add("secrets (.dev.vars, .dev.vars.example, secrets.required, --remote)", sec)
+	add("secrets (.dev.vars, .dev.vars.example, secrets.required)", sec)
 
 	// A name declared twice keeps its first (binding) type.
 	seen := map[string]bool{}

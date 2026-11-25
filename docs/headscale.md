@@ -52,8 +52,7 @@ umask 077; echo 'HEADSCALE_API_KEY=<the key>' > ~/.config/tailworks/headscale.en
 tw up --control=headscale \
   --control-url https://headscale.example.net \
   --tailnet hs.example.net \
-  --api-key-file ~/.config/tailworks/headscale.env \
-  --apply-policy
+  --api-key-file ~/.config/tailworks/headscale.env
 ```
 
 `--control-url` is Headscale's `server_url`. Its REST API is served at the
@@ -63,10 +62,11 @@ that it mints mgmt's node key and joins.
 
 **Headscale refuses to register a node whose tags its policy doesn't
 define.** So on this profile the policy goes in *before* anything joins.
-With `--apply-policy`, `tw up` shows the snippet and asks before writing
-it; add `--yes` to skip the question (required without a terminal).
-Without `--apply-policy`, `tw up` stops with `policy_missing_tag_owners`
-and prints the snippet:
+On a terminal, `tw up` shows the snippet and asks before writing it (when
+Headscale's parser accepts the merged policy). Without a terminal, use
+`--apply-policy --yes`. If you answer `n`, or run it without a terminal
+and without `--apply-policy`, or with `--apply-policy=false`, `tw up`
+stops with `policy_missing_tag_owners` and prints the snippet:
 
 ```hujson
 "tagOwners": {
@@ -89,6 +89,11 @@ An existing tw host can also serve a Headscale tailnet as a second tenant:
 tw tenant add hs.example.net --control=headscale \
   --control-url https://headscale.example.net --api-key-file ~/.config/tailworks/headscale.env
 ```
+
+That tailnet's policy needs only `"tag:tw": []` in `tagOwners` (its nodes
+are workloads; tailworks' own nodes stay on the operator's tailnet).
+`tw tenant add` prints the line when it is missing, and `--apply-policy`
+writes it after asking.
 
 ## Deploy
 

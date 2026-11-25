@@ -27,9 +27,9 @@ func TestNotifyTelemetryVerbs(t *testing.T) {
 	}
 	tr := buildCompletionTree()
 	for path, c := range map[string]struct{ has, not []string }{
-		"notify":        {[]string{"--tenant"}, []string{"--webhook", "--header", "--events"}},
-		"notify set":    {[]string{"--tenant", "--webhook", "--header", "--events"}, nil},
-		"notify rm":     {[]string{"--tenant"}, []string{"--webhook", "--header", "--events"}},
+		"notify":        {[]string{"--tenant"}, []string{"--webhook", "--header"}},
+		"notify set":    {[]string{"--tenant", "--webhook", "--header"}, nil},
+		"notify rm":     {[]string{"--tenant"}, []string{"--webhook", "--header"}},
 		"notify test":   {[]string{"--tenant"}, []string{"--webhook", "--header"}},
 		"telemetry":     {[]string{"--tenant"}, []string{"--otlp", "--header", "--signals"}},
 		"telemetry set": {[]string{"--tenant", "--otlp", "--header", "--signals"}, nil},

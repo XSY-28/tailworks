@@ -22,6 +22,12 @@ tw dev --once --json        # start, make one request, print it, exit (a smoke t
 ```
 
 `tw dev --help` lists the flags (`--port`, `--once`, `--test-scheduled`, and under Advanced `--workerd`, which defaults to `$TW_WORKERD`, and `-v`).
+
+The port is `--port`, else the wrangler config's `dev.port`, else 8787.
+A port you chose (either way) fails when it is busy, as `wrangler dev`
+does. When you chose none and 8787 is busy (another `tw dev`, or
+`wrangler dev`), `tw dev` takes a free port and prints one line naming
+both. `--port 0` always picks a free one.
 The `mcp` template serves on `/mcp` (its `/` answers 404); `tw dev` says
 so and its smoke test sends an MCP `initialize` there. Not in dev yet: a
 policy evaluator. Every dev node sees every other and gets the same test

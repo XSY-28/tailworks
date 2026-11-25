@@ -127,7 +127,7 @@
 
 5. **Operator surface.** `tw d1 create|list|delete` are the generic store
    routes (`PUT|GET|DELETE …/stores/d1/{name}`; delete crypto-shreds).
-   `tw d1 execute <db> --command|--file` and `tw d1 export` use two new
+   `tw d1 execute <db> --command|--file` (or SQL on stdin) and `tw d1 export` use two new
    routes, `POST /v1/tenants/{id}/workloads/{w}/d1/{name}/query` (a batch,
    `200` with D1's per-statement results, `400 d1_error` when a statement
    fails) and `GET …/d1/{name}/export` (SQL text in `wrangler d1 export`'s

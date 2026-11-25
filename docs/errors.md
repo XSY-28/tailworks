@@ -29,7 +29,7 @@ agent, cli = `tw`). Detail text is redacted of key material before it is
 printed anywhere.
 
 ### acl_denied
-403 · netd, mgmt, cli. **When:** the peer is visible in the netmap but the port or service is not granted; from `tw deploy`, the preflight found grants or tagOwners your app's `tailnet.connects` needs missing. **Fix:** add the printed grant (`snippet`) to the tailnet policy, or let tailworks add its `tag:tw*` lines with `tw policy --apply` / `tw deploy --apply-policy` (needs the OAuth client's Policy File write scope), or deploy with `--allow-missing-grants`. If saving the policy fails with `tag not found: "tag:<name>"`, the `dst` tag doesn't exist in your tailnet yet: add it to `tagOwners` first (for example `"tag:db": ["autogroup:admin"]`) and tag the device it names, or remove it from `tailnet.connects`.
+403 · netd, mgmt, cli. **When:** the peer is visible in the netmap but the port or service is not granted; from `tw deploy`, the preflight found grants or tagOwners your app's `tailnet.connects` needs missing. **Fix:** add the printed grant (`snippet`) to the tailnet policy, or let tailworks add its `tag:tw*` lines with `tw policy --apply` / `tw deploy --apply-policy` (needs the OAuth client's Policy File write scope), or deploy with `--allow-missing-grants`. On a terminal, plain `tw deploy` shows the lines and asks to write them first when the client can; you see `acl_denied` after answering no, without a terminal, with `--json` or a bare `--yes`, or with `--apply-policy=false`. If saving the policy fails with `tag not found: "tag:<name>"`, the `dst` tag doesn't exist in your tailnet yet: add it to `tagOwners` first (for example `"tag:db": ["autogroup:admin"]`) and tag the device it names, or remove it from `tailnet.connects`.
 
 ### already_joined
 409 · mgmt. **When:** a credential (auth key) was requested for an object that already has a node. **Fix:** nothing to do; hostd retries by rejoining. Report it if it repeats.
@@ -86,7 +86,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 409 · mgmt, cli. **When:** `tw rollback` to a deployment whose bundle mgmt no longer holds: mgmt keeps the bundles of each workload's newest deployments (tw-mgmt `-bundle-retention`, default 10) and prunes older ones, keeping their record and hash. Nothing is deployed. **Fix:** `tw deployments <workload>` marks pruned bundles with `*`; roll back to a retained one, or check out that version and `tw deploy` it.
 
 ### cancelled
-0 · cli. **When:** you answered no at a `tw up`, `tw agent setup` or `tw agent remove` confirmation prompt, or typed something other than the name at a delete's prompt. **Fix:** nothing was started, written or deleted; re-run (with the policy in place for `tw up`), or add `--yes` to skip the prompt.
+0 · cli. **When:** you answered no at a `tw up --apply-policy`, `tw tenant add --apply-policy`, `tw deploy --apply-policy`, `tw policy --apply`, `tw agent setup` or `tw agent remove` confirmation prompt (no at the policy question plain `tw up` and `tw deploy` ask on a terminal isn't an error: they go on printing the lines), or typed something other than the name at a delete's prompt. **Fix:** nothing was started, written or deleted; re-run (with the policy in place for `tw up`), or add `--yes` to skip the prompt.
 
 ### cap_limit_exceeded
 403 · netd (SDK `@tailworks/mcp`). **When:** the caller holds the tool but a numeric limit or budget in its grant is exceeded (e.g. `maxUsd`, `perDayUsd`). **Fix:** raise the limit in the `app` capability of the grant, or wait for the daily budget to reset.
@@ -95,7 +95,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 403 · netd (SDK `@tailworks/mcp`), mgmt (`/mcp`, approvals), hostd, cli. **When:** the caller's app capability lacks the tool (or the capability itself) the MCP server requires. From tailworks' own MCP server: a `deploy`, `kill` or `undeploy` call without a `github.com/rosskukulinski/tailworks/cap/mcp` grant naming the tool, or, on the tailworks host, a `tw mcp` bridge started without `--allow <tool>`. **Fix:** add the `app` capability with the tool to the grant from the caller's tag to the server's tag (the error's `snippet` has it); for tailworks' MCP server, ask the tailnet admin, don't work around it. For approvals: the approver's `github.com/rosskukulinski/tailworks/cap/approve` grants do not cover the workload, Workflow, step, decision or a param limit (`missing` says which); grant it to the approver on the workload's tag (the app's page, `/_tw/approvals`) and on `tag:tw-mgmt` (`tw approve`, the admin UI) ([approvals](approvals.md)).
 
 ### confirmation_required
-1 · cli. **When:** a command that asks first had no terminal to ask on (a coding agent, a script, or `--json`), so it did nothing. These commands ask first: `tw agent setup` and `tw agent remove` (they would write or delete files), `tw upgrade`, and every command that deletes data or a tenant's resources: `tw d1 rm`, `tw kv namespace rm`, `tw queues rm`, `tw queues purge`, `tw r2 bucket rm`, `tw tenant rm`, `tw host rm` and `tw uninstall`. **Fix:** run it in a terminal and answer the prompt (a delete asks you to type the name), or add `--yes`. An agent should tell the user what will be lost (and show `--dry-run` where there is one) and add `--yes` only after the user agreed to that action.
+1 · cli. **When:** a command that asks first had no terminal to ask on (a coding agent, a script, or `--json`), so it did nothing. These commands ask first: `tw agent setup` and `tw agent remove` (they would write or delete files), `tw upgrade`, `--apply-policy` on `tw up`, `tw tenant add` and `tw deploy`, `tw policy --apply`, and every command that deletes data or a tenant's resources: `tw d1 rm`, `tw kv namespace rm`, `tw queues rm`, `tw queues purge`, `tw r2 bucket rm`, `tw tenant rm`, `tw host rm` and `tw uninstall`. **Fix:** run it in a terminal and answer the prompt (a delete asks you to type the name), or add `--yes`. An agent should tell the user what will be lost (and show `--dry-run` where there is one) and add `--yes` only after the user agreed to that action. A bare `--yes` never writes the tailnet policy: that takes `--apply-policy --yes`.
 
 ### credential_file_insecure
 403 · cli. **When:** a credential file (`tw tenant add --oauth-client-file`, `--api-key-file`, `--db-file`) is readable by other users, or is owned by another user. (`tw up` tightens its own OAuth client file to 0600 instead.) **Fix:** `chmod 600 <file>` then run the command again.
@@ -259,6 +259,13 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### needs_root
 1 · cli. **When:** `tw host setup` changes the system and was not run as root. **Fix:** `sudo ~/.tailworks/bin/tw host setup --microvm` (sudo's PATH lacks `~/.tailworks/bin`).
 
+### network
+1 · cli. **When:** `tw upgrade` could not reach the release repository to find the latest release or to download its tarball. **Fix:** check the connection and retry, or download the tarball yourself and run `tw upgrade --from <tarball>`; `TW_REPO` and `TW_RELEASE_BASE` point it at another repository or a mirror, as for `get.sh`.
+
+### no_cgroup2
+1 · cli. **When:** `tw host setup --microvm` on a Linux host without the cgroup v2 unified hierarchy (`/sys/fs/cgroup/cgroup.controllers` is missing). **Fix:** boot with the unified hierarchy (`systemd.unified_cgroup_hierarchy=1`, the default on current distributions); the process tier works without it.
+
+
 ### no_host
 503 · mgmt. **When:** a deployment has no live host to run on (none registered, none in the tenant's pool, or all stale). **Fix:** `tw status` on the host; `tw host ls`.
 
@@ -335,10 +342,14 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 503 · mgmt. **When:** mgmt cannot read the tenant policy: the OAuth client has no `policy_file:read`, so spawn checks and deploy preflight cannot run. **Fix:** give the client Policy File › Read; until then `tw deploy` says `preflight skipped`.
 
 ### policy_write_denied
-403 · mgmt, cli. **When:** `tw policy --apply` / `tw deploy --apply-policy`: the tenant's OAuth client may not write the tailnet policy (it has Policy File › Read, or no Policy File scope). Nothing was written. **Fix:** generate a client with the Policy File write scope and `tw tenant set <tenant> --oauth-client-file <file>`, or add the snippet `tw policy` prints in the admin console.
+403 · mgmt, cli. **When:** `tw policy --apply`: the tenant's OAuth client may not write the tailnet policy (it has Policy File › Read, or no Policy File scope). Nothing was written. (`tw deploy --apply-policy` says so in one line and fails with `acl_denied` and the snippet instead.) **Fix:** generate a client with the Policy File write scope and `tw tenant set <tenant> --oauth-client-file <file>`, or add the snippet `tw policy` prints in the admin console.
 
 ### precondition_failed
 412 · mgmt. **When:** `If-Match` did not match the record's current `ETag`. **Fix:** re-read, then retry with the new ETag.
+
+### prefix_mismatch
+1 · cli. **When:** the `tw` running `tw upgrade` lives in another install (or in none, like an extracted tarball or a dev build) than the one that runs the state dir, so `tw upgrade` won't guess which to replace. The message names both and where the state dir's install came from (tw.json, the service, the running supervisor, or the state dir itself). **Fix:** `tw upgrade --prefix <dir>` to name the install to replace, or run the `tw` installed there: `<dir>/bin/tw upgrade` ([upgrading.md](upgrading.md#a-tw-up-machine)).
+
 
 ### preview_conflict
 409 · mgmt, cli. **When:** `tw deploy --preview` would run the preview as `<workload>--preview-<alias>`, and a workload of that name exists that is not a preview of this workload. **Fix:** pick another `--preview-alias`, or undeploy that workload.
@@ -353,10 +364,10 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 400 · mgmt, cli. **When:** the tenant's control-plane profile can't serve what was asked. On the Headscale profile (ADR-015): `tailnet.service` (Headscale has no Tailscale Services), public routes or `publicIngress: allow` (no Funnel), or an OAuth client (`--oauth-client-file`: Headscale mints with its API key). **Fix:** remove `tailnet.service` and reach the workload at its own workload node's MagicDNS name; serve public traffic some other way. See [docs/headscale.md](headscale.md).
 
 ### public_name_in_use
-409 · mgmt. **When:** a release of a public name (`DELETE /v1/tenants/{id}/public-names/{name}`) while the workload still serves it: its latest deployment declares `"public"` routes, or its public node is live. **Fix:** `tw undeploy <workload>`, or remove `"public"` from its `tailworks.jsonc` and redeploy, then release the name ([public-ingress](public-ingress.md#name-ownership)).
+409 · mgmt. **When:** `tw expose release <name>` (`DELETE /v1/tenants/{id}/public-names/{name}`) while the workload still serves it: its latest deployment declares `"public"` routes, or its public node is live. **Fix:** `tw undeploy <workload>`, or remove `"public"` from its `tailworks.jsonc` and redeploy, then `tw expose release <name>` ([public-ingress](public-ingress.md#name-ownership)).
 
 ### public_name_owned
-409 · mgmt, cli. **When:** a deploy (or `--dry-run`) declares `"public"` routes under a workload name that another tenant on the same tailnet owns as its public name. The first tenant to deploy public routes under a name keeps `https://<name>.<tailnet>.ts.net/` across undeploys, until it releases the name, so its public traffic (webhooks, OAuth callbacks) can't move to someone else. **Fix:** deploy under another workload name, or ask the operator to have the owning tenant release the name ([public-ingress](public-ingress.md#name-ownership)).
+409 · mgmt, cli. **When:** a deploy (or `--dry-run`) declares `"public"` routes under a workload name that another tenant on the same tailnet owns as its public name. The first tenant to deploy public routes under a name keeps `https://<name>.<tailnet>.ts.net/` across undeploys, until it releases the name, so its public traffic (webhooks, OAuth callbacks) can't move to someone else. **Fix:** deploy under another workload name, or ask the operator to have the owning tenant release the name (`tw expose release <name> --tenant <owner>`; `tw expose names --tenant <owner>` lists its names) ([public-ingress](public-ingress.md#name-ownership)).
 
 ### public_unreachable
 1 · cli. **When:** `tw deploy --wait-public` waited for the workload's public URL and it didn't answer from the public internet in time. The deploy itself succeeded. **Fix:** a new public name's certificate and DNS can take minutes; retry with a longer `--wait-public`, check the tailnet has HTTPS certificates on, and see [docs/public-ingress.md](public-ingress.md).
@@ -520,8 +531,19 @@ Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<bi
 ### update_check_failed
 1 · cli. **When:** `tw version --check` could not find the latest release: GitHub was unreachable, answered with an error (rate limit), or the repository has no published release. **Fix:** retry later, or look at the releases page; `TW_REPO` names another repository, as for `get.sh`.
 
+### upgrade_aborted
+409 · cli. **When:** `tw upgrade` was following a fleet upgrade run that was aborted (`tw upgrade abort`). **Fix:** `tw upgrade status <run>` shows where it stopped; `tw upgrade --plan`, then `tw upgrade` to start a new run.
+
+
 ### upgrade_blocked
 409 · mgmt, cli. **When:** `tw upgrade` can't start a fleet upgrade run because its plan has blockers: a release missing from the catalog, a host's tarball not imported, parts of the fleet more than one release line behind, or an intermediate release with contract migrations. **Fix:** `tw upgrade --plan` prints each blocker and its fix ([upgrading.md](upgrading.md)).
+
+### upgrade_failed
+1 · cli. **When:** `tw upgrade` on a `tw up` machine failed at a step the message names: the store backup, `tw down`, `install.sh` (the old release is still installed), or the health check of the new release. **Fix:** if the message says it rolled back (the old release runs with the store restored), `tw logs --component mgmt` shows why the new release failed. If it did not roll back (`--no-rollback`, or a contract migration ran) or the rollback failed too: `tw logs --component mgmt` and `tw doctor`; to go back by hand, `tw down`, `tw restore <backup> --yes` (the backup the message names), `<prefix>/install.sh --rollback`, then `tw up` ([upgrading.md](upgrading.md#roll-back-by-hand)). `tw restore` alone leaves the failed release installed.
+
+### upgrade_paused
+409 · cli. **When:** `tw upgrade` was following a fleet upgrade run that paused: a step failed (the reason is in the message) or someone ran `tw upgrade pause`. **Fix:** fix the cause, then `tw upgrade resume <run>`, or `tw upgrade abort <run>`.
+
 
 ### upgrade_state
 409 · mgmt, cli. **When:** `tw upgrade pause|resume|abort` on a run that isn't running (pause), paused (resume) or active (abort). **Fix:** `tw upgrade status` shows the run's state.

@@ -6,7 +6,8 @@ Every `tw` command and subcommand with its `--help` output: the usage line
 and each flag with its default. `tw help` lists the commands by group;
 `tw <command> --help` prints one of these sections. Every command also
 takes `--state-dir` (default `$TW_STATE_DIR` or `~/.tailworks`) and `--json`
-([cli-json.md](cli-json.md)).
+([cli-json.md](cli-json.md)). The environment variables tw reads are at the
+end: [Environment](#environment).
 
 ## Set up
 
@@ -21,13 +22,13 @@ usage: tw up [--apply-policy [--yes]] [--service=false]
 
 flags:
   -apply-policy
-    	write the tagOwners and grants tailworks needs to the tailnet policy instead of printing them (additive, validated first, written with If-Match); tw up shows the lines and asks first (--yes to skip). Tailscale: the OAuth client needs Policy File write. Headscale: needs policy.mode database
+    	write the tagOwners and grants tailworks needs to the tailnet policy instead of printing them (additive, validated first, written with If-Match); tw up shows the lines and asks first (--yes to skip). Without the flag tw up asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes. Tailscale: the OAuth client needs Policy File write. Headscale: needs policy.mode database
   -oauth-client-file string
     	mint mode "oauth" (Tailscale): file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (an OAuth client with Auth Keys write, tag tag:tw; tightened to 0600). Default on the default state dir: ~/.config/tailworks/oauth.env, asked for and saved on the first tw up
   -service
     	run the supervisor as a service that starts at login: Linux systemd user unit (~/.config/systemd/user/tw.service), macOS LaunchAgent (~/Library/LaunchAgents/dev.tailworks.up.plist). Default: on for a new default state dir where available; an existing state dir keeps how it runs (--service=false runs it in the background without a service)
   -yes
-    	skip the confirmation before --apply-policy writes the policy (tw up asks nothing else); needed without a terminal and with --json
+    	skip the confirmation before --apply-policy writes the policy; needed without a terminal and with --json
 
 Control plane (Tailscale or Headscale):
   -api-key-file string
@@ -194,8 +195,6 @@ tw init: create an app from a template (--list: every template, with the demos a
 usage: tw init <dir> [--template hello|agent|mcp|static-site] [--name <workload>] [--tags <tag>,…] [--object-tags [<Class>=]<tag>,…]…  |  init --list
 
 flags:
-  -keep-tags
-    	keep the template's object class tags instead of naming them after the app (tag:tw-<workload>-<class>); the workload tag follows the app either way (--tags sets it)
   -list
     	list every template: the starting points, then demos and patterns (templates.go)
   -name string
@@ -229,7 +228,7 @@ flags:
   -once
     	start, make one request (GET /; for an MCP app an initialize to its route), print it and exit (smoke test)
   -port int
-    	local port (127.0.0.1) (default 8787)
+    	local port on 127.0.0.1 (default: wrangler dev.port, else 8787, else a free port when 8787 is busy; 0 picks a free one) (default 8787)
   -test-scheduled
     	serve /__scheduled?cron=<expr>[&time=<ms>] on the local port: run a cron trigger's scheduled() now
   -wrangler
@@ -252,9 +251,9 @@ global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 generate Env types from tailworks.jsonc and wrangler config
 
 ```text
-tw types: write the app's TypeScript Env (vars, Durable Object, KV, R2, D1, Queue and Workflow bindings, secret names) from its wrangler config and tailworks.jsonc, like wrangler types; --check fails when the file is stale (CI)
+tw types: write the app's TypeScript Env (vars, Durable Object, KV, R2, D1, Queue and Workflow bindings, secret names) from its wrangler config and tailworks.jsonc, like wrangler types; secret names come from .dev.vars, .dev.vars.example (names and placeholder values only) and secrets.required; --check fails when the file is stale (CI)
 
-usage: tw types [dir] [--env <name>] [--out worker-configuration.d.ts] [--check] [--remote]
+usage: tw types [dir] [--env <name>] [--out worker-configuration.d.ts] [--check]
 
 flags:
   -check
@@ -263,10 +262,8 @@ flags:
     	wrangler environment: type env.<name> from the wrangler config, as 'tw deploy --env' deploys it
   -out string
     	the declaration file to write, relative to the app directory (default "worker-configuration.d.ts")
-  -remote
-    	also declare the workload's secrets from mgmt (the names 'tw secret ls' lists); needs a running or linked tw
 
-global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · --tenant <tailnet|id> (default: the tw up tenant)
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 ```
 
 ### tw docs
@@ -289,15 +286,20 @@ tw docs <subcommand> --help   its flags
 
 ```text
 flags:
-  -limit int
-    	search: at most this many sections (default 10)
+  (none besides the global ones)
 
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 ```
 
 #### tw docs search
 
-Same flags as [tw docs ls](#tw-docs-ls).
+```text
+flags:
+  -limit int
+    	at most this many sections (default 10)
+
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
+```
 
 #### tw docs show
 
@@ -388,7 +390,7 @@ usage: tw deploy [dir] [--env <name>] [--name <workload>] [--var K=V]… [--appl
 
 flags:
   -apply-policy
-    	when the preflight finds tagOwners, grants, funnel nodeAttrs or Service auto-approval missing, write them to the tailnet policy first (as tw policy --apply)
+    	when the preflight finds tagOwners, grants, funnel nodeAttrs or Service auto-approval missing, write them to the tailnet policy first (as tw policy --apply; shows the lines and asks, --yes to skip). Without the flag tw deploy asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes
   -env string
     	wrangler environment: use env.<name> from the wrangler config, as 'wrangler --env' does (the workload is named <name>-<env> unless the env sets a name)
   -name string
@@ -565,10 +567,13 @@ global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · -
 open or close a workload's public routes
 
 ```text
-tw expose: open or close a workload's public (Funnel) routes; survives redeploys (tailworks.jsonc "public", ADR-029)
+tw expose: open or close a workload's public (Funnel) routes; survives redeploys (tailworks.jsonc "public", ADR-029). names lists the public names the tenant owns (it keeps one across undeploys); release frees one nothing serves
 
 subcommands:
   tw expose on|off <workload>
+  tw expose names
+  tw expose release <name>
+  common flags: [--tenant <tailnet>]
 
 flags:
   (none besides the global ones)
@@ -576,11 +581,19 @@ flags:
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · --tenant <tailnet|id> (default: the tw up tenant)
 ```
 
+#### tw expose names
+
+Same flags as [tw expose](#tw-expose).
+
 #### tw expose off
 
 Same flags as [tw expose](#tw-expose).
 
 #### tw expose on
+
+Same flags as [tw expose](#tw-expose).
+
+#### tw expose release
 
 Same flags as [tw expose](#tw-expose).
 
@@ -634,7 +647,7 @@ subcommands:
   tw d1 create <db>
   tw d1 ls
   tw d1 rm <db> [--yes]
-  tw d1 execute <db> --command <sql> | --file <file>
+  tw d1 execute <db> [--command <sql> | --file <file>]
   tw d1 export <db> [--output <file>]
   tw d1 repair <db> --skip <seq> [--yes]
   tw d1 migrations create <db> <message>
@@ -660,7 +673,7 @@ flags:
   -command string
     	SQL to run (one or more statements, run as one batch)
   -file string
-    	a file of SQL to run as one batch
+    	a file of SQL to run as one batch (with neither flag, the SQL is read from stdin: tw d1 execute <db> < file.sql)
   -workload string
     	workload whose database it is (default: the app in the current directory, as tw deploy names it)
 
@@ -1158,7 +1171,7 @@ tw notify: tell people when a Workflow waits for an approval: mgmt POSTs JSON wi
 
 subcommands:
   tw notify [show]
-  tw notify set --webhook <url|-> [--header NAME[=VALUE]]... [--events approval_requested]
+  tw notify set --webhook <url|-> [--header NAME[=VALUE]]...
   tw notify test
   tw notify rm
   common flags: [--tenant <tailnet>]
@@ -1177,8 +1190,6 @@ Same flags as [tw notify](#tw-notify).
 
 ```text
 flags:
-  -events string
-    	what to send, comma-separated (default approval_requested)
   -header value
     	a header for every notification, NAME=VALUE, or NAME alone to read its value from stdin (repeatable)
   -webhook string
@@ -1386,7 +1397,7 @@ serve, list, update or remove tenants
 tw tenant: serve another tenant (its own tailnet) from this host; list, update (PATCH) or remove tenants
 
 subcommands:
-  tw tenant add <tailnet> --oauth-client-file <file> [--apply-policy [--yes]] [--owner-tag <tag> --name-prefix <p>]
+  tw tenant add <tailnet> [--oauth-client-file <file>] [--apply-policy [--yes]] [--owner-tag <tag> --name-prefix <p>]
   tw tenant ls
   tw tenant set <tenant> [--<setting> <value>]…  (tw tenant set --help; docs/limits.md)
   tw tenant rm <tenant> [--force]
@@ -1402,7 +1413,7 @@ flags:
   -api-key-file string
     	--control=headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied
   -apply-policy
-    	write the base policy snippet to the tailnet policy instead of printing it (additive, validated first, written with If-Match); shows the lines and asks first
+    	--control=headscale: write the owner tag's tagOwners entry ("tag:tw": []) when it is missing instead of printing it (additive, validated first, written with If-Match); shows the line and asks first. Without the flag it asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes. A Tailscale tenant's policy is never written
   -control string
     	control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; the tailnet argument is its dns.base_domain) (default "tailscale")
   -control-url string
@@ -1410,11 +1421,9 @@ flags:
   -name-prefix string
     	with --owner-tag: goes in front of every tailnet name tw makes for this tenant (up to 11 of a-z, 0-9, -)
   -oauth-client-file string
-    	this tailnet's OAuth client (mint mode "oauth"): 0600 file with TS_OAUTH_CLIENT_ID=… and TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:tw); read at use, never copied
+    	this tailnet's OAuth client (mint mode "oauth"): 0600 file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:tw); read at use, never copied. Omitted on a terminal: asked for and saved to ~/.config/tailworks/<tenant>-oauth.env
   -owner-tag string
     	another team's tenant on a tailnet that already has one (docs/teams.md): the tag that owns its tags, e.g. tag:tw-t-payments; its --oauth-client-file must be scoped to it
-  -registrations-per-minute int
-    	this tenant's node registration throttle (default 200/min)
   -yes
     	skip the confirmation before --apply-policy writes the policy; needed without a terminal and with --json
 
@@ -1632,3 +1641,31 @@ Same flags as [tw release](#tw-release).
 #### tw release ls
 
 Same flags as [tw release](#tw-release).
+
+## Environment
+
+The variables `tw` reads, and the ones `get.sh` and `install.sh` read
+("scripts"). A flag, where there is one, wins over the variable. The
+`tw up --service` unit sets only `PATH` and passes `--state-dir`, so
+none of these reach a tailworks that runs as a service unless the unit
+sets them. `TW_*` and `__TW*` names are reserved: a Worker never sees
+them, and secrets and `node.env` can't use them.
+
+| Variable | What it does | Flag | Read by |
+| --- | --- | --- | --- |
+| `TW_STATE_DIR` | the state dir (default `~/.tailworks`). A `tw up --service` unit passes `--state-dir` itself. | `--state-dir` | tw |
+| `TW_HOME` | where `get.sh` and `install.sh` install the release (the prefix; default `~/.tailworks`). It shares the state dir's default but is a different thing: [What is in ~/.tailworks](INSTALL.md#what-is-in-tailworks). | `install.sh --prefix` | scripts |
+| `TW_INSTALL_FORCE` | `1`: `get.sh` replaces another version while tailworks runs from the prefix, with no backup or health check. Use `tw upgrade` instead. | `install.sh --force` | scripts |
+| `TW_NO_UPDATE_CHECK` | set (to `1`): no once-a-day "newer release" notice after a command. `CI` does the same. |  | tw |
+| `CI` | set (as CI systems do): no update notice, as with `TW_NO_UPDATE_CHECK`. |  | tw |
+| `TW_WORKERD` | the workerd binary, when it isn't next to `tw` or in `~/.tailworks/bin`. | `--workerd` (`tw up`, `tw dev`) | tw |
+| `TW_NODE` | the Node.js binary that runs `"runtime": "node"` workloads (default: `node` on `PATH`). |  | tw |
+| `TW_CREATE_TAILWORKS` | the create-tailworks package directory (bundler and templates), when it isn't in the install or a checkout. |  | tw |
+| `TW_WRANGLER` | the wrangler CLI that builds a wrangler project (default: the project's `node_modules/.bin/wrangler`, then `PATH`). |  | tw |
+| `TW_REPO` | the GitHub repository releases come from (default `rosskukulinski/tailworks`), for `tw upgrade` and `tw version --check`. |  | tw, scripts |
+| `TW_RELEASE_BASE` | a mirror to download release tarballs and `SHA256SUMS` from instead of GitHub (the per-tag directory). The signature check still applies. |  | tw, scripts |
+| `TW_RELEASE_API` | a mirror of the GitHub API that answers "latest release" (default `https://api.github.com`), for `tw upgrade`, `tw version --check` and `get.sh`. For tests and private mirrors. |  | tw, scripts |
+| `TW_RELEASE_SIGNERS` | an `allowed_signers` file that replaces the pinned release keys. For tests and private builds; a host's self-upgrade (`tw-hostd`) ignores it. |  | tw, scripts |
+| `TW_ALLOW_UNSIGNED` | `1`: the per-invocation form of `--allow-unsigned`, for a build you made yourself. Don't export it in a shell profile: every later `get.sh`, `install.sh` and `tw upgrade` would skip the release signature check ([security-model.md](security-model.md)). A host's self-upgrade ignores it. | `--allow-unsigned` | tw, scripts |
+
+For debugging and the test harness only: `TW_KEEP_INSTANCES`, when set, keeps a workload instance's directory after it stops; its VM disks and tenant secrets stay on disk, so never set it on a production host. `TW_TEST_LINK_NAME` is the name `tw link` discovers instead of `tw-mgmt`, for hermetic tests.
