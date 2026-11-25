@@ -1,3 +1,17 @@
+Last update: 2026-11-25 PT. Merged origin/master (after #620, #628, #633, #637); resolved cmd/tw/app.go and dropped --keep-tags/APP_NAME from create-tailworks.
+
+## Merge with master (2026-11-25)
+
+- `cmd/tw/app.go` conflict: master (#628) removed `--keep-tags` and this
+  branch removed the `APP_NAME` regex; kept both removals.
+- create-tailworks (#620): removed `--keep-tags` (no longer a `tw init`
+  flag) from the flag parser, the pass-through, the "needs tw" message,
+  `docs/INSTALL.md` and the README; `lib/init.mjs` no longer renames
+  `APP_NAME` (no template has it now).
+- After the merge: `make lint` pass; `go test ./cmd/tw` pass (includes the
+  create-tailworks vs tw init drift test); create-tailworks `npm test`
+  7/7; `make templates-typecheck test-sdk` pass.
+
 # sdk-self-workload (issue #471)
 
 ## Done
