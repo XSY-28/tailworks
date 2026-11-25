@@ -34,7 +34,7 @@ import (
 //     plan and start an upgrade run that mgmt drives (pause, resume, abort,
 //     status as subcommands).
 
-const upgradeUsage = "upgrade [<version>] [--from <tarball|dir>] [--plan] [--yes] [--allow-unsigned] [--fleet] [--hosts h1,h2] [--canary h] [--soak 5m] [--settle 5m] [--no-wait] | upgrade status|pause|resume|abort [<run-id>]"
+const upgradeUsage = "upgrade [<version>] [flags] | upgrade status|pause|resume|abort [<run-id>]"
 
 func cmdUpgrade(args []string) error {
 	for i, a := range args {

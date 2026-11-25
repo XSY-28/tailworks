@@ -63,7 +63,7 @@ func cmdD1(args []string) error {
 		}
 	}
 	if len(subs) == 0 || subs[0] == "migrations" && len(subs) < 2 {
-		return fail("bad_request", "tw d1 needs a subcommand: create | list | delete | execute | export | repair | migrations create|list|apply", "usage: tw "+usageOf("d1"))
+		return needsSubcommand("d1")
 	}
 	return cmdD1Sub(strings.Join(subs, " "), rest)
 }

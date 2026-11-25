@@ -580,10 +580,14 @@ func mcpLs(c *mcpCtx, a map[string]any) (any, error) {
 	if err := c.call("GET", "/v1/deployments?latest=true&limit=500&"+q, nil, &deps); err != nil {
 		return nil, err
 	}
-	if err := c.call("GET", "/v1/objects?limit=500&"+q, nil, &objs); err != nil {
+	all := argBool(a, "all")
+	oq := q
+	if !all { // killed objects never eat the page (tw ls does the same)
+		oq += "&" + url.Values{"state": LiveStatuses}.Encode()
+	}
+	if err := c.call("GET", "/v1/objects?limit=500&"+oq, nil, &objs); err != nil {
 		return nil, err
 	}
-	all := argBool(a, "all")
 	shown := []map[string]any{}
 	for _, o := range objs.Items {
 		if all || !slices.Contains([]string{StatusKilled, StatusFailed, StatusTransferred}, fmt.Sprint(o["status"])) {
