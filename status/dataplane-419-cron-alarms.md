@@ -1,4 +1,4 @@
-Last update: 2026-11-24 23:10 PT. #419 cron/alarms chaos loop built, both scenarios have 3+ clean seeds, nightly wired; one finding (#566) needs a decision.
+Last update: 2026-11-25 00:25 PT. Clock-step faults added on the #564 hook: two more findings, #594 (fix PR #605) and #600 (needs a decision). Both scenarios have 3+ clean seeds.
 
 # Data-plane chaos loop: cron triggers and DO alarms (#419)
 
@@ -59,10 +59,26 @@ recorder pattern, two workloads of its own. Details are in
 - `make lint`: pass. `make changes-check`: ok (nothing upgrade-relevant).
 - `make test`: see the PR.
 
+## Clock steps (2026-11-25)
+
+Once #564 landed: `clock-back` and `clock-forward` faults step every host's
+wall clock (a `twtestclock` build of hostd, one shared offset file, half the
+time with a hostd restart mid-step).
+
+- **#594** (fix: PR #605): `cronLast` was in memory only, so a restart
+  under a stepped-back clock reran minutes (cron 31: 4 pairs). With #605:
+  0 on the same seed.
+- **#600** (needs a decision): `cronLast` is per host. A move followed by a
+  step back reruns the minute the old host ran (cron 32: 4 pairs). The fix
+  would be mgmt carrying it, or documenting it.
+- C1 notes both, and doesn't fail on them. A rerun on one host with no
+  restart still fails (`TestCronCheckers`).
+- Seeds with the clock faults: cron 33 and 35 (macOS), 34 (Linux arm64):
+  pass.
+
 ## Gaps and next steps
 
-- Wall-clock steps (C1's clock-back and clock-forward cases) wait for the
-  clock-skew hook, PR #564 (green, not merged yet). Add `clock-back` and
-  `clock-forward` faults once it's on master.
-- #566's decision. If it's "cancel at the fence", make the C2 note a failure
-  again.
+- Hosts whose clocks *differ*: the harness gives every process one
+  environment, so all hosts step together.
+- #566 and #600 need decisions. When #605 lands, drop the #594 case from
+  C1's note and the docs' "Known gaps".
