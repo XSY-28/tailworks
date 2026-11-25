@@ -405,6 +405,9 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 	}
 	// Containers (ADR-032) run on the microVM backend; without it this host
 	// offers none (start() fails with tier_unavailable, no fallback).
+	if o.NoContainers {
+		hcfg.ContainersOff = "turned off (tw-hostd -no-containers)"
+	}
 	if cb, ok := hcfg.VM.(sandbox.ContainerBackend); ok && hcfg.VM != nil && !o.NoContainers {
 		// Images pinned at deploy are pulled from mgmt's registry over the
 		// same connection as the API (ADR-032 D3: never from Docker Hub).
@@ -430,6 +433,7 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		// advertises the "containers" tier from this; ADR-032 D5).
 		if err := containersUsable(cb, st); err != nil {
 			log.Info("containers unavailable on this host; not offered", "reason", err)
+			hcfg.ContainersOff = err.Error() // tw doctor, tw up (hostd/containersoff.go)
 		} else {
 			hcfg.Containers, hcfg.Images = cb, st
 			log.Info("containers available", "image_cache", st.Dir, "image_dir", o.ContainerImageDir, "idle", o.ContainerIdle, "max_life", o.ContainerMaxLife, "internet", o.ContainerInternet)

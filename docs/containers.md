@@ -29,6 +29,15 @@ and the class bound as a Durable Object.
   `docker buildx`, pushes them to tailworks' registry, and pins every image by
   digest (see [Images](#images-build-registry-pinning-host-pull-adr-032-d3)).
   The host never builds and never runs a container engine.
+  `image_build_context` sets the build context (default: the Dockerfile's
+  directory) and `image_vars` the build args (`--build-arg`), as on
+  Cloudflare; a named image takes `build_context` and `build_vars`. Build
+  vars are not secrets: they end up in the image and in the bundle's
+  wrangler config.
+- Other keys of a `containers` entry (`rollout_*`, `constraints`, …) are
+  ignored, with one warning line each. `name` and `scheduling_policy`
+  `"default"` or `"durable_object"` (one container per Durable Object, what
+  tailworks does) get none.
 - `instance_type` is one of Cloudflare's types or custom resources (below).
   `max_instances` caps the running containers of that class for the tenant.
 - tailworks.jsonc can add `"containers"` too: the same array form, or
@@ -497,3 +506,11 @@ A host offers `containers` (and mgmt places container bundles
 on it) only when containers can actually run there: a microVM backend whose
 helper (Firecracker) or kernel (vz) supports container guests, a guest
 kernel with erofs, and `mkfs.erofs`.
+
+`tw doctor`'s `containers` row says whether this host offers them, and
+if not, why (the reason tw-hostd found when it started; never a failure).
+`tw up`'s tier line ends `, containers` when it does, and `; containers
+off: see tw doctor` when the microVM tier is on but containers are not.
+When `tw deploy` finds no live host offering containers to build for, its
+`no_host` fix lists the live hosts and their tiers; `--platform` builds
+anyway. `tw deploy` checks `docker buildx version` before it builds.

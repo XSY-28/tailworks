@@ -1546,11 +1546,12 @@ func remoteStatus(f *flags, s *state) error {
 // tenants: the process tier by the OS sandbox (Seatbelt on macOS,
 // Landlock+seccomp on Linux; "none" is loud), the microVM tier by the
 // Firecracker jailer + VM.
-func tierLine(s *state) string {
+func tierLine(s *state) (line string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	var hv hostd.StatusView
 	_ = s.hostd().Do(ctx, "GET", "/v1/status", nil, &hv)
+	defer func() { line += containersUpNote(hv) }() // doctor_containers.go
 	sb := hv.Sandbox
 	switch {
 	case sb == "":

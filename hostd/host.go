@@ -213,6 +213,11 @@ type Config struct {
 	Containers sandbox.ContainerBackend
 	// Images converts and caches container images (hostd/image).
 	Images *image.Store
+
+	// ContainersOff is why tw-hostd offers no containers when it doesn't
+	// (found once at startup; tw doctor and tw up show it, containersoff.go).
+	ContainersOff string
+
 	// ContainerCapacity optionally bounds this host's running containers
 	// further, on top of the capacity vector (Capacity) they share with
 	// microVM DO instances (0 = no extra bound).

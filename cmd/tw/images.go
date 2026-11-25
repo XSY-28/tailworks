@@ -46,6 +46,9 @@ func buildContainerImages(ctx context.Context, mc *mgmtapi.Client, a *app, bundl
 	if err != nil || len(jobs) == 0 {
 		return nil, err
 	}
+	if err := containerBuildxCheck(ctx); err != nil { // containerbuild.go
+		return nil, err
+	}
 	arches, err := buildArches(ctx, mc, tenantID, platforms, classes)
 	if err != nil {
 		return nil, err
@@ -98,12 +101,7 @@ func buildArches(ctx context.Context, mc *mgmtapi.Client, tenantID, platforms st
 	if err := mc.Do(ctx, "GET", "/v1/tenants/"+tenantID, nil, &tn); err != nil {
 		return nil, err
 	}
-	hosts, err := listAll[struct {
-		Status string   `json:"status"`
-		Tiers  []string `json:"tiers"`
-		Arch   string   `json:"arch"`
-		Pool   string   `json:"pool"`
-	}](ctx, mc, "/v1/hosts", 0)
+	hosts, err := listAll[containersHost](ctx, mc, "/v1/hosts", 0) // doctor_containers.go
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +113,7 @@ func buildArches(ctx context.Context, mc *mgmtapi.Client, tenantID, platforms st
 	sort.Strings(out)
 	if len(out) == 0 {
 		return nil, fail("no_host", "no live host in this tenant's pool offers containers, so there is no arch to build the Dockerfile images for").
-			withFix("set up a Linux host with KVM: sudo tw host setup --microvm", "or build anyway: tw deploy --platform linux/arm64")
+			withFix(containersNoHostFix(containersLocalState(), hosts), "or build anyway: tw deploy --platform linux/arm64")
 	}
 	return out, nil
 }
