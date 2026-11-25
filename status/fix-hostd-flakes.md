@@ -56,4 +56,12 @@ goroutines, 2,000 rounds) and passes with it.
 
 ## Tests
 
-See the PR body.
+- `make lint`: ok.
+- `make test` (macOS, local): every hostd package passed. The one failure
+  was netd's `TestKeepEarlyAnswerNoAnswer` (#429, unrelated: "POST 2 took
+  12.03 s").
+- `go test -race ./hostd/` after the last merge of origin/master: ok.
+- `TestTelemetry`, 100 runs (10 at once, with `yes` hogs): 100 passed.
+  Before the fix, the same load failed 1 in 80.
+- `go test -race -count=3 -run TestCloseOnceConcurrent ./hostd/`: ok. It
+  panics without the fix.
