@@ -1,7 +1,6 @@
 package bundle
 
 import (
-	"errors"
 	"fmt"
 	"path"
 	"slices"
@@ -55,9 +54,6 @@ func finishPython(a *App) error {
 	a.Python = true
 	if !slices.Contains(a.CompatFlags, PythonFlag) {
 		return fmt.Errorf("bundle: main %s is a Python module: add %q to compatibility_flags (as on Cloudflare)", a.Main, PythonFlag)
-	}
-	if a.Tier == TierMicroVM {
-		return errors.New("bundle: Python Workers run on the process tier only for now: drop \"tier\": \"microvm\" (docs/python.md#limits)")
 	}
 	for p := range a.Modules {
 		if a.PythonModuleName(p) == "" {

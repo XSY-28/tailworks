@@ -2,7 +2,6 @@ package hostd
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"time"
 
@@ -24,9 +23,10 @@ func (h *Host) pyodideDir() string {
 
 // pyodideFor makes sure a Python app's Pyodide bundles are on this host
 // (fetching the missing pins once) and returns their directory; "" for
-// any other app.
-func (h *Host) pyodideFor(app *bundle.App) (string, error) {
-	if !app.Python {
+// any other app, and on the microVM tier, whose guest image carries them
+// (guestPyodideArgs).
+func (h *Host) pyodideFor(app *bundle.App, tier string) (string, error) {
+	if !app.Python || tier == bundle.TierMicroVM {
 		return "", nil
 	}
 	dir := h.pyodideDir()
@@ -41,13 +41,14 @@ func (h *Host) pyodideFor(app *bundle.App) (string, error) {
 	return dir, nil
 }
 
-// errPythonMicroVM refuses a Python Worker that resolves to the microVM
-// tier: the guest image has no Pyodide bundles yet. It is not run in the
-// process tier instead (ADR-032 D5b).
-func errPythonMicroVM(app string) *apiError {
-	return &apiError{Code: "tier_unavailable", Detail: fmt.Sprintf(
-		"%q is a Python Worker, and Python Workers run on the process tier only for now (docs/python.md#limits); it is not run in the process tier instead. "+
-			"Set \"tier\": \"process\" in tailworks.jsonc", app)}
+// guestPyodideArgs are the guest workerd's flags for a Python app on the
+// microVM tier: the bundles the guest image carries, read-only
+// (guest/build-image.sh).
+func guestPyodideArgs(app *bundle.App) []string {
+	if !app.Python {
+		return nil
+	}
+	return pyodide.WorkerdArgs(pyodide.GuestDir)
 }
 
 // pyodideArgs are workerd's flags for the instance's Pyodide directory.

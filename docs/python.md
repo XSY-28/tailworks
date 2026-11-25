@@ -166,11 +166,20 @@ uses the per-user cache, `~/Library/Caches/tailworks/pyodide` on macOS and
 reads them read-only: its sandbox gains read access to that one directory and
 nothing else, and it never downloads anything itself.
 
+On the **microVM tier** the guest image carries the same pinned bundles, in
+`/usr/share/tailworks/pyodide` on its read-only root filesystem
+(`guest/build-image.sh`), so a microVM host fetches nothing and the guest,
+which has no network, has them at boot. A Python Worker takes more memory
+than a JavaScript one: about 250 MiB for workerd with one Python Worker
+and one Durable Object, against about 30 MiB without Python. That fits the
+default 512 MiB guest (`tw-hostd -vm-mem-mib`), with less room left for the
+objects' own data than a JavaScript workload has.
+
 ### Offline hosts
 
 On a host with no internet access, copy the bundles into the directory before
 the first Python deployment. The file names and digests are in
-[`internal/pyodide/pyodide.go`](../internal/pyodide/pyodide.go); each file is
+[`internal/pyodide/bundles.txt`](../internal/pyodide/bundles.txt); each file is
 at `https://pyodide-capnp-bin.edgeworker.net/<file name>`. A missing or
 corrupt bundle fails the deployment with `python_unavailable`
 ([errors.md](errors.md#python_unavailable)).
@@ -179,7 +188,9 @@ corrupt bundle fails the deployment with `python_unavailable`
 
 The bundles follow the workerd pin. When a workerd bump changes them,
 `internal/pyodide:TestBundlesMatchWorkerd` fails; add the new bundle's name,
-size and SHA-256 to `Bundles`.
+SHA-256 and size to `internal/pyodide/bundles.txt`. The process tier and the
+guest image build both read that file, so a change to it is a guest input
+change and needs a new guest image.
 
 ## Limits
 
@@ -187,9 +198,6 @@ Not supported for Python Workers yet; `tw deploy` and `tw dev` refuse each
 one with a message naming it:
 
 - Workflows and containers;
-- the microVM tier (`"tier": "microvm"`, or a tenant whose default is
-  microVM): the guest image has no Pyodide bundles yet. The deployment is
-  refused (`tier_unavailable`), not run in the process tier instead;
 - `--wrangler` and `--from-wrangler-out`: they bundle JavaScript.
 
 Also different from Cloudflare: no memory snapshots, so every cold start
