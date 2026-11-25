@@ -524,7 +524,7 @@ func (e *Env) Run() {
 	// Apps from the templates.
 	agentDir, mcpDir, helloDir := filepath.Join(e.WorkDir, "agent"), filepath.Join(e.WorkDir, "mcp"), filepath.Join(e.WorkDir, "hello")
 	for dir, tmpl := range map[string]string{agentDir: "agent", mcpDir: "mcp", helloDir: "hello"} {
-		e.MustJSON(nil, "init", dir, "--template", tmpl, "--keep-tags")
+		e.MustJSON(nil, InitArgs(dir, tmpl)...)
 	}
 	// Declare the agent's dependency on the echo service (preflighted).
 	tj := filepath.Join(agentDir, "tailworks.jsonc")

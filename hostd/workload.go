@@ -521,7 +521,7 @@ type instance struct {
 }
 
 // tierFor picks a deployment's isolation tier: the bundle's tailworks.jsonc
-// "tier", else the tenant's, else the host default. It never downgrades: a
+// "tier", else the tenant's, else process. It never downgrades: a
 // microvm deployment on a host without a microVM backend (macOS, no KVM, the
 // backend gone since registration) is refused with tier_unavailable, which
 // the host reports to mgmt as the deployment's error (ADR-032 D5b). The one
@@ -534,9 +534,6 @@ func (h *Host) tierFor(app *bundle.App, t *tenant) (string, error) {
 	tier := app.Tier
 	if tier == "" && t != nil {
 		tier = t.info.Tier
-	}
-	if tier == "" {
-		tier = h.cfg.DefaultTier
 	}
 	if tier != bundle.TierMicroVM {
 		return bundle.TierProcess, nil

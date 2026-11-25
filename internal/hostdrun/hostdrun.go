@@ -113,7 +113,6 @@ type Options struct {
 	// PathEvery is hostd.Config.PathEvery (0 = hostd.DefaultPathEvery;
 	// negative disables).
 	PathEvery          time.Duration
-	DefaultTier        string
 	VM                 VMOptions
 	Sandbox            string
 	InsecureSharedHost bool
@@ -296,9 +295,6 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 	if o.KillTombstone == 0 {
 		o.KillTombstone = 10 * time.Second
 	}
-	if o.DefaultTier == "" {
-		o.DefaultTier = "process"
-	}
 	if o.Sandbox == "" {
 		o.Sandbox = "auto"
 	}
@@ -379,7 +375,7 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 		HeartbeatEvery: o.Heartbeat, FenceAfter: o.FenceAfter, Ephemeral: o.Ephemeral, HostnamePrefix: o.HostnamePrefix, ControlURL: o.ControlURL,
 		PathEvery: o.PathEvery, CapacityNodes: o.CapacityNodes, KillTombstone: o.KillTombstone, Logger: log, TSNetLogs: o.TSNetLogs,
 		Sandbox: o.Sandbox, SandboxDeny: o.SandboxDeny, InsecureSharedHost: o.InsecureSharedHost, AllowSiblingEgress: o.AllowSiblingEgress, PoolNodes: o.PoolNodes,
-		DefaultTier: o.DefaultTier, NodeBin: o.NodeBin, VMVolumeMiB: o.VM.VolumeMiB, VMMemMiB: o.VM.MemMiB, VMVCPUs: o.VM.VCPUs,
+		NodeBin: o.NodeBin, VMVolumeMiB: o.VM.VolumeMiB, VMMemMiB: o.VM.MemMiB, VMVCPUs: o.VM.VCPUs,
 		VM:            vmBackend(o.VM, log),
 		ContainerIdle: o.ContainerIdle, ContainerMaxLife: o.ContainerMaxLife, ContainerGrace: o.ContainerGrace,
 		ContainerCapacity: hostd.ContainerCapacity{Max: o.ContainerMax, MemMiB: o.ContainerMemMiB, VCPU: o.ContainerVCPU},
