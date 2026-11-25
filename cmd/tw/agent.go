@@ -75,7 +75,7 @@ func cmdAgentSetup(args []string, remove bool) error {
 	dir := f.String("dir", ".", "the project directory (--scope project)")
 	agents := f.String("agent", "", "comma-separated agents: claude, codex, cursor, gemini, opencode (default: setup, the ones installed here; remove, all)")
 	dryRun := f.Bool("dry-run", false, "print what would change and write nothing")
-	yes := f.Bool("yes", false, "don't ask before writing (needed without a terminal; review --dry-run first)")
+	yes := yesFlagBefore(f, "writing (review --dry-run first)")
 	pos, err := f.parse(args)
 	if err != nil {
 		return err

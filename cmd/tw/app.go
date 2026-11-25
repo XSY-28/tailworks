@@ -397,22 +397,34 @@ type deployResult struct {
 func cmdDeploy(args []string) error {
 	f := newFlags("deploy")
 	name := f.String("name", "", "workload name (default: tailworks.jsonc name, then wrangler name, then the directory)")
-	allowMissing := f.Bool("allow-missing-grants", false, "deploy even if tailnet.connects grants are missing")
+	allowMissing := f.Bool("allow-missing-grants", false, "deploy even if the preflight finds policy lines missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)")
 	applyPolicy := f.Bool("apply-policy", false, "when the preflight finds tagOwners, grants, funnel nodeAttrs or Service auto-approval missing, write them to the tailnet policy first (as tw policy --apply)")
-	yes := f.Bool("yes", false, "with --apply-policy: write the policy without asking (needed without a terminal, and with --json)")
+	yes := yesFlagBefore(f, "--apply-policy writes the policy")
 	noWait := f.Bool("no-wait", false, "return once mgmt accepted the deploy")
 	forceTakeover := f.Bool("force-takeover", false, "the workload's current host is gone for good: move its Durable Objects anyway (audited; see takeover_unconfirmed); with --replace, confirms moving a stateful workload off a live host")
 	platform := f.String("platform", "", "containers: arches to build Dockerfile images for (linux/amd64,linux/arm64; default: the arches of the tenant pool's container hosts)")
 	hostF := f.String("host", "", "pin the workload to this host (it must be live, in the tenant's pool and offer the tier)")
 	replace := f.Bool("replace", false, "re-place the workload: move it to a clearly better host (smart placement: the best measured path to tailnet.connects) instead of keeping it where it runs")
 	preview := f.Bool("preview", false, "deploy as a preview next to the workload (<workload>--preview-<alias>), leaving the workload as it is; tw promote makes it the workload")
-	previewAlias := f.String("preview-alias", "", "the preview's alias (implies --preview; default: the start of the bundle's SHA-256)")
+	previewAlias := f.String("preview-alias", "", "--preview's alias, the <alias> in <workload>--preview-<alias> (implies --preview; default: the start of the bundle's SHA-256)")
 	wait := f.Duration("wait", 3*time.Minute, "how long to wait for ready")
 	waitPublic := f.Duration("wait-public", 0, "also wait (up to this long) until the public URL answers from the public internet (tailworks.jsonc \"public\")")
 	tenantF := tenantFlag(f)
 	vars := varFlags{}
 	f.Var(vars, "var", "override a wrangler var (KEY=VALUE, repeatable)")
 	ao := addAppFlags(f) // wranglerapp.go: --env, --wrangler, --from-wrangler-out
+	// --help lists these under Advanced (helpflags.go).
+	f.group(advancedFlags,
+		"host",
+		"replace",
+		"force-takeover",
+		"allow-missing-grants",
+		"platform",
+		"wait",
+		"wait-public",
+		"wrangler",
+		"from-wrangler-out",
+	)
 	pos, err := f.parse(args)
 	if err != nil {
 		return err

@@ -106,7 +106,7 @@ func (s *state) tenant(ref string) (TenantRef, error) {
 }
 
 func tenantFlag(f *flags) *string {
-	return f.String("tenant", "", "tenant: its tailnet, tenant ID or tailnet label (default: the `tw up` tenant)")
+	return f.String("tenant", "", tenantUsage) // helpflags.go: printed on the global line
 }
 
 // objectsOf lists a tenant's objects (every page; max > 0 caps the count).
@@ -170,7 +170,7 @@ func cmdTenantAdd(args []string) error {
 	keyFile := f.String("api-key-file", "", "--control=headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied")
 	profile := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; the tailnet argument is its dns.base_domain)")
 	apply := f.Bool("apply-policy", false, "write the base policy snippet to the tailnet policy instead of printing it (additive, validated first, written with If-Match); shows the lines and asks first")
-	yes := f.Bool("yes", false, "with --apply-policy: write the policy without asking (needed without a terminal, and with --json)")
+	yes := yesFlagBefore(f, "--apply-policy writes the policy")
 	control := f.String("control-url", prodControl, "coordination server for this tailnet's nodes")
 	rpm := f.Int("registrations-per-minute", 0, "this tenant's node registration throttle (default 200/min)")
 	ownerTag := f.String("owner-tag", "", "another team's tenant on a tailnet that already has one (docs/teams.md): the tag that owns its tags, e.g. tag:tw-t-payments; its --oauth-client-file must be scoped to it")

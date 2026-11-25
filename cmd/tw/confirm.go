@@ -23,7 +23,7 @@ import (
 
 // yesFlag registers --yes on a destructive subcommand's flag set.
 func yesFlag(f *flags) *bool {
-	return f.Bool("yes", false, "delete without asking (needed without a terminal, and with --json)")
+	return yesFlagBefore(f, "deleting") // helpflags.go
 }
 
 // confirmIn and confirmIsTerminal are the prompt's input; tests replace them.
