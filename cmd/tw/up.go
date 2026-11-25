@@ -108,11 +108,11 @@ func cmdUp(args []string) error {
 	upFlagGroups(f) // up_help.go: --help's groups
 	tailnet := f.String("tailnet", "", "the tailnet to serve (oauth: read from the client's devices or mgmt's node; headscale: required, the dns.base_domain). Overrides discovery")
 	oauthFile := f.String("oauth-client-file", "", "mint mode \"oauth\" (Tailscale): file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (an OAuth client with Auth Keys write, tag tag:tw; tightened to 0600). Default on the default state dir: ~/.config/tailworks/oauth.env, asked for and saved on the first tw up")
-	keyFile := f.String("api-key-file", "", "--control=headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied). Tailscale API keys are not a mint mode: use --oauth-client-file")
+	keyFile := f.String("api-key-file", "", "Headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied); with a non-default --control-url it selects the Headscale profile. Default on the default state dir with a Headscale --control-url: ~/.config/tailworks/headscale.env when it exists. Tailscale API keys are not a mint mode: use --oauth-client-file")
 	yes := yesFlagBefore(f, "--apply-policy writes the policy")
 	apply := f.Bool("apply-policy", false, "write the tagOwners and grants tailworks needs to the tailnet policy instead of printing them (additive, validated first, written with If-Match); tw up shows the lines and asks first (--yes to skip). Without the flag tw up asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes. Tailscale: the OAuth client needs Policy File write. Headscale: needs policy.mode database")
 	control := f.String("control-url", prodControl, "coordination server for the tailnet's nodes")
-	profileF := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server, tw up --control=headscale --control-url <url> --tailnet <base_domain> --api-key-file <file>; the file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain; docs/headscale.md)")
+	profileF := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server; implied by --api-key-file with a non-default --control-url: tw up --control-url <url> --tailnet <base_domain> [--api-key-file <file>]; the file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain; docs/headscale.md)")
 	tsapiURL := f.String("tsapi-url", "", "Tailscale API base URL (testing)")
 	hostID := f.String("host-id", defaultHostID(), "this host's ID")
 	prefix := f.String("hostname-prefix", "tw-", "prefix for every object node hostname")
@@ -155,15 +155,18 @@ func cmdUp(args []string) error {
 	// The mint mode: the flag, else the state dir's, else the choice is
 	// printed. Tailscale tailnets mint with an OAuth client; the Headscale
 	// profile with a Headscale API key (ADR-042).
+	if headscaleInferred(f.FlagSet, *keyFile, *control) { // up_headscale.go
+		*profileF = controlHeadscale
+	}
 	if *profileF == controlHeadscale && *oauthFile != "" {
 		return fail("profile_unsupported", "the Headscale profile mints with a Headscale API key: OAuth clients are a Tailscale feature").
-			withFix("tw up --control=headscale --control-url <server_url> --tailnet <base_domain> --api-key-file <file with HEADSCALE_API_KEY=…>")
+			withFix("tw up --control-url <server_url> --tailnet <base_domain> --api-key-file <file with HEADSCALE_API_KEY=…>")
 	}
 	if *profileF != controlHeadscale && *keyFile != "" {
 		return fail("mint_mode_removed", "tw no longer mints with a Tailscale API key (--api-key-file is for --control=headscale only)",
 			"an OAuth client is scoped to auth keys and tag:tw, and its secret never expires; an API key could do anything its owner can").
 			withFix("create an OAuth client (admin console › Settings › Trust credentials: Auth Keys write, tag tag:tw; see docs/INSTALL.md), save it 0600, then:",
-				"tw up --oauth-client-file <file>")
+				"tw up --oauth-client-file <file>", headscaleOnHint)
 	}
 	mode := ""
 	switch {
@@ -215,6 +218,11 @@ func cmdUp(args []string) error {
 		}
 	}
 	defaultDir := isDefaultStateDir(s.Dir, *f.stateDir) // up_defaults.go
+	if mode == "" && defaultDir && *oauthFile == "" {
+		if p := headscaleDefaultKey(f.FlagSet, *profileF, *control); p != "" { // up_headscale.go
+			*keyFile, *profileF, mode = p, controlHeadscale, mgmt.MintHeadscale
+		}
+	}
 	if mode == "" && defaultDir && *profileF != controlHeadscale {
 		if p := defaultOAuthFile(); p != "" {
 			asked := false
@@ -228,6 +236,10 @@ func cmdUp(args []string) error {
 			}
 		}
 	}
+	if mode == "" && *profileF == controlHeadscale {
+		_, err := headscaleKeyFile("")
+		return err
+	}
 	if mode == "" {
 		return mintModeRequired()
 	}
@@ -240,9 +252,9 @@ func cmdUp(args []string) error {
 		}
 	}
 	if hsMode && *tailnet == "" {
-		return fail("tailnet_required", "tw up --control=headscale needs --tailnet (the Headscale server's dns.base_domain)",
+		return fail("tailnet_required", "tw up on Headscale needs --tailnet (the Headscale server's dns.base_domain)",
 			"an API key does not name its tailnet, and tailworks never uses this machine's tailscaled or its identity.").
-			withFix("tw up --control=headscale --control-url <server_url> --tailnet <base_domain> --api-key-file <file with HEADSCALE_API_KEY=…>")
+			withFix("tw up --control-url <server_url> --tailnet <base_domain> --api-key-file <file with HEADSCALE_API_KEY=…>")
 	}
 	// oauth: the credential file must be the owner's only (checked before
 	// anything else happens; tw-mgmt refuses it too).

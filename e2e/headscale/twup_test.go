@@ -64,6 +64,12 @@ func testTwUp(t *testing.T, extra []string) {
 		!strings.Contains(se, "policy_missing_tag_owners") || !strings.Contains(se, "tag:tw-mgmt") || strings.Contains(se, "autogroup:admin") {
 		t.Fatalf("tw up --control=headscale without the policy: %v\n%s", err, se)
 	}
+	// The same without --control=headscale: --api-key-file with a
+	// non-default --control-url selects the profile (#539).
+	if _, se, _, err := e.Tw("up", "--yes", "--json", "--control-url", hs.URL, "--tailnet", hs.Domain, "--api-key-file", hs.KeyFile); err == nil ||
+		!strings.Contains(se, "policy_missing_tag_owners") || strings.Contains(se, "mint_mode_removed") {
+		t.Fatalf("tw up --control-url <headscale> --api-key-file (profile inferred) without the policy: %v\n%s", err, se)
+	}
 	if devs, _ := hs.Client.ListDevices(ctx); len(devs) != 0 {
 		t.Fatalf("nodes joined before the policy was in place: %+v", devs)
 	}

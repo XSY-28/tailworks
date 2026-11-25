@@ -39,7 +39,9 @@ You need a Headscale server with:
   policy. With `policy.mode: file`, tailworks prints the snippet and you add it to
   the file yourself.
 
-Create an API key on the Headscale server and put it in a `0600` file:
+Create an API key on the Headscale server and put it in a `0600` file.
+`~/.config/tailworks/headscale.env` is where `tw up` looks for it by
+default:
 
 ```sh
 headscale apikeys create --expiration 90d
@@ -49,11 +51,15 @@ umask 077; echo 'HEADSCALE_API_KEY=<the key>' > ~/.config/tailworks/headscale.en
 ## Start tailworks
 
 ```sh
-tw up --control=headscale \
-  --control-url https://headscale.example.net \
-  --tailnet hs.example.net \
-  --api-key-file ~/.config/tailworks/headscale.env
+tw up --control-url https://headscale.example.net --tailnet hs.example.net
 ```
+
+A `--control-url` other than Tailscale's selects the Headscale profile when
+there is an API key: `--api-key-file <file>`, or, on the default state dir
+(`~/.tailworks`), `~/.config/tailworks/headscale.env` when it exists.
+`tw up` never asks for the key or creates that file. `--control=headscale`
+is also accepted. `--tailnet` is the server's `dns.base_domain`: an API key
+doesn't name it.
 
 `--control-url` is Headscale's `server_url`. Its REST API is served at the
 same URL. `tw up` checks the key against the server, then writes the
@@ -86,7 +92,7 @@ their own device with it.
 An existing tw host can also serve a Headscale tailnet as a second tenant:
 
 ```sh
-tw tenant add hs.example.net --control=headscale \
+tw tenant add hs.example.net \
   --control-url https://headscale.example.net --api-key-file ~/.config/tailworks/headscale.env
 ```
 

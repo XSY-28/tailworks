@@ -31,9 +31,9 @@ flags:
 
 Control plane (Tailscale or Headscale):
   -api-key-file string
-    	--control=headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied). Tailscale API keys are not a mint mode: use --oauth-client-file
+    	Headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied); with a non-default --control-url it selects the Headscale profile. Default on the default state dir with a Headscale --control-url: ~/.config/tailworks/headscale.env when it exists. Tailscale API keys are not a mint mode: use --oauth-client-file
   -control string
-    	control-plane profile: tailscale, or headscale (ADR-015: a Headscale server, tw up --control=headscale --control-url <url> --tailnet <base_domain> --api-key-file <file>; the file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain; docs/headscale.md) (default "tailscale")
+    	control-plane profile: tailscale, or headscale (ADR-015: a Headscale server; implied by --api-key-file with a non-default --control-url: tw up --control-url <url> --tailnet <base_domain> [--api-key-file <file>]; the file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain; docs/headscale.md) (default "tailscale")
   -control-url string
     	coordination server for the tailnet's nodes (default "https://controlplane.tailscale.com")
   -tailnet string
@@ -1400,7 +1400,7 @@ tw tenant <subcommand> --help   its flags
 ```text
 flags:
   -api-key-file string
-    	--control=headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied
+    	Headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied. With a non-default --control-url it selects the Headscale profile
   -apply-policy
     	--control=headscale: write the owner tag's tagOwners entry ("tag:tw": []) when it is missing instead of printing it (additive, validated first, written with If-Match); shows the line and asks first. Without the flag it asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes. A Tailscale tenant's policy is never written
   -control string

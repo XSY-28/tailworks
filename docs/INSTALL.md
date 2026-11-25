@@ -392,9 +392,10 @@ places a workload on them, or size them: [hosts.md](hosts.md).
 ### Self-hosted control: Headscale
 
 tailworks also runs on a [Headscale](https://github.com/juanfont/headscale)
-server (v0.29 or later) instead of Tailscale: `tw up --control=headscale
---control-url <server_url> --tailnet <base_domain> --api-key-file <file with
-HEADSCALE_API_KEY=…>` (it asks before writing the policy). The profile has no Tailscale Services,
+server (v0.29 or later) instead of Tailscale: `tw up --control-url
+<server_url> --tailnet <base_domain>`, with `HEADSCALE_API_KEY=…` in
+`~/.config/tailworks/headscale.env` (or `--api-key-file <file>`; it asks
+before writing the policy). The profile has no Tailscale Services,
 no Funnel and no posture. See [headscale.md](headscale.md).
 
 ### 4. Day 2, stop and uninstall
