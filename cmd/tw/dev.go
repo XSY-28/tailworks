@@ -93,9 +93,11 @@ func cmdDev(args []string) error {
 		return err
 	}
 	a.printWarnings(os.Stderr)
-	printDevEgressVia(a.TwRaw, os.Stderr)                  // dev_egressvia.go
-	printDevTailnetHTTPS(a.TwRaw, os.Stderr)               // tailnethttps.go
-	if *port, err = resolveDevPort(*port, flagGiven(f.FlagSet, "port"), a, os.Stderr); err != nil { // dev_port.go
+	printDevEgressVia(a.TwRaw, os.Stderr)    // dev_egressvia.go
+	printDevTailnetHTTPS(a.TwRaw, os.Stderr) // tailnethttps.go
+	// --port, else wrangler dev.port, else 8787 or a free port (dev_port.go).
+	*port, err = resolveDevPort(*port, flagGiven(f.FlagSet, "port"), a, os.Stderr)
+	if err != nil {
 		return err
 	}
 	wd, err := findWorkerd(*workerdFlag)
