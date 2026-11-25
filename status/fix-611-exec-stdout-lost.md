@@ -28,3 +28,9 @@ still cut off.
   deadline already expired, writer held open): fails on the old loop
   ("pump sent 0 bytes"), passes with the fix. Plus deadline-cuts-off-daemon
   and EOF cases. Run in Lima `twd-dev` (`go test -race ./guest/...`: ok).
+- `make lint`: ok. `make test` (offloaded to mbp): ok.
+- Firecracker (twd-amd64, guest image rebuilt from this branch), `restore`
+  seed 10, 4 min, 2 hosts: K1 clean with no "200 without a report" notes
+  (both earlier runs of seed 10 had them). K2 failed on K-F4 (#610, a pool
+  node left `minted` after a burst-crash), unrelated. Results:
+  `20261125T200002Z-k-restore-10` on twd-amd64.
