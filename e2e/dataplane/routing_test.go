@@ -756,8 +756,12 @@ func (w *rworkload) run() {
 				w.do(w.cli, "http://"+dns+"/hello", &op, true)
 			}()
 		}
-		for dns := range w.c.tgs["rt-ws"].endpoints() {
-			go w.probeWS(dns, "probe")
+		// The WebSocket object's probes go quiet with its clients
+		// (hibernate): a request would keep it from being evicted.
+		if time.Now().UnixNano() >= w.quiet.Load() {
+			for dns := range w.c.tgs["rt-ws"].endpoints() {
+				go w.probeWS(dns, "probe")
+			}
 		}
 	})
 	// What mgmt answers for A's binding now (evidence: where binding calls

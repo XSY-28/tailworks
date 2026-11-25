@@ -3,6 +3,10 @@
 Issue #415. Process: `LOOP.md`. Findings are filed as GitHub issues
 labelled `dataplane-chaos`.
 
+Other loops on this cluster keep their own ledger:
+
+- Routing (#422, `TestRouting`): `ledger/routing.md`.
+
 ## Status
 
 | Scenario | Clean seeds (consecutive) | Notes |

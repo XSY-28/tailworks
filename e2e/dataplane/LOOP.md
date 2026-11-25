@@ -100,6 +100,50 @@ each grant and renew.
 | D6 | Availability: reported. Gated only outside fault windows (+60 s): ≥ 90% of ops succeed |
 | D7 | No workerd outlives its hostd: 10 s after a `crash-hostd` restart, none of the crashed hostd's workerds is still running (#432) |
 
+## Routing (issue #422)
+
+`TestRouting` (`routing_test.go`, `check_routing_test.go`) runs the same
+cluster with three stateful workloads (`testdata/routing`): `rt-a` (public
+routes, and a service binding to B), `rt-b` (the binding's target, fetch
+and RPC) and `rt-ws` (a Durable Object echoing on hibernatable
+WebSockets). Every answer carries the answering copy's (host, epoch, ver).
+Its ledger is `ledger/routing.md`.
+
+```sh
+make e2e-dataplane-routing                       # routing, 4 min, today's seed
+TW_DP_SCENARIO=bindings TW_DP_SEED=3 make e2e-dataplane-routing
+TW_DP_REPLAY=<results dir> go test -tags e2edataplane -run TestRoutingReplay ./e2e/dataplane/
+```
+
+- **Clients:** a public client that drives netd's public listener directly
+  (`tw-hostd -test-public-listen-dir`, `-local-dev` only: each public node
+  listens on loopback and its conns are Funnel conns; Funnel itself is out
+  of scope), a tailnet caller `rt-cli` (A, B, the binding paths, the
+  WebSockets, probes of every endpoint and listener ever seen), and
+  `rt-rec`, which A tells about every `/gate` request before answering.
+- **Faults:** the table above's host faults, run against the host of one
+  of the scenario's workloads, plus `move` (of A, B or the DO workload),
+  `paths` (redeploy A with `/gate/*` added to or removed from its public
+  routes), `revoke-binding` (undeploy B, redeploy it 8–12 s later) and
+  `hibernate` (the WebSocket clients go quiet past the object's idle
+  eviction).
+- **Scenarios:** `public`, `bindings`, `websockets`, `routing` (all of
+  them). `TW_DP_WORKLOADS=rt-b` narrows which workloads the faults hit.
+- **Testcontrol names:** a background loop keeps MagicDNS names unique in
+  testcontrol, as real control does (mgmt's device deletes don't reach it,
+  and a node rejoining from saved state can come back as a new node).
+  Without it a binding call after a move back could reach a dead node.
+
+| ID | Invariant |
+|---|---|
+| N1 | No request (public, tailnet, binding, WebSocket) is answered by a copy past its fence: once a newer epoch of a workload has answered, an older one doesn't answer a request sent after that (live moves: 5 s). After B moves, binding calls reach its new copy within the 5 s cache TTL + 15 s of it answering directly |
+| N2 | A revoked binding (B undeployed) stops answering within the cache TTL (5 s) + 1 s |
+| N3 | B sees the calling A copy's node on every binding call (fetch and RPC) and `rt-cli` on direct calls; A sees `rt-cli` on tailnet requests and a public requester on public ones |
+| N4 | An unlisted public path never reaches workerd; a tailnet-only path over the public listener is always `404 not_public`; a route change applies within 10 s |
+| N5 | Per WebSocket: replies in order, no duplicates, none skipped (hibernation included); a message left unanswered has its connection closed within 45 s, or 15 s after its host's stall or cut ends |
+| N6 | Availability per path, reported; ≥ 90% outside fault windows (+60 s). Recovery time per path after each fault is in the notes |
+| N0 | Convergence: after healing, every workload active and every path answering within 60 s |
+
 ## Each iteration
 
 1. Read `LEDGER.md` and pick one item: a harness fix, an open finding to
