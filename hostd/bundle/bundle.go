@@ -50,6 +50,12 @@ type App struct {
 	// EgressVia is tailnet.egress.via: "" or ViaExitNode (the workload needs
 	// a host whose internet path is an exit node; internet.go).
 	EgressVia string
+
+	// TailnetHTTPS is tailnet.https: the workload node also serves :443
+	// with its ts.net certificate, and requests that arrive that way get
+	// an https:// request.url (#360, hostd/tailnethttps.go).
+	TailnetHTTPS bool
+
 	// Tier is the requested isolation tier (tailworks.jsonc "tier"): "" (host
 	// default), "process" or "microvm".
 	Tier string
@@ -208,6 +214,9 @@ type twConfig struct {
 			Internet InternetEgress `json:"internet"`
 			Via      string         `json:"via"`
 		} `json:"egress"`
+
+		// HTTPS is tailnet.https (App.TailnetHTTPS).
+		HTTPS bool `json:"https"`
 	} `json:"tailnet"`
 }
 
@@ -268,6 +277,7 @@ func Parse(files map[string][]byte) (*App, error) {
 		Internet: t.Tailnet.Egress.Internet, Tier: t.Tier, Public: t.Public,
 		EgressVia: t.Tailnet.Egress.Via,
 	}
+	a.TailnetHTTPS = t.Tailnet.HTTPS
 	if err := a.Public.Validate(); err != nil {
 		return nil, fmt.Errorf("bundle: tailworks.jsonc %w", err)
 	}
@@ -445,6 +455,7 @@ func parseNode(files map[string][]byte, t *twConfig) (*App, error) {
 	a := &App{
 		Name: t.Name, Runtime: RuntimeNode, Classes: map[string]*Class{}, Modules: map[string][]byte{},
 		WorkloadTags: t.Tailnet.Tags, Internet: t.Tailnet.Egress.Internet, Tier: t.Tier,
+		TailnetHTTPS: t.Tailnet.HTTPS,
 	}
 	if t.Public != nil {
 		return nil, errors.New("bundle: tailworks.jsonc \"public\" is not supported for runtime \"node\" yet (ADR-029 v1: workerd workloads only)")

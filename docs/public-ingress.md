@@ -155,7 +155,13 @@ export default {
   `Forwarded`, `X-Real-IP`.
 - **Client IP:** netd sets `CF-Connecting-IP` and `X-Forwarded-For` (one
   value) to the client address Funnel reports, and `X-Forwarded-Proto:
-  https`. There is no geo data: `request.cf.country`, `colo`, `latitude`
+  https`.
+- **`request.url` is `https://`**, the URL the client called
+  (`https://<workload>.<tailnet>.ts.net/…`), as on Cloudflare. Before
+  [#360](https://github.com/rosskukulinski/tailworks/issues/360) a public
+  request's `request.url` was `http://` with `X-Forwarded-Proto: https`.
+  Tailnet requests keep `http://` unless the app sets
+  [`tailnet.https`](tailworks-jsonc.md#tailnethttps). There is no geo data: `request.cf.country`, `colo`, `latitude`
   and the other geo fields are absent ([wrangler.md](wrangler.md#requestcf)).
 
 ## Objects and spawn amplification

@@ -98,7 +98,7 @@ func (m *Mgmt) ApplyWorkloadPolicy(ctx context.Context, tenantID, workload strin
 	// The caller grant (callergrant.go) is mgmt's own, added after the
 	// bundle's entries passed Check without its relaxation.
 	if cfg, cerr := BundleConfig(r.Bundle); len(r.Bundle) > 0 && cerr == nil {
-		cg, why := callerGrant(cfg.Tailnet.Tags, snip, pol, popts)
+		cg, why := callerGrantPorts(cfg.Tailnet.Tags, CallerPorts(cfg.Tailnet.HTTPS), snip, pol, popts) // callergrant_https.go
 		if why != "" {
 			manual = append(manual, why)
 		}

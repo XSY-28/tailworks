@@ -68,6 +68,7 @@ schema. `tw init` writes this line for you:
 | `tags` | `["tag:…"]` | **Required.** Tags of the workload's own node. Your policy must let `tag:tw` own them; `tw policy` (and `tw deploy`'s preflight) prints the snippet if it doesn't, and `tw policy --apply` writes it ([below](#tags-and-tw-init)) |
 | `connects` | `["tag:…" or name]` | what the workload calls. `tw deploy` preflights these grants, and smart placement measures paths to them. Add the TCP port a socket dials (`"tag:db:5432"`) and the preflight checks the grant for that port instead of `tcp:80` |
 | `service` | `true` or `"svc:<name>"` | a Tailscale Service: a stable name and VIP in front of the workload ([services.md](services.md)) |
+| `https` | boolean | also serve the workload on `https://<name>.<tailnet>.ts.net` with its ts.net certificate, so `request.url` is `https://` for requests that arrive that way; [below](#tailnethttps) |
 | `egress.internet` | `true`, `false` or `[host, "*.suffix", IP, CIDR]`, each with an optional `:port` | internet egress for Worker code and containers; [below](#tailnetegressinternet) |
 | `egress.via` | `"exit-node"` | require a host whose internet egress leaves through a tailnet exit node; [below](#tailnetegressvia) |
 | `spawn.maxLive` | integer | the most live sub-agents (`ctx.tailnet.spawn`) |
@@ -168,6 +169,48 @@ sees the names. Absent (the default): whatever the host offers.
   back to its own network; `tw status` and `tw doctor` say why.
 - `tw dev` has no exit node: it runs the workload on your machine's
   network and prints a note.
+
+### `tailnet.https`
+
+`true` also serves the workload on
+`https://<name>.<tailnet>.ts.net`, port 443, with the workload node's own
+ts.net certificate, for code that needs an HTTPS origin: an OAuth
+server's resource URL (`@cloudflare/workers-oauth-provider`), `Secure`
+cookies, redirect URIs. A request that arrives that way reaches the Worker
+with an `https://` `request.url` (as on Cloudflare) and
+`X-Forwarded-Proto: https`; a Node app gets the header
+([issue #360](https://github.com/rosskukulinski/tailworks/issues/360)).
+
+```jsonc
+{ "tailnet": { "tags": ["tag:tw-wl-mcp"], "https": true } }
+```
+
+- **`http://` keeps working** on port 80, unchanged and not redirected:
+  `ctx.tailnet.fetch`, service bindings and other workloads call it, and a
+  redirect would turn their `POST`s into `GET`s. A request on port 80 still
+  has an `http://` `request.url`, so give clients the `https://` URL
+  (`tw deploy` prints it).
+- Callers need a grant to the workload's tags on **`tcp:443`** as well as
+  `tcp:80`. With `tailnet.https` on, the caller grant `tw deploy` and
+  `tw policy` print, and the one `tw policy --apply` (or
+  `--apply-policy`) writes for a new app, covers both ports. A grant you
+  wrote yourself, or one tailworks wrote before you turned `https` on,
+  needs `"tcp:443"` added to its `ip`.
+- The tailnet must issue HTTPS certificates (admin console, DNS page:
+  MagicDNS and HTTPS Certificates). Without them the deploy fails with
+  [`tailnet_https_unavailable`](errors.md#tailnet_https_unavailable) and
+  the deployment that was active keeps serving. Headscale issues no ts.net
+  certificates, so it can't serve `tailnet.https`
+  ([headscale.md](headscale.md)).
+- A new name's first certificate takes 30 to 100 seconds to issue. The host
+  requests it as soon as the listener opens, but the first `https://` call
+  right after the first deploy can wait for it.
+- Only the workload node: an object's own node (`tailnet.objects`) and a
+  Tailscale Service name (`tailnet.service`) stay `http://`. Public routes
+  are HTTPS already (Funnel).
+- `tw dev` serves the app on its local `http://` URL only and prints a note.
+- It needs hosts that offer the `tailnet-https` feature
+  ([upgrading.md](upgrading.md)).
 
 ### `tailnet.objects.<Class>`
 

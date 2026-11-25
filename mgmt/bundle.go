@@ -72,6 +72,10 @@ type TwConfig struct {
 			MaxLive  int `json:"maxLive"`
 			MaxDepth int `json:"maxDepth"`
 		} `json:"spawn"`
+
+		// HTTPS is tailnet.https: the workload node also serves :443, so
+		// the caller grant opens tcp:443 too (callergrant_https.go).
+		HTTPS bool `json:"https"`
 	} `json:"tailnet"`
 }
 

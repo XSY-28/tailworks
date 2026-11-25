@@ -402,7 +402,7 @@ func runProject(t *testing.T, pr *Prepared, tw twFunc, client *nettest.Node) Res
 	ip := cliflow.PeerIP(t, client, dep.Endpoint.MagicDNS, 90*time.Second)
 	if p.OriginVar != "" {
 		// The README's "set it to your deployed URL and deploy again".
-		if err := setOriginVar(p, pr.Root, p.OriginVar, "http://"+ip+"/mcp"); err != nil {
+		if err := setOriginVar(p, pr.Root, p.OriginVar, deployedBase(p, ip, dep.Endpoint.MagicDNS)+"/mcp"); err != nil { // tailnethttps.go
 			return fail("%v", err)
 		}
 		so, se, _, err := tw("", "", args...)
@@ -416,7 +416,7 @@ func runProject(t *testing.T, pr *Prepared, tw twFunc, client *nettest.Node) Res
 			return fail("tw deploy (with %s set): %v\n%s", p.OriginVar, err, tail(se, 3000))
 		}
 	}
-	run := &Run{P: p, Base: "http://" + ip, HC: client.HTTPClient(60 * time.Second),
+	run := &Run{P: p, Base: deployedBase(p, ip, dep.Endpoint.MagicDNS), HC: deployedClient(client.Dial, ip, 60*time.Second),
 		Tw: func(args ...string) (string, string, error) {
 			so, se, _, err := tw("", "", args...)
 			return so, se, err

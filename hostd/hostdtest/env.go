@@ -68,6 +68,9 @@ type Options struct {
 	// PublicListen is passed to hostd (ADR-029 public nodes; tests inject a
 	// listener of *ipn.FunnelConn because testcontrol has no certificates).
 	PublicListen func(srv *tsnet.Server) (net.Listener, error)
+	// TailnetHTTPSCert is passed to hostd (tailnet.https; testcontrol
+	// issues no real certificates).
+	TailnetHTTPSCert netd.HTTPSCertFunc
 	// CronTimeout is passed to hostd (cron trigger run limit).
 	CronTimeout time.Duration
 	// CronClock is passed to hostd (the cron loop's clock; tests that tick
@@ -205,6 +208,8 @@ func hostConfig(o Options, dir, wd string, log *slog.Logger, hc *mgmtapi.Client)
 		QueueVisibility: o.QueueVisibility,
 
 		PyodideDir: o.PyodideDir,
+
+		TailnetHTTPSCert: o.TailnetHTTPSCert,
 	}
 }
 
