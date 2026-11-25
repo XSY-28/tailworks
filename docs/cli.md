@@ -180,7 +180,7 @@ flags:
   -json
     	machine-readable output
   -keep-tags
-    	keep the template's tags instead of naming them after the app (tag:tw-wl-<workload>, tag:tw-<workload>-<class>)
+    	keep the template's object class tags instead of naming them after the app (tag:tw-<workload>-<class>); the workload tag follows the app either way (--tags sets it)
   -list
     	list every template: the starting points, then demos and patterns (templates.go)
   -name string

@@ -33,8 +33,8 @@
   </div></div>
   <div class="tbl">
   <table>
-    <thead><tr><th>Class</th><th>Tags</th><th>Agent</th><th>Time to live</th></tr></thead>
-    <tbody>{{range .Dep.Namespaces}}<tr><td class="mono">{{.Class}}</td><td class="mono">{{join .Tags}}</td><td>{{if .Agent}}yes{{else}}—{{end}}</td><td class="mono">{{or .TTL "—"}}</td></tr>{{else}}<tr><td colspan="4" class="empty">None</td></tr>{{end}}</tbody>
+    <thead><tr><th>Class</th><th>Tags</th><th>Time to live</th></tr></thead>
+    <tbody>{{range .Dep.Namespaces}}<tr><td class="mono">{{.Class}}</td><td class="mono">{{join .Tags}}</td><td class="mono">{{or .TTL "—"}}</td></tr>{{else}}<tr><td colspan="3" class="empty">None</td></tr>{{end}}</tbody>
   </table>
   </div>
 </section>

@@ -191,9 +191,9 @@ flowchart LR
 | Principal | Tailnet representation | MagicDNS name | Tags |
 |---|---|---|---|
 | Tenant | A trust domain in one tailnet, bound by its own OAuth client (§4.4). A tailnet may hold several, one per team, each with its own owner tag and name prefix ([ADR-043](adr/043-team-tenants.md)) | — (with a name prefix, every generated name is `<prefix>-<name>`) | Its owner tag (`tag:tw` by default) owns its tags through `tagOwners` |
-| Workload (a Worker) | One node per (workload, host), advertising `svc:<workload>` where Services exist | `<workload>-<host>`; Service `<workload>` | `tag:tw-wl-<workload>` |
+| Workload (a Worker) | One node per (workload, host), advertising `svc:<workload>` where Services exist | `<workload>-<host>`; Service `<workload>` | `tailnet.tags`, by default `tag:tw-wl-<workload>` (2026-11-24, #491: also when `tailworks.jsonc` leaves `tailnet.tags` out) |
 | Object (a DO instance) | **One persistent node per object** | `<class>-<b32(hmac(id))[:10]>` by default; `<class>-<slug>` if the class sets `publicNames` | From class config, e.g. `tag:tw-do-room` |
-| Agent | An object whose class sets `agent: true` | as for objects | e.g. `tag:tw-agent-support` |
+| Agent | An object of an Agents SDK class | as for objects | e.g. `tag:tw-agent-support` |
 | Sub-agent | An object spawned by an agent, with its own persistent node, reaped at TTL | as for objects | A child tag whose grants are ⊆ the parent's |
 | Human | Their own devices. Tailworks never impersonates them | — | — |
 | Operator plane | Nodes in the operator tailnet only | `tw-mgmt-*`, `tw-host-*` | `tag:tw-mgmt`, `tag:tw-host` |

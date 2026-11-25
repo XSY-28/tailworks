@@ -2580,7 +2580,7 @@ paths:
       description: |
         mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
         the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-        node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+        node), `tailnet.objects.<Class>.{tags, ttl, node}`,
         `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
         `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
         wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -5602,7 +5602,6 @@ components:
       properties:
         class: { type: string }
         tags: { type: array, items: { type: string } }
-        agent: { type: boolean }
         ttl: { type: string, description: "`10m`-style duration or seconds." }
         service:
           type: string

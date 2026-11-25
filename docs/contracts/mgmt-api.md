@@ -1080,7 +1080,7 @@ Deploys of a workload bundle to a host.
 
 mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -3523,7 +3523,6 @@ One DO namespace from `tailworks.jsonc` `tailnet.objects`.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `agent` | boolean | no |  |
 | `class` | string | yes |  |
 | `previewOf` | string | no | `_workload` only, previews: the workload this deployment is a preview of (ADR-048), deployed as the workload `<workload>--preview-<alias>`. |
 | `replicaOf` | string | no | `_workload` only, replicas 2..N: the workload this deployment is a replica of (`tailworks.jsonc` `replicas`). Replica i is deployed as the workload `<workload>--r<i>`. |
