@@ -78,10 +78,13 @@ for its wall-clock reads (tickets, caller seals, MAC timestamps, cron), and
 its workerds run with `internal/wallclock/testdata/skewclock.c` preloaded,
 which shifts `CLOCK_REALTIME`, `gettimeofday` and `time` by the same
 offset. Monotonic clocks aren't shifted. Before the nemesis starts, the
-harness checks that the workload's `Date.now()` follows a +90 s step
-(`/clock`). The library is Linux only, so on macOS the skew fault is left
-out and a seed runs a different fault sequence than on Linux. mgmt (SQLite)
-keeps the true clock.
+harness checks that the workload's `Date.now()` follows a +10 s step, in
+a Worker and in a Durable Object (`/clock`). The library is Linux only, so
+on macOS the skew fault is left out and a seed runs a different fault
+sequence than on Linux. mgmt (SQLite) keeps the true clock.
+
+Workflows and approvals (#418) have their own test, workload and checkers
+(W1–W5): see [ledger/workflows.md](ledger/workflows.md).
 
 Not yet: multiple mgmt replicas on Postgres are covered by
 `e2e/multimgmt`. Joining that harness here is the next step.

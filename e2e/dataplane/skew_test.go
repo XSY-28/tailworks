@@ -60,7 +60,7 @@ func (c *cluster) clockFile(host string) string { return filepath.Join(c.work, h
 
 // clockEnv is the test hook's environment for a host process (nil for mgmt).
 func (c *cluster) clockEnv(name string) []string {
-	if name == "mgmt" {
+	if name == "mgmt" || c.clocks == nil { // nil: a test without the hook (workflows_test.go)
 		return nil
 	}
 	os.MkdirAll(filepath.Join(c.work, name), 0o700)
@@ -73,6 +73,9 @@ func (c *cluster) clockEnv(name string) []string {
 
 // offset is host's wall-clock offset now.
 func (c *cluster) offset(host string) time.Duration {
+	if c.clocks == nil {
+		return 0
+	}
 	c.clocks.mu.Lock()
 	defer c.clocks.mu.Unlock()
 	return c.clocks.off[host]
