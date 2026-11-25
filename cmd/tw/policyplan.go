@@ -86,7 +86,7 @@ func cmdPolicy(args []string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	res := policyResult{Workload: a.Name, Tenant: tn.Tailnet, TenantID: tn.TenantID, Checked: true, CallerGrant: callerGrant(a.Cfg.Tailnet.Tags)}
+	res := policyResult{Workload: a.Name, Tenant: tn.Tailnet, TenantID: tn.TenantID, Checked: true, CallerGrant: callerGrant(a.Cfg.Tailnet.Tags, a.Cfg.Tailnet.HTTPS)}
 	err = s.mgmt().Do(ctx, "POST", "/v1/deployments?dryRun=true", map[string]any{"tenantID": tn.TenantID, "workload": a.Name, "bundle": tb}, &res.Preflight)
 	if me, ok := mgmtapi.AsError(err); ok && me.Code == "policy_unavailable" {
 		// mgmt can't read the policy (an OAuth client without Policy File ›

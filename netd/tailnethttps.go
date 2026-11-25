@@ -1,6 +1,6 @@
 package netd
 
-// Tailnet HTTPS (issue #360): an object node can also
+// Tailnet HTTPS (issue #360, ADR-tailnet-https): an object node can also
 // serve its attributed ingress on :443 with the node's own ts.net
 // certificate, so code that insists on an https:// origin (OAuth resource
 // URLs, secure cookies) can run on the tailnet. Plain :80 stays exactly as

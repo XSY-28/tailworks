@@ -177,7 +177,8 @@ export default {
       if (t.kind !== "workload") return errResponse("public_request", "a public request may only reach its workload's entry point");
       const p = new URL(req.url).pathname;
       if (p === "/_tw" || p.startsWith("/_tw/")) return errResponse("not_public", "/_tw is never public");
-      return env.TENANT.fetch(req);
+      // Funnel terminated TLS: the Worker sees the https:// URL (#360).
+      return env.TENANT.fetch(t.https === true ? httpsRequest(req) : req);
     }
     switch (t.kind) {
       case "admin":

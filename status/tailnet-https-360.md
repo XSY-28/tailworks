@@ -1,4 +1,4 @@
-Last update: 2026-11-24 15:30 PT. tailnet.https (#360): workload node on :443 with its ts.net certificate, https:// request.url.
+Last update: 2026-11-24 17:00 PT. Maintainer decisions applied: caller grant on tcp:443 for https apps, public request.url https://, ADR draft.
 
 # Tailnet HTTPS for workloads (issue #360)
 
@@ -22,7 +22,7 @@ Last update: 2026-11-24 15:30 PT. tailnet.https (#360): workload node on :443 wi
   serving. A remint of the workload node comes back with the listener
   (`startNodeLocked` → `opts.HTTPS`). `ingressHandler` sets
   `cf.tw.https` for workload-node tailnet requests that came over TLS
-  (never public requests, never object nodes); platform.js rewrites
+  and for every public request (never object nodes); platform.js rewrites
   `request.url` to `https://` for those. Node tier: `X-Forwarded-Proto` is
   now forwarded to the app.
 - `tw deploy` prints the `https://` URL (human and `--json` ready event);
@@ -40,11 +40,15 @@ Last update: 2026-11-24 15:30 PT. tailnet.https (#360): workload node on :443 wi
 - `:80` stays served, not redirected (platform callers, service bindings,
   POSTs).
 - Only the workload node. Per-object nodes, Service VIPs: left out.
-- Public routes' `request.url` is unchanged (still `http://`); they were
-  not in scope.
-- Caller grant generation unchanged (tcp:80 only); docs say to add tcp:443.
-- No ADR file: `docs:TestADRIndex` fails CI on a slug draft; the design
-  note is in the PR body.
+- Maintainer, 2026-11-24: public routes' `request.url` is now `https://`
+  too (`markHTTPSRoute` marks every public request; behaviour change noted
+  in the changes fragment, public-ingress.md and COMPAT.md;
+  `hostd:TestPublicIngress` asserts it).
+- Maintainer, 2026-11-24: the caller grant covers `tcp:443` too, only for
+  apps with `tailnet.https` (`mgmt.CallerPorts`, used by the printed grant
+  in `tw deploy`/`tw policy` and the one `--apply-policy` writes).
+- Design note: `docs/design/adr/tailnet-https.md` (ADR-tailnet-https,
+  Proposed). Its CI docs test needs #409 (un-numbered drafts).
 
 ## Tests run
 

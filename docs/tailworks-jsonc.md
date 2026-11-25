@@ -191,8 +191,11 @@ with an `https://` `request.url` (as on Cloudflare) and
   has an `http://` `request.url`, so give clients the `https://` URL
   (`tw deploy` prints it).
 - Callers need a grant to the workload's tags on **`tcp:443`** as well as
-  `tcp:80`. The caller grant `tw deploy` prints (and `tw policy --apply`
-  writes) is for `tcp:80` only: add `"tcp:443"` to its `ip`.
+  `tcp:80`. With `tailnet.https` on, the caller grant `tw deploy` and
+  `tw policy` print, and the one `tw policy --apply` (or
+  `--apply-policy`) writes for a new app, covers both ports. A grant you
+  wrote yourself, or one tailworks wrote before you turned `https` on,
+  needs `"tcp:443"` added to its `ip`.
 - The tailnet must issue HTTPS certificates (admin console, DNS page:
   MagicDNS and HTTPS Certificates). Without them the deploy fails with
   [`tailnet_https_unavailable`](errors.md#tailnet_https_unavailable) and

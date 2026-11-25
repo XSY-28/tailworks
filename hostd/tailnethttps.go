@@ -1,16 +1,18 @@
 package hostd
 
-// Tailnet HTTPS (tailworks.jsonc tailnet.https, #360).
+// Tailnet HTTPS (tailworks.jsonc tailnet.https, #360, ADR-tailnet-https).
 //
 // With the setting on, the workload's entry node also serves :443 with its
 // ts.net certificate (netd/tailnethttps.go), and a request that arrived
 // that way reaches the Worker with an https:// request.url:
 //
 //	caller ─TLS─▶ workload node :443 (netd: WhoIs, strip, X-Forwarded-Proto: https)
-//	       ─▶ ingressHandler: cf.tw.https = true (only for the workload node, never public)
+//	       ─▶ ingressHandler: cf.tw.https = true (only for the workload node)
 //	       ─▶ platform.js: request.url http:// → https:// ─▶ the Worker's fetch()
 //
-// A Node-tier app gets X-Forwarded-Proto: https instead (its URL is the
+// Public (Funnel) requests are HTTPS too (Funnel terminates TLS), so they
+// get cf.tw.https and an https:// request.url as well, with or without
+// the setting. A Node-tier app gets X-Forwarded-Proto: https instead (its URL is the
 // app's own business). Plain :80 is served as before.
 //
 // The deploy checks it: on a tailnet without HTTPS certificates the
@@ -76,16 +78,16 @@ func (h *Host) tailnetHTTPSLocked(o *object) bool {
 	return w != nil && w.httpsOn.Load()
 }
 
-// markHTTPSRoute tells the platform that a tailnet request reached the
-// workload node over HTTPS (cf.tw.https), so the Worker sees an https://
-// request.url. netd strips every client X-Forwarded-Proto and sets it only
-// for its :443 listener (and for public requests, which keep their own
-// handling).
+// markHTTPSRoute tells the platform that a request reached the workload
+// node over HTTPS (cf.tw.https), so the Worker sees an https://
+// request.url: a public request (always: Funnel is HTTPS only), or a
+// tailnet one on the :443 listener. netd strips every client
+// X-Forwarded-Proto and sets it only for those two.
 func markHTTPSRoute(r *http.Request, o *object, blob, route map[string]any) {
-	if o.Class != "" || publicBlob(blob) {
+	if o.Class != "" {
 		return
 	}
-	if r.Header.Get("X-Forwarded-Proto") == "https" {
+	if publicBlob(blob) || r.Header.Get("X-Forwarded-Proto") == "https" {
 		route["https"] = true
 	}
 }
