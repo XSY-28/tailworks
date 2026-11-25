@@ -74,8 +74,16 @@ Scenarios are fault mixes: `queues`, `fencing`, `d1`, `mixed`
 Not yet: wall-clock skew on a host. `TW_TEST_WALL_CLOCK_OFFSET` only exists
 in `tw-mgmt` (and with SQLite mgmt uses the local clock). hostd fences on its
 monotonic clock and workerd reads the wall clock directly, so skewing a
-host needs a hook in both. Multiple mgmt replicas on Postgres are covered by
-`e2e/multimgmt`. Joining that harness here is the next step.
+host needs a hook in both.
+
+**mgmt replicas.** `TW_DP_MGMT=pg3` (or `pg2`) runs mgmt as replicas on a
+throwaway Postgres container (docker context `PG_CTX`, default `orbstack`),
+each behind its own fault proxy, with a shared fake setec: the pieces of
+`e2e/multimgmt`, from `e2e/internal/mgmtpg` (`mgmtpg_test.go`). The
+cluster's mgmt socket spreads connections over the running replicas, so
+hosts fail over when one dies; `restart-mgmt` then restarts one replica,
+and `pg-fault` blackholes, slows or resets one replica's path to Postgres.
+The deploys scenarios use `pg3` unless `TW_DP_MGMT` says otherwise.
 
 ## Workloads and the history
 
@@ -99,6 +107,48 @@ each grant and renew.
 | D5 | Convergence: after healing, the deployment is active and serving within 60 s, both queues drain within 120 s, and the lock answers |
 | D6 | Availability: reported. Gated only outside fault windows (+60 s): ≥ 90% of ops succeed |
 | D7 | No workerd outlives its hostd: 10 s after a `crash-hostd` restart, none of the crashed hostd's workerds is still running (#432) |
+
+## Deploys (issue #421)
+
+`TW_DP_SCENARIO=deploys-hosts|deploys-mgmt|deploys-mixed` (`make
+e2e-dataplane-deploys`, nightly with the date as the seed) runs another
+workload, `testdata/deploys` (`dpd`): one Durable Object class, so the
+lease fences. Every answer to `GET /info` carries the epoch, the bundle's
+`BUILD` var, a random ID of the Durable Object copy, and the first 16 hex
+digits of the SHA-256 of each secret value, as both the Worker and the
+Durable Object see them. Values never leave the Worker; the history holds
+digests. State: `ledger/deploys.md`.
+
+- **Clients**, each one op at a time, mostly through its own replica:
+  three deployers (sticky deploys, rollbacks naming an earlier deployment
+  that ran, preview deploys with aliases `pa` and `pb`, promotions with and
+  without `keepPreview`), and two secret writers (SEC_A and SEC_B one writer
+  each, SEC_C both; puts and deletes; one writer also puts SEC_P on a
+  preview's own name, which no deployment may get). Every deploy uploads a
+  bundle of its own (`BUILD` = `b2.17`), so an answer names its deploy.
+- **Probes** ask every endpoint ever seen every 400 ms; a watcher lists
+  every workload's history every second.
+- **Faults** (`deploys_test.go`): `deploy-kill-host`, `deploy-pause-host`
+  and `deploy-cut` start a deploy and break its host 0–1.5 s later;
+  `deploy-pause-takeover` and `deploy-cut-takeover` also take over on
+  another host with a deploy or rollback `--force-takeover`; `deploy-move`
+  is a live `--replace --force-takeover` move with a new bundle;
+  `deploy-race` fires a deploy and a rollback through two replicas at
+  once; `deploy-kill-mgmt` SIGKILLs the replica serving a deploy 0–300 ms
+  after sending it; plus `kill-workerd`, `restart-mgmt` and `pg-fault`.
+  Wall-clock skew is not in the mix yet (see "Not yet").
+
+| ID | Invariant (`check_deploys_test.go`) |
+|---|---|
+| V1 | One active deployment per workload: once an epoch has answered, no older epoch answers a request sent after that, on any host (a live move is allowed 5 s) |
+| V2 | Epochs are unique and grow with creation per workload; each acknowledged deploy has its own; an epoch answers only from the host its deployment is on |
+| V3 | Every answer comes from a copy of a deployment created before that copy answered, running that deployment's bundle; once a newer copy answered on a host, no older copy there answers a later request. The previous copy answering at the new epoch while the new one starts is a reported handover |
+| V4 | Secrets: an answer holds no value overwritten or deleted (and acknowledged) before its deployment was created; Worker and Durable Object agree; SEC_P never appears; every `secret_release` audit went to the host holding that workload's epoch (previews: with `previewOf`); a redeploy after the last write sees the last acknowledged values; no value is in any log, audit record, or mgmt's store (`pg_dump`) |
+| V5 | History: records never vanish or change; a rollback's record names the deployment the client named and has its bundle; every acknowledged op is in the history and every record comes from an op; every record has its `deploy`/`rollback`/`promote` audit |
+| V6 | Convergence: after healing, each workload's newest deployment is active and serves its bundle at its epoch within 60 s |
+
+`TW_DP_REPLAY=<results dir> go test -tags e2edataplane -run
+TestReplayDeploys ./e2e/dataplane/` re-runs V1–V5 on a recorded run.
 
 ## Each iteration
 
