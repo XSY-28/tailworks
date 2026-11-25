@@ -590,8 +590,7 @@ use that global `Env` and don't declare their own: in an ES module a local
 current: on start and on each reload it rewrites a
 `worker-configuration.d.ts` that `tw types` wrote when the config has
 changed. It never creates the file, and it leaves alone a hand-written
-one, one written by `tw types --remote` (its header says so) or typed
-for an `--env`. It does nothing under `tw dev --env`, `--wrangler`,
+one or one typed for an `--env`. It does nothing under `tw dev --env`, `--wrangler`,
 `--from-wrangler-out` or `--once`. Otherwise, run `tw types` again after
 you change the config. In CI, run
 `tw types --check`: it writes nothing and fails with

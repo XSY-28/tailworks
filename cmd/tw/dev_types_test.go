@@ -77,7 +77,6 @@ func TestDevRefreshTypes(t *testing.T) {
 
 	for name, content := range map[string]string{
 		"hand-written": "interface Env { MINE: string }\n",
-		"--remote":     typesRemoteHeader + "wrangler.jsonc and tailworks.jsonc.\ninterface Env {\n  OLD: string;\n}\n",
 		"--env":        typesHeader + "wrangler.jsonc and tailworks.jsonc.\n// Environment: --env staging.\ninterface Env {\n  OLD: string;\n}\n",
 	} {
 		t.Run("leaves a "+name+" file alone", func(t *testing.T) {
@@ -98,15 +97,4 @@ func TestDevRefreshTypes(t *testing.T) {
 			t.Fatal("refreshed under --env")
 		}
 	})
-}
-
-// TestTypesRemoteHeader: `tw types --remote` marks its header, so tw dev
-// can tell its file from plain `tw types`'.
-func TestTypesRemoteHeader(t *testing.T) {
-	t.Parallel()
-	src := []byte(typesHeader + "wrangler.jsonc and tailworks.jsonc.\n// Don't edit it: run `tw types` again\n")
-	got := string(typesMarkRemote(src))
-	if !strings.HasPrefix(got, typesRemoteHeader) || strings.Count(got, "--remote") != 1 {
-		t.Fatalf("got %q", got)
-	}
 }

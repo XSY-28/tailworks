@@ -67,9 +67,6 @@ func cmdTypes(args []string) error {
 		path = filepath.Join(a.Dir, path)
 	}
 	src, names := genTypes(a, filepath.Dir(path), secrets)
-	if *remote {
-		src = typesMarkRemote(src) // dev_types.go: tw dev leaves this file alone
-	}
 	cur, rerr := os.ReadFile(path)
 	res := typesResult{File: path, Runtime: a.Runtime, Names: names, Changed: rerr != nil || !bytes.Equal(cur, src)}
 	if res.Runtime == "" {
