@@ -165,6 +165,32 @@ Responses API calls with a scripted stream. That is listed as a change.
    shim. The `workflows` example throws after each step 9 times in 10 on
    purpose, so its approval step isn't reached.
 
+### The second pass (2026-11-24)
+
+`upstream_more.go` adds the 9 `examples/next/*` examples that declare no
+Cloudflare-only binding and the AI SDK's `fastify`, `nest` and `mcp`
+(its `http` and `sse` servers). Under `tw dev` all 9 `next/` examples
+pass, and the `mcp` `http` server passes with the same entry the other Node
+servers get. Two of the `next/` examples first failed on tailworks gaps,
+fixed since:
+
+1. **Fixed ([#395](https://github.com/rosskukulinski/tailworks/issues/395)): a Durable Object that called `ctx.abort()` was never recreated.**
+   `next/lifecycle`'s `/restart` aborts its object; every later request to
+   it failed with the abort reason.
+2. **Fixed ([#391](https://github.com/rosskukulinski/tailworks/issues/391)): `RpcPromise` couldn't be serialized.**
+   `next/routing`'s hub (`RoutedAgents.get()`, then a call on the chat's
+   stub) failed like the playground's `createChild`.
+3. Not tailworks: Fastify never registers its server with the node:http
+   bridge (and doesn't start under stock `wrangler dev`); Nest `require()`s
+   optional packages a bundler can't resolve (stock `wrangler dev` fails the
+   same way); the `mcp` `sse` server writes to one request's response while
+   handling another, which no Worker can (stock `wrangler dev` cancels it
+   the same way).
+
+The Agents SDK examples that need Workers AI stay not run: tailworks
+ignores the `ai` binding, so a scripted `env.AI` would have to be wired
+into each example (its config, or a wrapper around each agent class).
+
 ## What "unmodified" means
 
 The suite does to each project only what a user following its README

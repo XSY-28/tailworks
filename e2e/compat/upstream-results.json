@@ -1,7 +1,7 @@
 {
   "dev": {
     "date": "2026-11-25",
-    "commit": "a506f283d5390e6f05db48551209e0b40e23932e",
+    "commit": "fc52de0ae670cb0b09b50ed2f3ab7339bd0faad3",
     "platform": "darwin/arm64",
     "results": {
       "ag-cross-domain": {
@@ -37,6 +37,51 @@
         "source": "cloudflare/agents/examples/mcp-worker-authenticated@95dacf84dcdf",
         "steps": 14
       },
+      "ag-next-lifecycle": {
+        "outcome": "PASS",
+        "source": "cloudflare/agents/examples/next/lifecycle@95dacf84dcdf",
+        "steps": 19
+      },
+      "ag-next-mcp-client": {
+        "outcome": "PASS",
+        "source": "cloudflare/agents/examples/next/mcp-client@95dacf84dcdf",
+        "steps": 9
+      },
+      "ag-next-queue": {
+        "outcome": "PASS",
+        "source": "cloudflare/agents/examples/next/queue@95dacf84dcdf",
+        "steps": 2
+      },
+      "ag-next-routing": {
+        "outcome": "PASS",
+        "source": "cloudflare/agents/examples/next/routing@95dacf84dcdf",
+        "steps": 11
+      },
+      "ag-next-schedules": {
+        "outcome": "PASS",
+        "source": "cloudflare/agents/examples/next/schedules@95dacf84dcdf",
+        "steps": 7
+      },
+      "ag-next-sessions": {
+        "outcome": "PASS",
+        "source": "cloudflare/agents/examples/next/sessions@95dacf84dcdf",
+        "steps": 8
+      },
+      "ag-next-streams": {
+        "outcome": "PASS",
+        "source": "cloudflare/agents/examples/next/streams@95dacf84dcdf",
+        "steps": 4
+      },
+      "ag-next-tasks": {
+        "outcome": "PASS",
+        "source": "cloudflare/agents/examples/next/tasks@95dacf84dcdf",
+        "steps": 8
+      },
+      "ag-next-websockets": {
+        "outcome": "PASS",
+        "source": "cloudflare/agents/examples/next/websockets@95dacf84dcdf",
+        "steps": 8
+      },
       "ag-playground": {
         "outcome": "PASS",
         "source": "cloudflare/agents/examples/playground@95dacf84dcdf",
@@ -67,10 +112,27 @@
         "source": "vercel/ai/examples/express@8956ca55ed9c",
         "steps": 4
       },
+      "ai-fastify": {
+        "outcome": "XFAIL",
+        "source": "vercel/ai/examples/fastify@8956ca55ed9c"
+      },
       "ai-hono": {
         "outcome": "PASS",
         "source": "vercel/ai/examples/hono@8956ca55ed9c",
         "steps": 5
+      },
+      "ai-mcp-http": {
+        "outcome": "PASS",
+        "source": "vercel/ai/examples/mcp@8956ca55ed9c",
+        "steps": 5
+      },
+      "ai-mcp-sse": {
+        "outcome": "XFAIL",
+        "source": "vercel/ai/examples/mcp@8956ca55ed9c"
+      },
+      "ai-nest": {
+        "outcome": "XFAIL",
+        "source": "vercel/ai/examples/nest@8956ca55ed9c"
       },
       "ai-node-http": {
         "outcome": "PASS",

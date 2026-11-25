@@ -450,19 +450,20 @@ var chatMessages = map[string]any{"messages": []any{map[string]any{"id": "m1", "
 // the first function tool on the first turn when there is one, else text.
 // Every other fetch goes out unchanged.
 const openAIStub = `// Written by e2e/compat: a scripted OpenAI Responses API. No key, no network.
+// Plain JavaScript (no type annotations), so it is also a .js file.
 const realFetch = globalThis.fetch;
 export const STUB_TEXT = "tw-compat scripted reply";
 
-function sse(events: unknown[]): Response {
+function sse(events) {
   const body = events.map((e) => "data: " + JSON.stringify(e) + "\n\n").join("");
   return new Response(body, { headers: { "content-type": "text/event-stream" } });
 }
 
-function reply(req: { model?: string; input?: unknown; tools?: { type: string; name?: string }[] }): Response {
+function reply(req) {
   const model = req.model ?? "stub";
-  const base = { id: "resp_twcompat", object: "response", created_at: 1, model, status: "in_progress", output: [] as unknown[] };
+  const base = { id: "resp_twcompat", object: "response", created_at: 1, model, status: "in_progress", output: [] };
   const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 } };
-  const input = Array.isArray(req.input) ? (req.input as { type?: string }[]) : [];
+  const input = Array.isArray(req.input) ? req.input : [];
   const fn = (req.tools ?? []).find((t) => t.type === "function");
   const called = input.some((i) => i.type === "function_call_output");
   if (fn && !called) {
@@ -488,14 +489,14 @@ function reply(req: { model?: string; input?: unknown; tools?: { type: string; n
   ]);
 }
 
-globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+globalThis.fetch = async (input, init) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   if (new URL(url).pathname.endsWith("/responses")) {
     const body = init?.body ?? (input instanceof Request ? await input.clone().text() : "{}");
     return reply(JSON.parse(String(body)));
   }
-  return realFetch(input as RequestInfo, init);
-}) as typeof fetch;
+  return realFetch(input, init);
+};
 `
 
 func probeAIHono(r *Run) error {
@@ -707,7 +708,7 @@ func UpstreamNotRun() []NotRun {
 		return NotRun{Section: SectionVercel, Repo: "vercel/ai", Commit: vercelAICommit, Base: "examples/", Dirs: dirs, Why: why}
 	}
 	return append(pythonNotRun(), []NotRun{ // python.go
-		ag("needs Workers AI (`env.AI`, an `ai` binding in its wrangler config), which tailworks doesn't provide",
+		ag("needs Workers AI (`env.AI`, an `ai` binding in its wrangler config), which tailworks doesn't provide. A scripted `env.AI` isn't possible without changing each example: tailworks ignores the `ai` binding (`env.AI` is undefined), so there is no binding to point at a stub, and one would have to be wired into each example: its config, or a wrapper around each of its agent classes (they read `this.env.AI` inside their Durable Objects)",
 			"a2a", "agents-as-tools", "auth-agent", "chat-sdk-messenger", "codemode-browser", "context-overflow-recovery", "deploy-churn",
 			"dynamic-tools", "mcp-rpc-transport", "multi-ai-chat", "resumable-stream-chat", "structured-input", "think-chat-sdk",
 			"think-submissions", "think-workflows", "vue-chat", "web-fetch-lab", "web-research"),
@@ -727,20 +728,14 @@ func UpstreamNotRun() []NotRun {
 			"tictactoe"),
 		ag("needs a funded test wallet key and the public x402.org facilitator",
 			"x402", "x402-mcp"),
-		ag("not reached in this pass. These declare no Cloudflare-only binding (plain `DurableObject` + `Lifecycle` capabilities), so they are the next ones to add",
-			"next/lifecycle", "next/mcp-client", "next/queue", "next/routing", "next/schedules", "next/sessions", "next/streams", "next/tasks", "next/websockets"),
-		ag("not reached in this pass; needs Workers AI, the Worker Loader, a container or a model provider key",
+		ag("needs Workers AI, the Worker Loader, a container or a model provider key",
 			"next/channels", "next/dynamic-agents", "next/harnesses/*", "next/models", "next/tools/browser"),
 
 		ai("a Next.js, Nuxt, SvelteKit or Angular app that calls a model provider with an API key. tailworks' Worker tier runs Workers projects, not these frameworks' builds, and none of them has a Workers target",
 			"ai-e2e-next", "angular", "harness-e2e-next", "next", "next-agent", "next-fastapi", "next-google-vertex", "next-langchain",
 			"next-openai-kasada-bot-protection", "next-openai-pages", "next-openai-telemetry", "next-openai-telemetry-sentry",
 			"next-openai-upstash-rate-limits", "next-workflow", "nuxt-openai", "sveltekit-openai", "xai-tts-demo"),
-		ai("a Node server on a framework with its own HTTP layer (Fastify, Nest); not tried",
-			"fastify", "nest"),
 		ai("scripts and a terminal UI, not servers; they call model providers with API keys",
 			"ai-functions", "harness-e2e-tui"),
-		ai("Node MCP servers and clients run as script pairs (`tsx server.ts`, `tsx client.ts`), several over stdio; not tried",
-			"mcp"),
 	}...)
 }

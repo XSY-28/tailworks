@@ -50,6 +50,7 @@ const redirectWorkaround = "deploys the Vite plugin's output directory with --wr
 func Projects() []*Project {
 	ps := append(cloudflareProjects(), pythonDeployedOnly()...) // python.go
 	ps = append(ps, upstreamProjects()...)
+	ps = append(ps, upstreamMoreProjects()...) // upstream_more.go
 	return append(ps, pythonProjects()...)
 }
 
