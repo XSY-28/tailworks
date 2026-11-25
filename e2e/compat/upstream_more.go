@@ -26,8 +26,6 @@ func upstreamMoreProjects() []*Project {
 		agentsUp("ag-next-lifecycle", "next/lifecycle", func(p *Project) {
 			p.What = "A plain `DurableObject` with `Lifecycle` and a job-queue capability: a self-rescheduling durable job, cancel, `ctx.abort()` restart"
 			p.Exercises = []string{"agents-sdk", "do-storage", "alarms"}
-			p.Expect = Expect{Kind: ExpectProbeFail, Compat: "do-storage",
-				Why: "the job ticks, and its `/restart` route calls `ctx.abort()`; after that the object is never recreated, and every request to it fails with the abort reason (`demo restart`). Stock `wrangler dev` gives it a new instance and the job keeps ticking ([#395](https://github.com/rosskukulinski/tailworks/issues/395))"}
 			p.Probe = probeNextLifecycle
 		}),
 		agentsUp("ag-next-mcp-client", "next/mcp-client", func(p *Project) {
@@ -45,8 +43,6 @@ func upstreamMoreProjects() []*Project {
 			p.What = "`RoutedAgents` on a plain `DurableObject` hub: one Agent per chat, forwarded requests and WebSockets, pushed metadata, search, delete (+ React UI)"
 			p.Exercises = []string{"agents-sdk", "do-rpc", "do-storage", "websockets", "assets"}
 			p.Build = viteBuild
-			p.Expect = Expect{Kind: ExpectProbeFail, Compat: "do-rpc",
-				Why: "the hub's `createChat()` (`RoutedAgents.get(id)`, then `init()` on the chat's stub over Durable Object RPC) fails with `Could not serialize object of type \"RpcPromise\"`, as the playground's multi-agent demo does; the same build passes under stock `wrangler dev` ([#391](https://github.com/rosskukulinski/tailworks/issues/391))"}
 			p.Probe = probeNextRouting
 		}),
 		agentsUp("ag-next-schedules", "next/schedules", func(p *Project) {
