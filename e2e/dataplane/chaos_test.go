@@ -64,6 +64,10 @@ func TestDataplane(t *testing.T) {
 		}
 	}
 	t.Logf("scenario %s, seed %d, duration %v, faults %v", scenario, seed, dur, names)
+	if cronScenarios[scenario] { // cron_test.go: its own workloads and checkers
+		runCron(t, wd, scenario, names, seed, dur)
+		return
+	}
 
 	root, _ := filepath.Abs("results")
 	rdir := filepath.Join(root, fmt.Sprintf("%s-%s-%d", time.Now().UTC().Format("20060102T150405Z"), scenario, seed))
