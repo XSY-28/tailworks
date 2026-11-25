@@ -80,6 +80,10 @@
           "type": ["boolean", "string"],
           "description": "true (\"svc:<workload>\") or a Tailscale Service name: a stable name and VIP (docs/services.md)."
         },
+        "https": {
+          "type": "boolean",
+          "description": "Also serve the workload node on https://<name>.<tailnet>.ts.net (port 443, its ts.net certificate); requests that arrive that way see an https:// request.url. Needs HTTPS certificates on the tailnet. Plain http:// on port 80 keeps working (docs/tailworks-jsonc.md#tailnethttps)."
+        },
         "connects": {
           "type": "array",
           "items": { "type": "string" },

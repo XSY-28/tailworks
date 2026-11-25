@@ -132,6 +132,12 @@ type Project struct {
 	// the deployed run: the example behaves differently on a real host
 	// than under tw dev.
 	ExpectDeployed Expect
+
+	// TailnetHTTPS sets tailworks.jsonc tailnet.https in the overlay
+	// (#360): the deployed run calls the workload at
+	// https://<magicDNS> and gives an OriginVar that origin. tw dev
+	// ignores it (loopback http://). List it in Changes too.
+	TailnetHTTPS bool
 }
 
 // ExpectIn is what the suite expects of p in a run mode ("dev" or

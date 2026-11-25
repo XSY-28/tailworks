@@ -379,6 +379,7 @@ func (h *Host) nodeIngress(inst *instance, tr http.RoundTripper) http.Handler {
 			pr.SetURL(&url.URL{Scheme: "http", Host: "app"})
 			netd.KeepBodyEOF(pr) // #138
 			pr.Out.Host = pr.In.Host
+			keepForwardedProto(pr) // tailnethttps.go
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			if r.Context().Err() != nil {

@@ -22,6 +22,7 @@ an older server with `profile_unsupported`. Tested against v0.29.7 with
 | Kill switch | Tier 1 (netd), Tier 2 (device delete), Tier 3 (posture) | Tiers 1 and 2. Tier 2 deletes the Headscale node |
 | Caps (`app`) | in grants | in grants (the same). `nodeAttrs` carry no `app` |
 | HTTPS on mgmt's node | when the tailnet has HTTPS certificates | plain HTTP on `:80` (WireGuard-encrypted, WhoIs-authenticated) |
+| `tailnet.https` (a workload on `https://`) | when the tailnet has HTTPS certificates | not available: Headscale issues no ts.net certificates, so the deploy fails with `tailnet_https_unavailable` |
 | Policy owners | `autogroup:admin`, `tag:tw` | `tag:tw` only. Headscale rejects `autogroup:admin` |
 
 Everything else works the same way: Durable Objects with their own nodes,

@@ -68,6 +68,9 @@ type workload struct {
 	placementTargets []string
 	cronLast         time.Time       // the last minute whose cron triggers were evaluated (UTC)
 	cronRunning      map[string]bool // cron expressions with a run in progress
+
+	// httpsOn: the workload node serves tailnet HTTPS (tailnethttps.go).
+	httpsOn atomic.Bool
 }
 
 // fences reports whether heartbeat loss must stop this workload (stateful,
@@ -247,6 +250,10 @@ func (h *Host) deploy(w *workload, a mgmtapi.Assignment) {
 	w.mu.Lock()
 	w.wl = wl
 	w.mu.Unlock()
+	if err := h.applyTailnetHTTPS(ctx, t, w, wl, app); err != nil { // tailnethttps.go
+		w.fail(a.DeploymentID, err)
+		return
+	}
 
 	if tier == bundle.TierProcess {
 		// RT-08: a Node app on a host with NO process sandbox has fully

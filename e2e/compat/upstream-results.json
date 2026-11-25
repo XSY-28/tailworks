@@ -242,10 +242,6 @@
         "source": "cloudflare/agents/examples/mcp-worker@95dacf84dcdf",
         "steps": 5
       },
-      "ag-mcp-worker-auth": {
-        "outcome": "XFAIL",
-        "source": "cloudflare/agents/examples/mcp-worker-authenticated@95dacf84dcdf"
-      },
       "ag-playground": {
         "outcome": "PASS",
         "source": "cloudflare/agents/examples/playground@95dacf84dcdf",

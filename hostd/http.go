@@ -90,6 +90,7 @@ func (h *Host) ingressHandler(t *tenant) http.Handler {
 			return
 		}
 		trace := newTraceID()
+		markHTTPSRoute(r, o, blob, route) // tailnethttps.go
 		blob["tw"] = route
 		blob["traceId"] = trace
 		// limits.md#redeploy-wait

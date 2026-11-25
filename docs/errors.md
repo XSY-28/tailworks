@@ -463,6 +463,9 @@ Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<bi
 ### tag_not_owned
 400 · mgmt, cli. **When:** a tenant with its own owner tag deployed or spawned with a tag that, in the tailnet policy's `tagOwners`, its owner tag doesn't own, or another tenant's owner tag on the same tailnet also owns; `tw policy` lists them as `tagOwnerProblems`. **Fix:** own the tag by the tenant's owner tag only (the printed `snippet`), or use a tag of your own team's ([teams.md](teams.md)).
 
+### tailnet_https_unavailable
+412 · hostd, netd. **When:** a deploy of an app with tailworks.jsonc `"tailnet": {"https": true}` ([tailworks-jsonc.md](tailworks-jsonc.md#tailnethttps)), and the tailnet issues no HTTPS certificates to the workload's node: HTTPS Certificates (or MagicDNS) is off for the tailnet, or the control server is Headscale, which issues none. `tw deploy` shows it as the detail of `deploy_failed`; the deployment that was active keeps serving. **Fix:** turn on MagicDNS and HTTPS Certificates in the admin console (DNS page) and deploy again, or remove `tailnet.https` and serve `http://` only.
+
 ### tailnet_required
 400 · cli. **When:** the tailnet could not be determined from the OAuth client, or the Headscale profile was used without `--tailnet` (its `dns.base_domain`). Tailworks never bootstraps from the machine's own Tailscale login. **Fix:** `tw up --tailnet <name> …`.
 

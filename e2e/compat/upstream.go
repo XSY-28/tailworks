@@ -122,9 +122,14 @@ func upstreamProjects() []*Project {
 			p.Exercises = []string{"mcp", "kv", "vars", "assets"}
 			p.Build = viteBuild
 			p.OriginVar = "MCP_RESOURCE"
-			p.Changes = []string{"`vars.MCP_RESOURCE` in wrangler.jsonc set to the served URL + `/mcp`, as the example's README says to"}
-			p.ExpectDeployed = Expect{Kind: ExpectRefused, Compat: "fetch", Error: "must be an absolute HTTPS URI",
-				Why: "workers-oauth-provider accepts only an HTTPS resource URL (`http` on loopback), and a tailnet workload is served over `http://`, so with `MCP_RESOURCE` set to its tailnet URL workerd can't start the Worker ([#360](https://github.com/rosskukulinski/tailworks/issues/360))"}
+			// workers-oauth-provider accepts only an HTTPS resource URL
+			// (`http` on loopback): deployed, the workload is called at
+			// its https:// tailnet URL (#360).
+			p.TailnetHTTPS = true
+			p.Changes = []string{
+				"`vars.MCP_RESOURCE` in wrangler.jsonc set to the served URL + `/mcp`, as the example's README says to",
+				"deployed: `\"tailnet\": {\"https\": true}` in tailworks.jsonc, so the resource URL is the workload's `https://` tailnet URL ([#360](https://github.com/rosskukulinski/tailworks/issues/360))",
+			}
 			p.Probe = probeMCPWorkerAuth
 		}),
 		agentsUp("ag-push-notifications", "push-notifications", func(p *Project) {

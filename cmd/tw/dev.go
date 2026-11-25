@@ -86,6 +86,7 @@ func cmdDev(args []string) error {
 	}
 	a.printWarnings(os.Stderr)
 	printDevEgressVia(a.TwRaw, os.Stderr)                  // dev_egressvia.go
+	printDevTailnetHTTPS(a.TwRaw, os.Stderr)               // tailnethttps.go
 	if err := checkDevPort(*port, os.Stderr); err != nil { // devlog.go
 		return err
 	}
@@ -139,6 +140,8 @@ func cmdDev(args []string) error {
 		ForceProcessTier: true,
 		// Workers reach the internet as on a host (tailnet.egress.internet).
 		WorkerInternet: hostd.DirectInternet(),
+		// The local control issues no certificates (tailnethttps.go).
+		TailnetHTTPSOff: true,
 		// --inspector-port: each workerd gets an inspector (hostd/inspector.go).
 		WorkerdInspector: *inspectorPort > 0,
 		// Python Workers: the per-user Pyodide cache, fetched once (python.go).

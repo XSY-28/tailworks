@@ -40,6 +40,7 @@ import (
 	"github.com/rosskukulinski/tailworks/hostd/r2"
 	"github.com/rosskukulinski/tailworks/hostd/sandbox"
 	"github.com/rosskukulinski/tailworks/internal/procsb"
+	"github.com/rosskukulinski/tailworks/netd"
 	"tailscale.com/tsnet"
 )
 
@@ -98,6 +99,15 @@ type Config struct {
 	// (netd.Config.PublicListen). Tests only: testcontrol issues no
 	// certificates, so they inject a listener of *ipn.FunnelConn.
 	PublicListen func(srv *tsnet.Server) (net.Listener, error)
+
+	// TailnetHTTPSCert overrides the certificate of a workload node's
+	// tailnet HTTPS listener (netd.Config.HTTPSCert). Tests only.
+	TailnetHTTPSCert netd.HTTPSCertFunc
+	// TailnetHTTPSOff ignores tailworks.jsonc tailnet.https: the workload
+	// is served on http:// only (tw dev, whose local control issues no
+	// certificates). Never set it on a host that serves tenants.
+	TailnetHTTPSOff bool
+
 	// VM boots microVM sandboxes (hostd/vm: Firecracker on Linux + KVM).
 	// Nil means this host offers the process tier only: a microvm
 	// deployment is refused (tier_unavailable), never downgraded.

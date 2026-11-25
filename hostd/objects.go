@@ -365,6 +365,7 @@ func (h *Host) startNodeLocked(o *object) {
 	}
 	eph := h.cfg.Ephemeral
 	opts := netd.ObjectOptions{Hostname: o.Hostname, Tags: o.Tags, Ephemeral: &eph}
+	opts.HTTPS = h.tailnetHTTPSLocked(o) // tailnethttps.go
 	if o.isPublicNode() {
 		// A public node never starts without its public options (it would
 		// otherwise come up as a tailnet listener): wait for applyPublic.
