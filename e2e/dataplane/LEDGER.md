@@ -73,3 +73,4 @@ the date as the seed.
 | make e2e-dataplane (macOS, merged tree) | mixed 20261125 | pass |
 | CI ubuntu-24.04, nightly dispatch run 45535497016 | mixed 20261125 | **D1 fail: F3** (2 stale Pulse side effects after takeovers of stalled hosts) |
 | fix-432 branch, queues 6 | queues 6, crash-hostd + move | pass. Workerds alive 10 s after a hostd crash and restart: 8 of 8 → 0 of 7 (D7 now gates it) |
+| fix-501 branch, Linux arm64 (Lima) | fencing 20261125, pause-takeover + pause-hostd-takeover, 5 min | pass. 6 takeovers of a stalled host, 7 epochs, 0 stale answers, 0 stale side effects (of 371 pulses) |

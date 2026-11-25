@@ -18,4 +18,11 @@ egress calls seconds after the new copy's first.
 
 ## Tests
 
-See the PR.
+
+- `go test ./hostd -run 'TestStallFence|TestHoldEgress|TestCronDue|TestMM_F9|TestFence'`: pass. Both
+  `TestStallFence*` fail without the fix.
+- `make lint`, `make test` (macOS): pass.
+- `make e2e-locks`: pass (TestLocksFailover 79 s).
+- Linux arm64 (Lima): `TW_DP_SCENARIO=fencing TW_DP_FAULTS=pause-takeover,pause-hostd-takeover
+  TW_DP_SEED=20261125 TW_DP_DURATION=5m` e2e/dataplane: pass. 6 stalled-host takeovers,
+  0 stale answers, 0 stale side effects (the CI run that found #501 had 2).
