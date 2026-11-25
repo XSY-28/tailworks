@@ -114,7 +114,9 @@ Paste the Client Secret when asked. `tw up` saves it to
 `tagOwners` and grants it will add to your policy and asks before writing
 them, joins your tailnet as `tw-mgmt`, and installs a service so tailworks
 starts at login. It prints the admin console URL:
-`http://tw-mgmt.<tailnet>.ts.net/ui/`.
+`http://tw-mgmt.<tailnet>.ts.net/ui/`. The bare `http://tw-mgmt.<tailnet>.ts.net`
+redirects a browser there, and `tw link` and `tw whoami` print it on other
+machines.
 
 If you pasted the whole snippet in step 2, or chose **Policy File › Read**,
 run plain `tw up`: it prints any lines still missing.
