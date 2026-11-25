@@ -75,6 +75,10 @@ type hostJoin struct {
 	Hostname           string   `json:"hostname"`
 	ControlURL         string   `json:"controlURL"`
 	Tailnet            string   `json:"tailnet"`
+
+	// host_joinfile.go: what the join file carries besides the secrets.
+	KeyTagsOnly bool   `json:"keyTagsOnly"`
+	MgmtURL     string `json:"mgmtURL"`
 }
 
 func (hostJoin) String() string { return "hostJoin{[REDACTED]}" }
@@ -108,7 +112,7 @@ func (s *state) mintHostJoin(ctx context.Context, hostID, tenantID string) error
 		return err
 	}
 	tmp := s.hostJoinFile() + ".tmp"
-	if err := os.WriteFile(tmp, hj.joinFileContent(), 0o600); err != nil {
+	if err := os.WriteFile(tmp, hj.hostJoinFileContent(hostID, s.hostJoinMgmtURL(hj)), 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, s.hostJoinFile())

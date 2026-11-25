@@ -60,15 +60,15 @@ func run() error {
 	}
 	home, _ := os.UserHomeDir()
 	var (
-		mgmtAddr   = flag.String("mgmt", "", "tw-mgmt address: http(s)://tw-mgmt.<tailnet> over this host's node (default), or unix:///path with -local-dev")
+		mgmtAddr   = flag.String("mgmt", "", "tw-mgmt address: http(s)://tw-mgmt.<tailnet> over this host's node (default: the join file's, else the one saved at the join), or unix:///path with -local-dev")
 		localDev   = flag.Bool("local-dev", false, "talk to mgmt over its unix socket with the per-host token instead of this host's own tailnet node (tw dev, hermetic tests)")
 		tsDir      = flag.String("tsnet-dir", "", "state of this host's own tailnet node (default <data-dir>/tsnet)")
-		tsControl  = flag.String("tsnet-control-url", "", "operator tailnet control URL for this host's node (required unless -local-dev)")
+		tsControl  = flag.String("tsnet-control-url", "", "operator tailnet control URL for this host's node (default: the join file's, else the one saved at the join, else Tailscale's for a node that hasn't joined yet)")
 		tsKeyTags  = flag.Bool("tsnet-key-tags-only", false, "the host's node advertises no tags; its join key carries tag:tw-host (required on Headscale, ADR-015)")
-		joinFile   = flag.String("join-token-file", "", "TS_AUTHKEY=… file with the single-use join key mgmt minted (tw host add / tw up); waited for when the node has no state yet. Deleted after use")
+		joinFile   = flag.String("join-token-file", "", "the join file tw host add wrote: the single-use join key (TS_AUTHKEY=…), the registration secret, and the host ID, mgmt URL and control URL (flags win; kept beside the node state after the join); waited for when the node has no state yet. Deleted after use")
 		pushPort   = flag.Int("push-port", hostdrun.DefaultPushPort, "port on this host's node where mgmt pushes kills and assignment changes")
 		metricsPrt = flag.Int("metrics-port", obs.DefaultMetricsPort, "port on this host's node serving GET /metrics (Prometheus; who may scrape is a tailnet policy grant); 0 = off")
-		hostID     = flag.String("host-id", "", "this host's ID (default: hostname)")
+		hostID     = flag.String("host-id", "", "this host's ID (default: the join file's, else the one saved at the join, else hostname)")
 		dataDir    = flag.String("data-dir", filepath.Join(home, ".tailworks", "hostd"), "node state, DO storage, objects.json")
 		runDir     = flag.String("run-dir", "", "sockets and generated configs (short path; default a new /tmp dir)")
 		workerd    = flag.String("workerd", "", "workerd binary (default: $TW_WORKERD, ~/.tailworks/bin/workerd, or PATH)")
@@ -240,15 +240,27 @@ func installPrefix() string {
 func runJoin(args []string) error {
 	home, _ := os.UserHomeDir()
 	fs := flag.NewFlagSet("tw-hostd join", flag.ContinueOnError)
-	hostID := fs.String("host-id", "", "this host's ID (default: hostname)")
+	hostID := fs.String("host-id", "", "this host's ID (default: the token file's TW_HOST_ID, else hostname)")
 	dataDir := fs.String("data-dir", filepath.Join(home, ".tailworks", "hostd"), "hostd state (the node state goes to <data-dir>/tsnet)")
 	tsDir := fs.String("tsnet-dir", "", "node state dir (default <data-dir>/tsnet)")
-	control := fs.String("control-url", "https://controlplane.tailscale.com", "operator tailnet control URL")
+	control := fs.String("control-url", "https://controlplane.tailscale.com", "operator tailnet control URL (default: the join file's TW_TSNET_CONTROL_URL, else Tailscale's)")
 	tokenFile := fs.String("token-file", "", "TS_AUTHKEY=… file with the join key (tw host add --json > …)")
 	token := fs.String("token", "", "the join key itself (prefer --token-file; argv is visible to other users)")
 	keyTags := fs.Bool("key-tags-only", false, "advertise no tags; the join key carries tag:tw-host (required on Headscale, ADR-015)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	// #488: the join file names the host ID, control URL and key-tags-only
+	// (a flag still wins); they are kept beside the node state after the join.
+	js := hostdrun.ReadJoinSettings(*tokenFile)
+	controlGiven := false
+	fs.Visit(func(f *flag.Flag) { controlGiven = controlGiven || f.Name == "control-url" })
+	if !controlGiven && js.ControlURL != "" {
+		*control = js.ControlURL
+	}
+	*keyTags = *keyTags || js.KeyTagsOnly
+	if *hostID == "" {
+		*hostID = js.HostID
 	}
 	if *hostID == "" {
 		h, _ := os.Hostname()
@@ -287,8 +299,11 @@ func runJoin(args []string) error {
 		// M1: keep the registration secret for the first registration;
 		// the join key itself is single use.
 		hostdrun.PersistRegistrationSecret(*tokenFile, *tsDir)
+		if err := hostdrun.SaveJoinSettings(*tsDir, hostdrun.JoinSettings{HostID: *hostID, MgmtURL: js.MgmtURL, ControlURL: *control, KeyTagsOnly: *keyTags}); err != nil {
+			fmt.Fprintf(os.Stderr, "tw-hostd join: could not save the join settings beside the node state: %v (pass -host-id, -mgmt and -tsnet-control-url to tw-hostd)\n", err)
+		}
 		os.Remove(*tokenFile)
 	}
-	fmt.Printf("joined as %s (%s); node state in %s. Start tw-hostd without a key now.\n", strings.TrimSuffix(st.Self.DNSName, "."), st.TailscaleIPs, *tsDir)
+	fmt.Printf("joined as %s (%s); node state in %s. Start tw-hostd without a key now (it reads the saved settings; -mgmt if the join file named none).\n", strings.TrimSuffix(st.Self.DNSName, "."), st.TailscaleIPs, *tsDir)
 	return nil
 }

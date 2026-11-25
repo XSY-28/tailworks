@@ -5277,6 +5277,13 @@ components:
         tags: { type: array, items: { type: string } }
         hostname: { type: string, description: "`tw-host-<hostID>`" }
         controlURL: { type: string, format: uri }
+        keyTagsOnly:
+          type: boolean
+          description: The host's node must advertise no tags; its join key carries `tag:tw-host` (Headscale, ADR-015). `tw-hostd -tsnet-key-tags-only`.
+        mgmtURL:
+          type: string
+          format: uri
+          description: "Where the host reaches mgmt over the tailnet (`tw-hostd -mgmt`): `http://tw-mgmt.<tailnet>`. Absent when mgmt doesn't know its own node name (local-dev)."
         tailnet: { type: string }
       x-tw-secret: true
     HostRegistration:

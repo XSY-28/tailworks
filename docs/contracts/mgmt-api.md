@@ -3998,6 +3998,8 @@ A single-use join key for a host's `tag:tw-host` node. Never logged.
 | `expiresAt` | integer (int64) | yes | unix ms |
 | `host` | `Host` | yes |  |
 | `hostname` | string | yes | `tw-host-<hostID>` |
+| `keyTagsOnly` | boolean | no | The host's node must advertise no tags; its join key carries `tag:tw-host` (Headscale, ADR-015). `tw-hostd -tsnet-key-tags-only`. |
+| `mgmtURL` | string (uri) | no | Where the host reaches mgmt over the tailnet (`tw-hostd -mgmt`): `http://tw-mgmt.<tailnet>`. Absent when mgmt doesn't know its own node name (local-dev). |
 | `registrationSecret` | string (password) | yes | One-time secret (32 random bytes, base64url) the host presents in its first `PUT /v1/hosts/{id}`; mgmt stores only its SHA-256 and clears it once the node is bound. |
 | `tags` | array of string | yes |  |
 | `tailnet` | string | no |  |

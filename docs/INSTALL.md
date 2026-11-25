@@ -799,7 +799,7 @@ enables and starts it. Logs go to the same `<state>/logs/` (`mgmt.log` and
 **One process by default; scale out with `tw host add`.** As on macOS,
 `tw up` adds one device to your tailnet (mgmt's node) and runs the host
 agent inside the same process; only when you add machines (`tw host add
-<id>`, then `tw-hostd join` + `tw-hostd` there) do hosts get their own
+<id>`, then `tw-hostd -join-token-file <id>.join.env` there) do hosts get their own
 `tag:tw-host` nodes, which is also what the printed `tag:tw-host` policy
 lines are for. `systemctl --user restart tw` brings tailworks back
 in a few seconds, and deployed workloads rejoin with the same tailnet nodes

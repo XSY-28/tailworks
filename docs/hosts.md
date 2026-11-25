@@ -25,9 +25,20 @@ node); a state dir keeps the layout it was created with (state from before
 this option stays two-process). Object nodes are the same in both layouts.
 
 Add a second machine as a host with `tw host add <host-id>`: mgmt records
-it (pending) and writes a single-use join key file; on the new machine run
-`tw-hostd join --host-id <id> --token-file <file> --control-url …`, then
-start `tw-hostd -host-id <id> -mgmt http://tw-mgmt.<tailnet> -tsnet-control-url …`.
+it (pending) and writes a join file (0600) with a single-use join key, the
+one-time registration secret, and the host ID, mgmt's URL and the control
+URL (plus key-tags-only on Headscale). Copy it to the new machine and run
+
+```sh
+tw-hostd -join-token-file <host-id>.join.env
+```
+
+No other flags are needed: tw-hostd joins with the key, deletes the file
+and keeps the settings beside the node state (`<data-dir>/tsnet/join.env`),
+so later starts need no flags either. A flag still wins over the file. To
+run it as a service, use systemd with `Restart=always` and add
+`-self-upgrade`. `tw-hostd join --token-file <file>` (join only, then
+exit) reads the same file.
 `tw host ls` / `tw host rm <id> [--force]` manage hosts; `tw tenant set`
 (PATCH) and `tw tenant rm`, `tw undeploy <workload>` round out the CRUD.
 More hosts still share one mgmt; for more than one mgmt replica, see

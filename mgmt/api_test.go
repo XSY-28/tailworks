@@ -955,6 +955,11 @@ func TestTailnetAuth(t *testing.T) {
 	if len(hj1.RegistrationSecret) < 40 || hj1.RegistrationSecret == hj2.RegistrationSecret {
 		t.Fatalf("registration secrets: %q %q", hj1.RegistrationSecret, hj2.RegistrationSecret)
 	}
+	// #488: over the tailnet the answer names mgmt's URL for the join file
+	// (keyTagsOnly only on Headscale).
+	if c, b := call("100.64.0.3:1", "POST", "/v1/hosts", `{"hostID":"h-joinurl","tenantID":"`+tn.TenantID+`"}`); c != 201 || b["mgmtURL"] != "http://tw-mgmt.t.ts.net" || b["keyTagsOnly"] != nil {
+		t.Fatalf("host join over the tailnet: %d %v", c, b)
+	}
 	reg := func(secret string) string {
 		b := map[string]any{"capacityNodes": 1, "tiers": []string{"process"}}
 		if secret != "" {

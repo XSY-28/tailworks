@@ -51,7 +51,12 @@ vulnerability, see [SECURITY.md](../SECURITY.md).
   directory that workloads' sandboxes can't read. mgmt reads the key and
   deletes the file before it joins; a failed start deletes it too, and so
   does `tw up` when it returns. A host's own join key
-  (`~/.tailworks/hostd/join.env`) is handled the same way.
+  (`~/.tailworks/hostd/join.env`) is handled the same way. The join file
+  `tw host add` writes for another machine (0600) carries that host's
+  single-use key and one-time registration secret, plus non-secret
+  settings (host ID, mgmt's URL, control URL); tw-hostd deletes it after
+  the join and keeps only the settings and the registration secret beside
+  the node state (0600).
 - **Kill is a network cut.** `tw kill` tombstones the object, its node
   stops answering (410), and with the Devices scope the device is deleted.
 

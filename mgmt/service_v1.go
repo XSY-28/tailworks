@@ -274,6 +274,9 @@ type HostJoin struct {
 	Hostname           string   `json:"hostname"`
 	ControlURL         string   `json:"controlURL,omitempty"`
 	Tailnet            string   `json:"tailnet,omitempty"`
+
+	// KeyTagsOnly: the host's node advertises no tags (Headscale).
+	KeyTagsOnly bool `json:"keyTagsOnly,omitempty"`
 }
 
 // String never prints the key.
@@ -383,7 +386,8 @@ func (m *Mgmt) CreateHost(ctx context.Context, r HostCreate) (HostJoin, bool, er
 	m.audit(ctx, AuditRecord{TenantID: t.ID, Kind: "host_add", ActingFor: r.By}, map[string]any{"host": r.HostID, "keyID": k.ID,
 		"tags": tags, "mode": t.MintMode, "by": r.By, "new": created})
 	return HostJoin{Host: h, AuthKey: k.Secret, RegistrationSecret: secret, ExpiresAt: m.now().Add(HostJoinKeyExpiry).UnixMilli(), Tags: tags,
-		Hostname: HostNodeName(r.HostID), ControlURL: m.cfg.OperatorControlURL, Tailnet: t.Tailnet}, created, nil
+		Hostname: HostNodeName(r.HostID), ControlURL: m.cfg.OperatorControlURL, Tailnet: t.Tailnet,
+		KeyTagsOnly: t.MintMode == MintHeadscale}, created, nil
 }
 
 func validHostID(s string) bool {
