@@ -119,6 +119,10 @@ type Server struct {
 	// storesDown: the store journal answers 503 (storesdown.go).
 	storesDown bool
 
+	// loseAppendAnswers: appends that commit and then answer 503, as if
+	// the answer were lost (storelose.go).
+	loseAppendAnswers int
+
 	// storeReadHold: hosts' journal reads hang (storeshold.go).
 	storeReadHold storeReadHold
 
