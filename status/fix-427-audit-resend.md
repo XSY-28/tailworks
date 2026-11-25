@@ -36,4 +36,6 @@ without the head is stored as before, and verification still reports it.
 `TestAuditResendIsIdempotent` (mgmt): it sends the first record twice, a
 batch that overlaps the stored records, and a new segment twice. Without
 the fix it fails with the CI signature (`Records:2 BrokenAt:2`).
-The other commands are in the PR body.
+- `make lint` and `make test` (macOS, local, after merging origin/master): ok.
+- `TestAuditChainAcrossRestart` before the fix: 2 failures in about 170 stress runs, both with the duplicated first record. With the fix, under the same load: 95 runs of all three subtests passed. One binary crashed on an unrelated hostd bug ("close of closed channel" in `closeOnce`), which PR #632 fixes.
+- `make e2e-multimgmt`: could not run. Another agent's run on this machine held the shared `tw-mm-pg` container and Postgres, so every scenario failed at setup (a container name conflict, or "replicas sharing a store must share custody").
