@@ -636,7 +636,7 @@ subcommands:
   tw d1 create <db>
   tw d1 ls
   tw d1 rm <db> [--yes]
-  tw d1 execute <db> --command <sql> | --file <file>
+  tw d1 execute <db> [--command <sql> | --file <file>]
   tw d1 export <db> [--output <file>]
   tw d1 repair <db> --skip <seq> [--yes]
   tw d1 migrations create <db> <message>
@@ -662,7 +662,7 @@ flags:
   -command string
     	SQL to run (one or more statements, run as one batch)
   -file string
-    	a file of SQL to run as one batch
+    	a file of SQL to run as one batch (with neither flag, the SQL is read from stdin: tw d1 execute <db> < file.sql)
   -workload string
     	workload whose database it is (default: the app in the current directory, as tw deploy names it)
 
