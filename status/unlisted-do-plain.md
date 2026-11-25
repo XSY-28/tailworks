@@ -18,6 +18,11 @@ whether or not tailworks.jsonc exists.
   tailworks-jsonc, wrangler, ADR-006 amendment paragraph.
 - e2e/upgrade: an unlisted class `Tally` (packed old-style) whose storage
   must survive the hostd upgrade.
+- e2e/compat: `ag-cross-domain` and `ag-mcp-elicitation` XPASSed (imported
+  env: an internal class needs no create admission), so their expected
+  failure is gone; reran both under `e2e-compat-dev` and `e2e-compat`, then
+  `make compat-upstream`. COMPAT.md's imported-env row now says it works for
+  unlisted classes.
 - `changes/unlisted-do-plain.md`: kind breaking, `config-default`.
 
 ## Tests
