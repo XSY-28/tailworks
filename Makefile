@@ -106,6 +106,15 @@ e2e-placement: deps
 e2e-dataplane: deps
 	$(GO) test -tags e2edataplane -count=1 -v -timeout 25m -run TestDataplane ./e2e/dataplane/...
 
+## e2e-dataplane-deploys: the data-plane loop's deploys scenario (issue #421, e2e/dataplane/LOOP.md "Deploys"):
+## concurrent deploys, rollbacks, previews, promotions and secret puts/deletes through 3 tw-mgmt replicas on
+## Postgres (docker context PG_CTX), under host, mgmt-replica and Postgres faults; checks V1-V6.
+## TW_DP_SEED defaults to today's date; TW_DP_SCENARIO=deploys-hosts|deploys-mgmt|deploys-mixed.
+.PHONY: e2e-dataplane-deploys
+e2e-dataplane-deploys: deps
+	PG_CTX="$(PG_CTX)" TW_DP_SCENARIO="$${TW_DP_SCENARIO:-deploys-mixed}" \
+		$(GO) test -tags e2edataplane -count=1 -v -timeout 25m -run 'TestDataplane$$' ./e2e/dataplane/...
+
 ## e2e-dataplane-r2: the data-plane chaos loop for R2 buckets (issue #420, e2e/dataplane/ledger/r2.md): the same
 ## cluster running testdata/r2 under the r2-fs, r2-s3 and r2-replicas scenarios (3 min each; s3 is a Garage
 ## container, so it needs Docker), checked for R1-R6. TW_DP_SCENARIO=r2-fs|r2-s3|r2-replicas runs one.
