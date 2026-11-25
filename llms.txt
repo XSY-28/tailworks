@@ -15,6 +15,7 @@ Coding agents: start with the skills. `tw agent setup` installs them for Claude 
 - [Alternatives to tailworks](https://github.com/rosskukulinski/tailworks/blob/master/docs/alternatives.md): what tailworks adds to stock workerd, a dated comparison with celld, workerd on its own, OpenOrange, Rivet, Cloudflare Mesh and tsnet, and when not to use it
 - [Installing tailworks](https://github.com/rosskukulinski/tailworks/blob/master/docs/INSTALL.md): macOS and Linux, OAuth client, `tw link`, hosts, troubleshooting
 - [My first deploy doesn't answer](https://github.com/rosskukulinski/tailworks/blob/master/docs/troubleshooting.md): the caller grant, `identity_pending`, tagOwners after a rename, `peer_not_visible`, a `failed` deployment
+- [What tailworks runs on a host](https://github.com/rosskukulinski/tailworks/blob/master/docs/footprint.md): processes, ports, tailnet devices, state files and the microVM tier's root-owned helper
 - [Where the install is tested](https://github.com/rosskukulinski/tailworks/blob/master/docs/install-testing.md): the Linux support matrix and measured timings
 - [Postgres and mgmt replicas](https://github.com/rosskukulinski/tailworks/blob/master/docs/postgres.md): when to switch, `tw-mgmt migrate --from sqlite`, `tw up --db-file`, backups with Postgres, HA replicas
 - [Upgrading tailworks](https://github.com/rosskukulinski/tailworks/blob/master/docs/upgrading.md): what may run together, `tw upgrade`, fleet upgrade runs, cordon and drain
