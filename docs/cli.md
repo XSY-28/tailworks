@@ -574,10 +574,11 @@ Same flags as [tw expose](#tw-expose).
 a workload's secrets (env.NAME)
 
 ```text
-tw secret: a workload's secrets (env.NAME, like wrangler secret): put reads the value from stdin (hidden prompt on a terminal), ls shows names only; changes apply on the next deploy
+tw secret: a workload's secrets (env.NAME, like wrangler secret): put reads the value from stdin (hidden prompt on a terminal), bulk sets several from a dotenv or JSON file or piped stdin, ls shows names only; changes apply on the next deploy
 
 subcommands:
   tw secret put <NAME>
+  tw secret bulk [<file>]
   tw secret ls
   tw secret rm <NAME>
   common flags: [--workload <workload>] [--tenant <tailnet>]
@@ -588,6 +589,10 @@ flags:
 
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · --tenant <tailnet|id> (default: the tw up tenant)
 ```
+
+#### tw secret bulk
+
+Same flags as [tw secret](#tw-secret).
 
 #### tw secret ls
 
@@ -991,12 +996,7 @@ subcommands:
   common flags: [--tenant <tailnet>]
 
 flags:
-  -header value
-    	set: a header for every export, NAME=VALUE, or NAME alone to read its value from stdin (repeatable)
-  -otlp string
-    	set: the OTLP/HTTP base URL of a collector on the tailnet (http://otel-collector:4318)
-  -signals string
-    	set: what to export, comma-separated (default logs,metrics,traces)
+  (none besides the global ones)
 
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · --tenant <tailnet|id> (default: the tw up tenant)
 ```
@@ -1007,7 +1007,17 @@ Same flags as [tw telemetry](#tw-telemetry).
 
 #### tw telemetry set
 
-Same flags as [tw telemetry](#tw-telemetry).
+```text
+flags:
+  -header value
+    	a header for every export, NAME=VALUE, or NAME alone to read its value from stdin (repeatable)
+  -otlp string
+    	the OTLP/HTTP base URL of a collector on the tailnet (http://otel-collector:4318)
+  -signals string
+    	what to export, comma-separated (default logs,metrics,traces)
+
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · --tenant <tailnet|id> (default: the tw up tenant)
+```
 
 ### tw audit
 
@@ -1139,12 +1149,7 @@ subcommands:
   common flags: [--tenant <tailnet>]
 
 flags:
-  -events string
-    	set: what to send, comma-separated (default approval_requested)
-  -header value
-    	set: a header for every notification, NAME=VALUE, or NAME alone to read its value from stdin (repeatable)
-  -webhook string
-    	set: the URL mgmt POSTs to (https://hooks.slack.com/services/…, http://chat-bot/notify); - reads it from stdin
+  (none besides the global ones)
 
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · --tenant <tailnet|id> (default: the tw up tenant)
 ```
@@ -1155,7 +1160,17 @@ Same flags as [tw notify](#tw-notify).
 
 #### tw notify set
 
-Same flags as [tw notify](#tw-notify).
+```text
+flags:
+  -events string
+    	what to send, comma-separated (default approval_requested)
+  -header value
+    	a header for every notification, NAME=VALUE, or NAME alone to read its value from stdin (repeatable)
+  -webhook string
+    	the URL mgmt POSTs to (https://hooks.slack.com/services/…, http://chat-bot/notify); - reads it from stdin
+
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · --tenant <tailnet|id> (default: the tw up tenant)
+```
 
 #### tw notify test
 
