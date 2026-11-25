@@ -161,7 +161,9 @@ func checkK1(in kInput) result {
 				if o.OK && o.MS > maxDown {
 					maxDown = o.MS
 				}
-				if o.OK && time.Duration(o.MS)*time.Millisecond > ctrGrace+5*time.Second {
+				// The cap runs on the host's clock: a destroy() on a host
+				// that is stopped or cut off meanwhile takes longer.
+				if o.OK && time.Duration(o.MS)*time.Millisecond > ctrGrace+5*time.Second && nonRedeployFault(in.faults, o.Sent, o.Recv, 0) == "" {
 					r.fail("%s: destroy() took %d ms (grace cap %v)", obj, o.MS, ctrGrace)
 				}
 				continue
