@@ -34,8 +34,32 @@ Process and invariants: `e2e/dataplane/LOOP.md` "Routing".
 
 ## Results
 
-RESULTS
+"Done when" for #422 is met: 3 clean 4-minute seeds per scenario on
+macOS (public 1, 2, 3; bindings 1, 2, 3; websockets 1, 2, 3; routing 2, 3,
+4), and at least one clean Linux run per scenario (lima twd-dev, arm64:
+public 11, bindings 11, websockets 11 and 12, routing 11). The ledger has
+every run, the reruns and why.
+
+Gaps:
+
+- #593 is open, so `revoke-binding` redeploys onto the host it undeployed
+  from, and `TestRedeployAfterUndeploy` is skipped.
+- A WebSocket left open across a hostd crash can stay black-holed until
+  the client gives up (ledger HR1). N5 reports it as a note.
+- No 10-minute soak.
 
 ## Tests run
 
-TESTS
+- `make e2e-dataplane`-style runs: `TestRouting` (`go test -tags
+  e2edataplane -run 'TestRouting$'`) for the seeds above, the ledger's
+  run log has each. Post-merge smoke: routing 5, 2 min.
+- `TestRoutingReplay` on routing 2 and websockets 2 (clean after the
+  checker fixes).
+- `TestRedeployAfterUndeploy` with `TW_DP_KNOWN_FAILURES=1`: fails (#593).
+- `go test -run TestFenceClosesOpenWebSockets ./hostd/`, `go test
+  ./hostd/`: ok (#579).
+- `make lint`, `make lint-docs`, `make changes-check`: ok.
+- `make test` (mbp runner): all ok except `cmd/tw:TestDevPython` (workerd
+  not healthy in time) and `mgmt:TestWarmKeysRevokedOnCloseInParallel`
+  (1.8 s over a 1.6 s budget); both pass when rerun here, and neither
+  package is touched by this branch.
