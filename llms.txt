@@ -2,7 +2,7 @@
 
 > tailworks is a self-hosted, tailnet-native runtime for Cloudflare-style Workers and Durable Objects on stock workerd. Every workload and every Durable Object instance is its own Tailscale tailnet node; callers are identified by WireGuard identity (`getCaller`), not tokens. You drive it with the `tw` CLI; every command takes `--json`.
 
-Coding agents: start with the skills. `tw agent setup` installs them for Claude Code, Codex, Cursor, Gemini CLI and OpenCode; `tw agent show <skill>` prints one; `tw docs search <words>` and `tw docs show <doc>[#<anchor>]` read these docs offline, at the version of the installed CLI.
+Coding agents: start with the skills. `tw agent setup` installs them for Claude Code, Codex, Cursor, Gemini CLI and OpenCode; `tw agent show <skill>` prints one; `tw docs search <words>` and `tw docs show <doc>[#<anchor>]` read these docs offline, at the version of the installed CLI (all but the API and design section below).
 
 ## Start here
 

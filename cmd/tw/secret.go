@@ -57,6 +57,9 @@ func cmdSecretSub(sub string, args []string) error {
 	if sub == "" {
 		return needsSubcommand("secret")
 	}
+	if sub == "bulk" {
+		return cmdSecretBulk(f, *tenantF, *workloadF, pos)
+	}
 	switch {
 	case sub == "ls" && len(pos) != 0:
 		return fail("bad_request", "tw secret ls takes no arguments", "usage: tw "+usageOf("secret"))
@@ -68,7 +71,7 @@ func cmdSecretSub(sub string, args []string) error {
 	case (sub == "put" || sub == "rm") && len(pos) != 1:
 		return fail("bad_request", "tw secret "+sub+" needs the secret's NAME", "usage: tw "+usageOf("secret"))
 	case sub != "put" && sub != "ls" && sub != "rm":
-		return fail("bad_request", fmt.Sprintf("unknown subcommand %q (put, ls or rm)", sub), "usage: tw "+usageOf("secret"))
+		return fail("bad_request", fmt.Sprintf("unknown subcommand %q (put, bulk, ls or rm)", sub), "usage: tw "+usageOf("secret"))
 	}
 	name := ""
 	if len(pos) == 1 {
@@ -78,17 +81,9 @@ func cmdSecretSub(sub string, args []string) error {
 			return fail("bad_request", "the secret name must be a JS identifier and environment variable name ([A-Za-z_][A-Za-z0-9_]*, ≤128), not starting with TW_ or __TW")
 		}
 	}
-	workload := *workloadF
-	if workload == "" {
-		a, err := loadApp(".", "")
-		if err != nil {
-			return fail("bad_request", "no app in the current directory to take the workload from").
-				withFix("cd <app dir> && tw secret "+sub+" …", "tw secret "+sub+" … --workload <workload>")
-		}
-		workload = a.Name
-	}
-	if workloadLabel(workload) != workload {
-		return fail("bad_request", fmt.Sprintf("workload %q is not a DNS label", workload))
+	workload, err := secretWorkload(*workloadF, sub)
+	if err != nil {
+		return err
 	}
 	var value string
 	if sub == "put" {
@@ -157,6 +152,23 @@ func cmdSecretSub(sub string, args []string) error {
 		})
 	}
 	return nil
+}
+
+// secretWorkload is --workload, or else the app in the current directory's
+// workload, for tw secret sub.
+func secretWorkload(workload, sub string) (string, error) {
+	if workload == "" {
+		a, err := loadApp(".", "")
+		if err != nil {
+			return "", fail("bad_request", "no app in the current directory to take the workload from").
+				withFix("cd <app dir> && tw secret "+sub+" …", "tw secret "+sub+" … --workload <workload>")
+		}
+		workload = a.Name
+	}
+	if workloadLabel(workload) != workload {
+		return "", fail("bad_request", fmt.Sprintf("workload %q is not a DNS label", workload))
+	}
+	return workload, nil
 }
 
 // readSecretValue reads one secret value: a hidden prompt on a terminal,

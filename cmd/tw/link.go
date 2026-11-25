@@ -226,6 +226,9 @@ type linkResult struct {
 	Tenants  []TenantRef `json:"tenants"`
 	Path     string      `json:"path"`
 	Unlinked bool        `json:"unlinked,omitempty"`
+
+	// Console is the admin console URL (console.go); omitted under --tsnet.
+	Console string `json:"console,omitempty"`
 }
 
 // cmdLink binds this machine to a remote mgmt: `tw link
@@ -371,6 +374,7 @@ func cmdLink(args []string) error {
 		return err
 	}
 	res := linkResult{Endpoint: ep, Scheme: l.Scheme, Tailnet: l.Tailnet, MgmtNode: l.MgmtNode, Login: w.Login, Actor: w.Actor, NodeID: w.NodeID, Admin: w.Admin, Tenants: s.tenants(), Path: s.linkPath()}
+	res.Console = consoleURL(l, w.Admin, len(w.TenantGrants) > 0, false)
 	emit(f, res, func() {
 		role := "admin"
 		if !w.Admin {
@@ -387,6 +391,9 @@ func cmdLink(args []string) error {
 		}
 		for _, t := range res.Tenants {
 			fmt.Printf("✓ tenant    %s (%s, mint mode %s)\n", t.Tailnet, t.TenantID, mintModeName(t.MintMode))
+		}
+		if res.Console != "" {
+			fmt.Printf("✓ console   %s (admin UI in your browser)\n", res.Console)
 		}
 		fmt.Printf("  saved %s · `tw init hello --template agent && cd hello && tw deploy` · `tw ls` · `tw audit` · `tw link --unlink`\n", s.linkPath())
 	})
