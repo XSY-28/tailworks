@@ -10,7 +10,7 @@ labelled `dataplane-chaos`.
 | queues | 1, 2, 5, 6 | Attempt gaps inside fault windows: see F1 (#431) |
 | fencing | 2, 7 | Seed 2 counts only the rerun with safe takeovers |
 | d1 | 4 (on replay after the checker fix) | |
-| mixed | 3, 8, 9 | |
+| mixed | 3, 8, 9 (macOS) | Linux: 20261125 fails D1 (F3, #501) |
 | 10-minute mixed soak | none yet | |
 
 The issue's stop condition is not met yet: 3 consecutive seeds on every
@@ -22,13 +22,14 @@ the date as the seed.
 | ID | Verdict | Invariant | Issue | Summary |
 |---|---|---|---|---|
 | F1 | CONFIRMED | D3 (attempts count deliveries) | #431 | A hand-back (`Release`) from a host that has just lost the lease is refused with `lease_lost`. The batch waits out the visibility timeout and is counted as an attempt it never ran. Poison can be dead-lettered after fewer real runs than `max_retries + 1`. Root cause: `mgmt.AckQueue` checks the current epoch before it looks at a release-only settle. Refused 1–9 times per run, every time on the host that had just lost the lease |
+| F3 | CONFIRMED (Linux) | D1 (one live copy: side effects) | #501 | A host stalled (SIGSTOP of hostd alone, or of the whole host) past the lease, then resumed after a `--force-takeover`, made DO egress calls 2.7 s and 4.8 s after the new copy's first. hostd fences only after a *failed* heartbeat (`hostd/host.go` `tick`). On resume the first heartbeat succeeds and carries the revoke, and until it's processed nothing gates stateful egress or ingress on heartbeat freshness (cron does, `hostd/cron.go`). Not seen on macOS in 26 takeovers. Nightly runs e2e-dataplane with `allow_failure: #501` until it's fixed |
 | F2 | CONFIRMED | D1 (one live copy), resources | #432 | workerd runs in its own process group, so it outlives a hostd crash (SIGKILL / OOM / panic), and no later hostd reaps it: 8 of 8 `crash-hostd` faults left the old workerd running. systemd's `KillMode=mixed` covers Linux service hosts. launchd, `tw up --separate-host`'s supervisor and `tw dev` don't. Two workerds sharing one DO's storage is a hypothesis, not yet shown. Also: `e2e/queues` step 3 believes it kills workerd and doesn't |
 
 ## Hypotheses
 
 | ID | Status | Hypothesis | Result |
 |---|---|---|---|
-| H1 | REFUTED | A host SIGSTOPped past its lease, resumed after a takeover, answers or acts (Pulse alarm egress) before its first heartbeat tells it the lease is gone. hostd fences only after a *failed* heartbeat (`hostd/host.go` `tick`) | No stale answer or side effect in 26 takeovers of a stopped or cut-off host (fencing 2, 7; d1 4; mixed 3, 8, 9). On SIGCONT the first heartbeat succeeds and carries the revoke first. The window is real in principle (a request that reaches the ingress before that heartbeat returns). Keep it in the mix |
+| H1 | CONFIRMED on Linux → F3 | A host SIGSTOPped past its lease, resumed after a takeover, answers or acts (Pulse alarm egress) before its first heartbeat tells it the lease is gone. hostd fences only after a *failed* heartbeat (`hostd/host.go` `tick`) | No stale answer or side effect in 26 takeovers of a stopped or cut-off host (fencing 2, 7; d1 4; mixed 3, 8, 9). On SIGCONT the first heartbeat succeeds and carries the revoke first. The window is real in principle (a request that reaches the ingress before that heartbeat returns). Keep it in the mix. **On Linux it shows:** the first CI run (ubuntu-24.04, mixed 20261125) had 2 stale side effects, 2.7 s and 4.8 s after the new copy's first: F3, #501 |
 | H2 | OPEN | Two workerds on one DO's storage after a hostd crash (F2) corrupt or lose DO writes | Next: keep the orphan alive, drive `Reg` increments and Pulse alarms on the new copy, then compare storage |
 | H3 | OPEN | Wall-clock skew on a host doesn't matter (ADR-028) | Needs a skew hook in hostd and workerd (see LOOP.md "Not yet") |
 
@@ -68,3 +69,5 @@ the date as the seed.
 | 20261125T022948Z-fencing-7 | fencing 7, pause-hostd-takeover + pause-takeover | pass. 6 takeovers of a host whose hostd was stopped and workerd kept running |
 | 20261125T022948Z-mixed-8 | mixed 8 | pass. F2 seen again (2 of 2) |
 | 20261125T022948Z-mixed-9 | mixed 9 | pass. F2 seen again (1 of 1) |
+| make e2e-dataplane (macOS, merged tree) | mixed 20261125 | pass |
+| CI ubuntu-24.04, nightly dispatch run 45535497016 | mixed 20261125 | **D1 fail: F3** (2 stale Pulse side effects after takeovers of stalled hosts) |

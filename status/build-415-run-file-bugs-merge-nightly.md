@@ -1,4 +1,4 @@
-Last update: 2026-11-24 18:45 PT. The data-plane chaos loop (#415) is built, has run 13 times, found 2 bugs (#431, #432), and runs nightly.
+Last update: 2026-11-24 18:45 PT. The data-plane chaos loop (#415) is built, has run 13 times, found 3 bugs (#431, #432, #501), and runs nightly (allow_failure: #501).
 
 # Data-plane chaos loop (issue #415)
 
@@ -24,8 +24,15 @@ Last update: 2026-11-24 18:45 PT. The data-plane chaos loop (#415) is built, has
 - #431 Queues: a hand-back from a host that just lost the lease is refused
   (`lease_lost`), so it costs an attempt that never ran.
 - #432 hostd: workerds survive a hostd crash and are never reaped.
+- #501 hostd: a host resuming from a stall past its lease makes DO egress
+  calls after the takeover, before its heartbeat revokes it (D1, seen on
+  Linux CI). Nightly's e2e-dataplane entry is `allow_failure` on it.
 
 ## Runs
+
+- `make lint`, `make test`, `make changes-check`: pass (macOS, after merging origin/master).
+- `make e2e-dataplane` on macOS: pass (mixed 20261125). On ubuntu-24.04
+  (`gh workflow run nightly.yml` on the branch): D1 fails, which is #501.
 
 See `e2e/dataplane/LEDGER.md` "Run log": 13 runs, 3–6 min each, on an
 M-series Mac. Every run since the harness fixes passes the gated
