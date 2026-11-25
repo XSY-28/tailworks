@@ -394,10 +394,23 @@ export class Store extends DurableObject {
     return this.#locked(async () => {
       // A degraded store tries its failing entry again first, and refuses
       // the write (store_degraded) if it still doesn't apply.
-      if (!this.syncedAt || this.degraded) await this.#catchUp();
+      let caughtUp = !this.syncedAt || this.degraded;
+      if (caughtUp) await this.#catchUp();
       for (let attempt = 0; attempt < 8; attempt++) {
         const es = (typeof entries === "function" ? entries() : entries).map((e) => ({ ckey: e.ckey || undefined, data: toBytes(e.data) }));
-        if (!es.length) return this.seq;
+        if (!es.length) {
+          // Nothing to write, as decided on the local copy (a delete of
+          // a key it doesn't have, an UPDATE that matches no row). Only
+          // an append is checked against the journal's head, and the
+          // copy can be behind it (another replica wrote; mgmt can't be
+          // reached), so confirm the decision on a caught-up copy before
+          // acknowledging it (#562). If the journal can't be reached the
+          // catch-up throws and the write fails, as every write does then.
+          if (caughtUp) return this.seq;
+          await this.#catchUp();
+          caughtUp = true;
+          continue;
+        }
         let r;
         try {
           r = await this.#hostd("append", {
