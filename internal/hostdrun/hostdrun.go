@@ -43,6 +43,10 @@ const HostTag = "tag:tw-host"
 // Flag defaults tw-hostd and the single-process tw up share (an Options
 // zero value means "off" for these, so callers pass the default explicitly).
 const (
+	// DefaultImageCacheMiB caps the converted container image cache
+	// (tw-hostd -container-image-cache-max-mib; 0 = no cap). Images in use
+	// stay even past it.
+	DefaultImageCacheMiB = 20480
 	// DefaultPoolNodes is the pre-joined node pool per hot class
 	// (tw-hostd -pool-nodes); hostd treats 0 as off.
 	DefaultPoolNodes = 1
@@ -131,7 +135,8 @@ type Options struct {
 	// dir of image tarballs with an images.json index; ContainerPublicImages
 	// refs cached once for all tenants; ContainerImageMaxMiB caps one
 	// image's layers while converting (0 = image.DefaultMaxImageBytes);
-	// ContainerImageCacheMaxMiB caps the cache (0 = none); ContainerIdle,
+	// ContainerImageCacheMaxMiB caps the cache (0 = none; callers pass
+	// DefaultImageCacheMiB); ContainerIdle,
 	// ContainerMaxLife, ContainerGrace are hostd.Config's (0 = default);
 	// ContainerMax, ContainerMemMiB, ContainerVCPU the host's capacity (0 =
 	// unlimited); ContainerInternet "direct" (default), "exit-node[=<node>]"

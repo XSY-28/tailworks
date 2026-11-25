@@ -410,7 +410,7 @@ Details: [containers.md](containers.md#instance-types) and
 | Outbound intercepts per container | 128 | no | `netd/sbxnet/sbxnet.go:MaxIntercepts` |
 | Image, uncompressed | 40 GiB | `tw-hostd -container-image-max-mib` | `hostd/image/limits.go:DefaultMaxImageBytes` |
 | Image layers / entries / path depth / path length | 128 / 1 Mi / 256 / 4096 bytes | no | `hostd/image/limits.go:MaxLayers`, `hostd/image/limits.go:MaxEntries`, `hostd/image/limits.go:MaxDepth`, `hostd/image/limits.go:MaxName` |
-| Converted image cache | unlimited | `tw-hostd -container-image-cache-max-mib` | `cmd/tw-hostd/main.go:-container-image-cache-max-mib` |
+| Converted image cache | 20 GiB (least recently used images not in use are removed past it; images in use stay, even past it) | `tw-hostd -container-image-cache-max-mib` (0 = no cap) | `internal/hostdrun/hostdrun.go:DefaultImageCacheMiB`, `cmd/tw-hostd/main.go:-container-image-cache-max-mib` |
 | `exec()` duration | none | — | |
 
 ## Hosts and the microVM tier

@@ -1142,6 +1142,8 @@ func superviseSingle(s *state, logf func(string, ...any)) error {
 		Ephemeral: s.Cfg.Ephemeral, InsecureSharedHost: s.Cfg.InsecureSharedHost, AllowSiblingEgress: s.Cfg.AllowSiblingEgress, Log: hlog}
 	// Experimental compatibility flags (hostd/gen/compatflags.go, #337).
 	ho.AllowExperimentalFlags = s.Cfg.AllowExperimentalFlags
+	// The converted container image cache cap, tw-hostd's default (#476).
+	ho.ContainerImageCacheMaxMiB = hostdrun.DefaultImageCacheMiB
 	s.Cfg.retentionSingle(nil, &ho) // up_retention.go
 	s.Cfg.workerInternetSingle(&ho) // up_workerinternet.go
 	hrt, err := hostdrun.New(ctx, ho)

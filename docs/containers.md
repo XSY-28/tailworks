@@ -429,8 +429,10 @@ tw deploy                    /v2/  OCI registry                            no co
   shared, the tenant's own namespace is its alone, any other namespace is
   refused before anything is fetched; so a cache hit never tells one tenant
   which images another runs. Pinned entries are keyed by manifest digest.
-  `-container-image-cache-max-mib` caps the converted cache (least recently
-  used first; images of running containers are held). Converting one image
+  `-container-image-cache-max-mib` caps the converted cache (default 20480,
+  `tw up` too; 0 = no cap): least recently used first; images of running
+  containers, and the one a start just converted, are held, so the cache can
+  sit above the cap while they run. Converting one image
   is capped too (`image.Limits`): `-container-image-max-mib` uncompressed
   layer bytes (default 40960, twice Cloudflare's 20 GB disk; counted while
   decompressing and from the entries' sizes, so a decompression bomb stops
