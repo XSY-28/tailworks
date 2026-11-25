@@ -126,6 +126,10 @@ type Options struct {
 	// <data-dir>/pyodide).
 	PyodideDir string
 
+	// TestPublicListenDir (tests, LocalDev only) opens public nodes'
+	// listeners on loopback instead of Funnel (testfunnel.go).
+	TestPublicListenDir string
+
 	SandboxDeny        []string
 	NodeBin            string
 	AllowSiblingEgress bool
@@ -391,6 +395,12 @@ func New(ctx context.Context, o Options) (rt *Runtime, err error) {
 	hcfg.NodeHeapMiB = o.NodeHeapMiB
 	hcfg.AllowExperimentalFlags = o.AllowExperimentalFlags // hostd/gen/compatflags.go (#337)
 	hcfg.PyodideDir = o.PyodideDir                         // hostd/pyodide.go
+	if o.TestPublicListenDir != "" {
+		if !o.LocalDev {
+			return nil, errors.New("-test-public-listen-dir needs -local-dev (hermetic tests only)")
+		}
+		hcfg.PublicListen = testPublicListen(o.TestPublicListenDir) // testfunnel.go
+	}
 	// Containers (ADR-032) run on the microVM backend; without it this host
 	// offers none (start() fails with tier_unavailable, no fallback).
 	if cb, ok := hcfg.VM.(sandbox.ContainerBackend); ok && hcfg.VM != nil && !o.NoContainers {

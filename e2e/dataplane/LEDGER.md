@@ -5,6 +5,7 @@ labelled `dataplane-chaos`.
 
 - Deploys, rollback and secrets (#421, scenarios `deploys-hosts`, `deploys-mgmt`, `deploys-mixed`): [ledger/deploys.md](ledger/deploys.md)
 - R2 buckets (#420, `TestR2`): [ledger/r2.md](ledger/r2.md)
+- Routing (#422, `TestRouting`): [ledger/routing.md](ledger/routing.md)
 - Workflows and approvals (#418, scenarios `workflows`, `workflows-move`): [ledger/workflows.md](ledger/workflows.md)
 
 ## Status
