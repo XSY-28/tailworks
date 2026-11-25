@@ -99,7 +99,7 @@ func cmdR2(args []string) error {
 		return err
 	}
 	if verb == "" {
-		return fail("bad_request", "tw r2 needs a subcommand: bucket ls|create|rm, object ls", "usage: tw "+r2Usage)
+		return needsSubcommand("r2")
 	}
 	want := 1
 	if verb == "bucket ls" {

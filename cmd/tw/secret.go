@@ -55,7 +55,7 @@ func cmdSecretSub(sub string, args []string) error {
 		return err
 	}
 	if sub == "" {
-		return fail("bad_request", "tw secret needs a subcommand: put | ls | rm", "usage: tw "+usageOf("secret"))
+		return needsSubcommand("secret")
 	}
 	switch {
 	case sub == "ls" && len(pos) != 0:

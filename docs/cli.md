@@ -265,7 +265,12 @@ search and read tailworks' docs offline
 ```text
 tw docs: tailworks' docs, offline: search them, print one doc or section (e.g. errors.md#acl_denied)
 
-usage: tw docs search <words…> [--limit 10] | docs show <doc>[#<anchor>] | docs ls
+subcommands:
+  tw docs search <words…> [--limit 10]
+  tw docs show <doc>[#<anchor>]
+  tw docs ls
+
+tw docs <subcommand> --help   its flags
   (every command takes --state-dir, default ~/.tailworks, and --json)
 ```
 
@@ -283,27 +288,11 @@ flags:
 
 #### tw docs search
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -limit int
-    	search: at most this many sections (default 10)
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
+Same flags as [tw docs ls](#tw-docs-ls).
 
 #### tw docs show
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -limit int
-    	search: at most this many sections (default 10)
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
+Same flags as [tw docs ls](#tw-docs-ls).
 
 ## Coding agents
 
@@ -334,7 +323,13 @@ teach coding agents to drive tw (skills)
 ```text
 tw agent: teach coding agents (Claude Code, Codex, Cursor, Gemini CLI, OpenCode) to drive tw: install or remove tailworks' skills, list or print them
 
-usage: tw agent setup [--scope user|project] [--dir <dir>] [--agent claude,codex,cursor,gemini,opencode] [--dry-run] [--yes] | agent remove [same flags] | agent ls | agent show <skill>
+subcommands:
+  tw agent setup [--scope user|project] [--dir <dir>] [--agent claude,codex,cursor,gemini,opencode] [--dry-run] [--yes]
+  tw agent remove [same flags]
+  tw agent ls
+  tw agent show <skill>
+
+tw agent <subcommand> --help   its flags
   (every command takes --state-dir, default ~/.tailworks, and --json)
 ```
 
@@ -370,33 +365,11 @@ flags:
 
 #### tw agent setup
 
-```text
-flags:
-  -agent string
-    	comma-separated agents: claude, codex, cursor, gemini, opencode (default: setup, the ones installed here; remove, all)
-  -dir string
-    	the project directory (--scope project) (default ".")
-  -dry-run
-    	print what would change and write nothing
-  -json
-    	machine-readable output
-  -scope string
-    	user: your home directory (every project) | project: this project's files (--dir) (default "user")
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -yes
-    	don't ask before writing (needed without a terminal; review --dry-run first)
-```
+Same flags as [tw agent remove](#tw-agent-remove).
 
 #### tw agent show
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
+Same flags as [tw agent ls](#tw-agent-ls).
 
 ## Deploy
 
@@ -611,7 +584,8 @@ open or close a workload's public routes
 ```text
 tw expose: open or close a workload's public (Funnel) routes; survives redeploys (tailworks.jsonc "public", ADR-029)
 
-usage: tw expose on|off <workload> [--tenant <tailnet>]
+subcommands:
+  tw expose on|off <workload> [--tenant <tailnet>]
 
 flags:
   -json
@@ -624,27 +598,11 @@ flags:
 
 #### tw expose off
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-```
+Same flags as [tw expose](#tw-expose).
 
 #### tw expose on
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-```
+Same flags as [tw expose](#tw-expose).
 
 ### tw secret
 
@@ -653,7 +611,11 @@ a workload's secrets (env.NAME)
 ```text
 tw secret: a workload's secrets (env.NAME, like wrangler secret): put reads the value from stdin (hidden prompt on a terminal), ls shows names only; changes apply on the next deploy
 
-usage: tw secret put <NAME> | secret ls | secret rm <NAME>   [--workload <workload>] [--tenant <tailnet>]
+subcommands:
+  tw secret put <NAME>
+  tw secret ls
+  tw secret rm <NAME>
+  common flags: [--workload <workload>] [--tenant <tailnet>]
 
 flags:
   -json
@@ -668,45 +630,15 @@ flags:
 
 #### tw secret ls
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -workload string
-    	workload (default: the app in the current directory, as tw deploy names it)
-```
+Same flags as [tw secret](#tw-secret).
 
 #### tw secret put
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -workload string
-    	workload (default: the app in the current directory, as tw deploy names it)
-```
+Same flags as [tw secret](#tw-secret).
 
 #### tw secret rm
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -workload string
-    	workload (default: the app in the current directory, as tw deploy names it)
-```
+Same flags as [tw secret](#tw-secret).
 
 ## Data
 
@@ -717,7 +649,17 @@ a workload's D1 databases and migrations
 ```text
 tw d1: a workload's D1 databases (like wrangler d1): create, list, delete, run SQL, export, and wrangler-layout migrations; execute/export/migrations reach the running workload
 
-usage: tw d1 create <db> | d1 ls | d1 rm <db> [--yes] | d1 execute <db> --command <sql> | --file <file> | d1 export <db> [--output <file>] | d1 repair <db> --skip <seq> [--yes] | d1 migrations create <db> <message> | d1 migrations ls <db> | d1 migrations apply <db>   [--workload <workload>] [--tenant <tailnet>]
+subcommands:
+  tw d1 create <db>
+  tw d1 ls
+  tw d1 rm <db> [--yes]
+  tw d1 execute <db> --command <sql> | --file <file>
+  tw d1 export <db> [--output <file>]
+  tw d1 repair <db> --skip <seq> [--yes]
+  tw d1 migrations create <db> <message>
+  tw d1 migrations ls <db>
+  tw d1 migrations apply <db>
+  common flags: [--workload <workload>] [--tenant <tailnet>]
 
 flags:
   -json
@@ -732,17 +674,7 @@ flags:
 
 #### tw d1 create
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -workload string
-    	workload whose database it is (default: the app in the current directory, as tw deploy names it)
-```
+Same flags as [tw d1](#tw-d1).
 
 #### tw d1 execute
 
@@ -780,59 +712,19 @@ flags:
 
 #### tw d1 ls
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -workload string
-    	workload whose database it is (default: the app in the current directory, as tw deploy names it)
-```
+Same flags as [tw d1](#tw-d1).
 
 #### tw d1 migrations apply
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -workload string
-    	workload whose database it is (default: the app in the current directory, as tw deploy names it)
-```
+Same flags as [tw d1](#tw-d1).
 
 #### tw d1 migrations create
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -workload string
-    	workload whose database it is (default: the app in the current directory, as tw deploy names it)
-```
+Same flags as [tw d1](#tw-d1).
 
 #### tw d1 migrations ls
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -workload string
-    	workload whose database it is (default: the app in the current directory, as tw deploy names it)
-```
+Same flags as [tw d1](#tw-d1).
 
 #### tw d1 repair
 
@@ -875,7 +767,15 @@ a workload's Workers KV namespaces and keys
 ```text
 tw kv: a workload's Workers KV namespaces (kv_namespaces, like wrangler kv): key commands name the namespace with --namespace (its name or binding; default: the app's only one); writes reach running workloads within 60 s
 
-usage: tw kv namespace create <NAME> | kv namespace ls | kv namespace rm <NAME> [--yes] | kv key put <KEY> [VALUE] [--path FILE] [--ttl S] [--expiration T] [--metadata JSON] | kv key get <KEY> | kv key rm <KEY> | kv key ls [--prefix P]   [--namespace <NAME|BINDING>] [--workload <workload>] [--tenant <tailnet>]
+subcommands:
+  tw kv namespace create <NAME>
+  tw kv namespace ls
+  tw kv namespace rm <NAME> [--yes]
+  tw kv key put <KEY> [VALUE] [--namespace N] [--path FILE] [--ttl S] [--expiration T] [--metadata JSON]
+  tw kv key get <KEY> [--namespace N]
+  tw kv key rm <KEY> [--namespace N]
+  tw kv key ls [--namespace N] [--prefix P]
+  common flags: [--workload <workload>] [--tenant <tailnet>]
 
 flags:
   -json
@@ -954,49 +854,15 @@ flags:
 
 #### tw kv key rm
 
-```text
-flags:
-  -binding string
-    	same as --namespace (wrangler's spelling)
-  -json
-    	machine-readable output
-  -namespace string
-    	the namespace: its name (a kv_namespaces id) or its binding in the app's wrangler config (default: the app's only kv_namespaces entry)
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -workload string
-    	workload whose namespaces these are (default: the app in the current directory)
-```
+Same flags as [tw kv key get](#tw-kv-key-get).
 
 #### tw kv namespace create
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -workload string
-    	workload whose namespaces these are (default: the app in the current directory)
-```
+Same flags as [tw kv](#tw-kv).
 
 #### tw kv namespace ls
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -workload string
-    	workload whose namespaces these are (default: the app in the current directory)
-```
+Same flags as [tw kv](#tw-kv).
 
 #### tw kv namespace rm
 
@@ -1021,7 +887,15 @@ the tenant's queues: create, peek, send
 ```text
 tw queues: the tenant's queues (like wrangler queues): producers' first send creates a queue; messages peeks without claiming (read a dead-letter queue); send takes JSON (or --text) from the argument or stdin
 
-usage: tw queues create <queue> | queues ls | queues info <queue> | queues rm <queue> | queues purge <queue> | queues messages <queue> [--limit N] | queues send <queue> [<json>|--text <text>] [--delay S]   [--tenant <tailnet>]
+subcommands:
+  tw queues create <queue>
+  tw queues ls
+  tw queues info <queue>
+  tw queues rm <queue>
+  tw queues purge <queue>
+  tw queues messages <queue> [--limit N]
+  tw queues send <queue> [<json>|--text <text>] [--delay S]
+  common flags: [--tenant <tailnet>]
 
 flags:
   -json
@@ -1034,39 +908,15 @@ flags:
 
 #### tw queues create
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-```
+Same flags as [tw queues](#tw-queues).
 
 #### tw queues info
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-```
+Same flags as [tw queues](#tw-queues).
 
 #### tw queues ls
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-```
+Same flags as [tw queues](#tw-queues).
 
 #### tw queues messages
 
@@ -1098,17 +948,7 @@ flags:
 
 #### tw queues rm
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
-```
+Same flags as [tw queues purge](#tw-queues-purge).
 
 #### tw queues send
 
@@ -1133,7 +973,12 @@ a workload's R2 buckets and objects
 ```text
 tw r2: a workload's R2 buckets (r2_buckets bindings): list, create or delete buckets, list a bucket's objects
 
-usage: tw r2 bucket ls | r2 bucket create <bucket> | r2 bucket rm <bucket> | r2 object ls <bucket> [--prefix P]   [--workload <workload>] [--tenant <tailnet>]
+subcommands:
+  tw r2 bucket ls
+  tw r2 bucket create <bucket>
+  tw r2 bucket rm <bucket>
+  tw r2 object ls <bucket> [--prefix P]
+  common flags: [--workload <workload>] [--tenant <tailnet>]
 
 flags:
   -json
@@ -1148,31 +993,11 @@ flags:
 
 #### tw r2 bucket create
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -workload string
-    	workload (default: the app in the current directory, as tw deploy names it)
-```
+Same flags as [tw r2](#tw-r2).
 
 #### tw r2 bucket ls
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -workload string
-    	workload (default: the app in the current directory, as tw deploy names it)
-```
+Same flags as [tw r2](#tw-r2).
 
 #### tw r2 bucket rm
 
@@ -1245,17 +1070,17 @@ flags:
 list deployments and objects
 
 ```text
-tw ls: list deployments and objects (paged; --all follows every page and shows killed objects)
+tw ls: list deployments and live objects, or one workload's with its previews and replicas; --all adds killed objects and stopped deployments (at most 5000 objects: --limit N, 0 for no ceiling)
 
-usage: tw ls [--tenant <tailnet>] [--all] [--limit N]
+usage: tw ls [workload] [--tenant <tailnet>] [--all]
 
 flags:
   -all
-    	include killed objects, and fetch every page
+    	also list killed objects and stopped deployments
   -json
     	machine-readable output
   -limit int
-    	at most this many objects (pages of ≤500 are followed up to it; --all lifts the cap) (default 200)
+    	list at most this many objects (0: no ceiling) (default 5000)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
@@ -1269,7 +1094,11 @@ the tenant's OTLP export
 ```text
 tw telemetry: the tenant's OTLP export of request records, metrics and spans (each workload exports from its own node); --header NAME reads a credential from stdin, never shown again
 
-usage: tw telemetry [show] | telemetry set --otlp <url> [--header NAME[=VALUE]]... [--signals logs,metrics,traces] | telemetry rm   [--tenant <tailnet>]
+subcommands:
+  tw telemetry [show]
+  tw telemetry set --otlp <url> [--header NAME[=VALUE]]... [--signals logs,metrics,traces]
+  tw telemetry rm
+  common flags: [--tenant <tailnet>]
 
 flags:
   -header value
@@ -1288,48 +1117,20 @@ flags:
 
 #### tw telemetry rm
 
-```text
-flags:
-  -header value
-    	set: a header for every export, NAME=VALUE, or NAME alone to read its value from stdin (repeatable)
-  -json
-    	machine-readable output
-  -otlp string
-    	set: the OTLP/HTTP base URL of a collector on the tailnet (http://otel-collector:4318)
-  -signals string
-    	set: what to export, comma-separated (default logs,metrics,traces)
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-```
+Same flags as [tw telemetry](#tw-telemetry).
 
 #### tw telemetry set
 
-```text
-flags:
-  -header value
-    	set: a header for every export, NAME=VALUE, or NAME alone to read its value from stdin (repeatable)
-  -json
-    	machine-readable output
-  -otlp string
-    	set: the OTLP/HTTP base URL of a collector on the tailnet (http://otel-collector:4318)
-  -signals string
-    	set: what to export, comma-separated (default logs,metrics,traces)
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-```
+Same flags as [tw telemetry](#tw-telemetry).
 
 ### tw audit
 
 the hash-chained audit trail
 
 ```text
-tw audit: show the hash-chained audit trail
+tw audit: show the hash-chained audit trail: the newest -n records, or every record of an object (and its descendants), a principal, a trace or the tenant (--all)
 
-usage: tw audit [--tenant <tailnet>] <object> | --human <login> | --trace <id> | --all
+usage: tw audit [--tenant <tailnet>] [-n 50] | <object> | --human <login> | --trace <id> | --all
 
 flags:
   -all
@@ -1338,6 +1139,8 @@ flags:
     	records acting for this principal (login or caller node)
   -json
     	machine-readable output
+  -n int
+    	bare tw audit: the newest records (an object, --human, --trace and --all are always complete) (default 50)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
@@ -1351,7 +1154,7 @@ flags:
 request records and console lines; daemon logs
 
 ```text
-tw logs: show a workload's request records (one line per request with its console.* lines; --json, filters; --console for the raw app output), else the daemons' logs
+tw logs: show a workload's request records (one line per request with its console.* lines; --json, filters; --console for the raw app output); default workload: the app in the current directory, else your only workload; --component for the daemons' logs
 
 usage: tw logs [workload] [--tenant <tailnet>] [--component mgmt|hostd|supervisor] [--host <id>] [-n 50] [-f] [--json] [--console] [--object <id|Class/name>] [--status 5xx] [--outcome exception] [--errors] [--caller <login|node>] [--trace <id>]
 
@@ -1359,7 +1162,7 @@ flags:
   -caller string
     	only callers whose login or node name contains this (public: Funnel requests)
   -component string
-    	mgmt | hostd | supervisor (default: hostd, or workerd for a workload)
+    	mgmt | hostd | supervisor: the daemons' logs
   -console
     	the app's raw output (workerd.log, the node tier's app.log, the microVM console) instead of request records
   -errors
@@ -1389,16 +1192,16 @@ flags:
 
 ### tw kill
 
-kill an object (--cascade: its sub-agents)
+kill an object and its sub-agents
 
 ```text
-tw kill: kill an object (and with --cascade its sub-agents)
+tw kill: kill an object and its sub-agents (--cascade=false kills only the object; the reaper kills its sub-agents within seconds)
 
-usage: tw kill <object> [--tenant <tailnet>] [--cascade] [--reason <text>]
+usage: tw kill <object> [--tenant <tailnet>] [--reason <text>] [--cascade=false]
 
 flags:
   -cascade
-    	also kill every descendant (sub-agents)
+    	also kill every descendant (sub-agents); --cascade=false leaves them to the reaper (default true)
   -json
     	machine-readable output
   -reason string
@@ -1462,7 +1265,12 @@ a webhook for approvals waiting for a decision
 ```text
 tw notify: tell people when a Workflow waits for an approval: mgmt POSTs JSON with a link to the approvals page (Slack and chat incoming webhooks show its text); the URL is a secret, never shown again
 
-usage: tw notify [show] | notify set --webhook <url|-> [--header NAME[=VALUE]]... [--events approval_requested] | notify test | notify rm   [--tenant <tailnet>]
+subcommands:
+  tw notify [show]
+  tw notify set --webhook <url|-> [--header NAME[=VALUE]]... [--events approval_requested]
+  tw notify test
+  tw notify rm
+  common flags: [--tenant <tailnet>]
 
 flags:
   -events string
@@ -1481,57 +1289,15 @@ flags:
 
 #### tw notify rm
 
-```text
-flags:
-  -events string
-    	set: what to send, comma-separated (default approval_requested)
-  -header value
-    	set: a header for every notification, NAME=VALUE, or NAME alone to read its value from stdin (repeatable)
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -webhook string
-    	set: the URL mgmt POSTs to (https://hooks.slack.com/services/…, http://chat-bot/notify); - reads it from stdin
-```
+Same flags as [tw notify](#tw-notify).
 
 #### tw notify set
 
-```text
-flags:
-  -events string
-    	set: what to send, comma-separated (default approval_requested)
-  -header value
-    	set: a header for every notification, NAME=VALUE, or NAME alone to read its value from stdin (repeatable)
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -webhook string
-    	set: the URL mgmt POSTs to (https://hooks.slack.com/services/…, http://chat-bot/notify); - reads it from stdin
-```
+Same flags as [tw notify](#tw-notify).
 
 #### tw notify test
 
-```text
-flags:
-  -events string
-    	set: what to send, comma-separated (default approval_requested)
-  -header value
-    	set: a header for every notification, NAME=VALUE, or NAME alone to read its value from stdin (repeatable)
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -webhook string
-    	set: the URL mgmt POSTs to (https://hooks.slack.com/services/…, http://chat-bot/notify); - reads it from stdin
-```
+Same flags as [tw notify](#tw-notify).
 
 ### tw completion
 
@@ -1540,7 +1306,8 @@ shell completion script (bash, zsh, fish)
 ```text
 tw completion: print a shell completion script for every command, subcommand and flag (bash: eval "$(tw completion bash)"; zsh: tw completion zsh > "${fpath[1]}/_tw"; fish: tw completion fish > ~/.config/fish/completions/tw.fish)
 
-usage: tw completion bash|zsh|fish
+subcommands:
+  tw completion bash|zsh|fish
 
 flags:
   -json
@@ -1551,33 +1318,15 @@ flags:
 
 #### tw completion bash
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
+Same flags as [tw completion](#tw-completion).
 
 #### tw completion fish
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
+Same flags as [tw completion](#tw-completion).
 
 #### tw completion zsh
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
+Same flags as [tw completion](#tw-completion).
 
 ### tw image
 
@@ -1586,7 +1335,13 @@ public base images and operator images
 ```text
 tw image: container images (ADR-032): mark public base images shared across tenants (mirrored now), push operator images (the arm64 alias targets) to tailworks' registry
 
-usage: tw image public add <ref> [--arch amd64,arm64] | image public ls | image public rm <id> | image push <oci-layout|docker-save.tar> tw.local/<name>:<tag>
+subcommands:
+  tw image public add <ref> [flags]
+  tw image public ls
+  tw image public rm <id>
+  tw image push <oci-layout|docker-save.tar> tw.local/<name>:<tag>
+
+tw image <subcommand> --help   its flags
   (every command takes --state-dir, default ~/.tailworks, and --json)
 ```
 
@@ -1614,23 +1369,11 @@ flags:
 
 #### tw image public rm
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
+Same flags as [tw image public ls](#tw-image-public-ls).
 
 #### tw image push
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
+Same flags as [tw image public ls](#tw-image-public-ls).
 
 ### tw backup
 
@@ -1677,7 +1420,9 @@ upgrade tailworks on this machine or the fleet
 ```text
 tw upgrade: upgrade tailworks: on a tw up machine, back up, install a newer release and roll back if it isn't healthy; against a linked tw-mgmt (or --fleet), plan and run a fleet upgrade (status, pause, resume, abort)
 
-usage: tw upgrade [<version>] [--from <tarball|dir>] [--plan] [--yes] [--allow-unsigned] [--fleet] [--hosts h1,h2] [--canary h] [--soak 5m] [--settle 5m] [--no-wait] | upgrade status|pause|resume|abort [<run-id>]
+subcommands:
+  tw upgrade [<version>] [flags]
+  tw upgrade status|pause|resume|abort [<run-id>]
 
 flags:
   -allow-unsigned
@@ -1724,33 +1469,15 @@ flags:
 
 #### tw upgrade pause
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
+Same flags as [tw upgrade abort](#tw-upgrade-abort).
 
 #### tw upgrade resume
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
+Same flags as [tw upgrade abort](#tw-upgrade-abort).
 
 #### tw upgrade status
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
+Same flags as [tw upgrade abort](#tw-upgrade-abort).
 
 ### tw version
 
@@ -1779,7 +1506,13 @@ serve, list, update or remove tenants
 ```text
 tw tenant: serve another tenant (its own tailnet) from this host; list, update (PATCH) or remove tenants
 
-usage: tw tenant add <tailnet> --oauth-client-file <file> [--apply-policy [--yes]] [--owner-tag <tag> --name-prefix <p>] | tenant ls | tenant set <tenant> [--owner-tag <tag>] [--name-prefix <p>] [--max-objects N] [--registrations-per-minute N] [--pool P] [--tier T] [--oauth-client-file FILE] [--max-containers N] [--max-container-mem-mib N] [--max-container-vcpu F] [--max-store-bytes SIZE] [--max-queue-bytes SIZE] [--max-stores N] [--public-ingress allow|deny] | tenant rm <tenant> [--force]
+subcommands:
+  tw tenant add <tailnet> --oauth-client-file <file> [--apply-policy [--yes]] [--owner-tag <tag> --name-prefix <p>]
+  tw tenant ls
+  tw tenant set <tenant> [--<setting> <value>]…  (tw tenant set --help; docs/limits.md)
+  tw tenant rm <tenant> [--force]
+
+tw tenant <subcommand> --help   its flags
   (every command takes --state-dir, default ~/.tailworks, and --json)
 ```
 
@@ -1880,7 +1613,17 @@ add, list, remove or set up hosts
 ```text
 tw host: add a remote host (mgmt mints its single-use tag:tw-host join key), list or remove hosts; cordon (no new placements), uncordon, or drain one (move its workloads elsewhere); install the microVM tier's helper; check a microVM
 
-usage: tw host add <host-id> [--tenant <tailnet>] [--out <file>] | host ls | host rm <host-id> [--drain] | host cordon <host-id> | host uncordon <host-id> | host drain <host-id> [--allow-local-state-loss] [--dry-run] | host setup --microvm [--user <name>] [--hugepages N] | host setup --undo   (Linux, with sudo, once) | host vmcheck <workload> [--keyscan] [--container <Class>/<name>]
+subcommands:
+  tw host add <host-id> [flags]
+  tw host ls
+  tw host rm <host-id> [flags]
+  tw host cordon <host-id>
+  tw host uncordon <host-id>
+  tw host drain <host-id> [flags]
+  tw host setup --microvm [flags] | --undo   (Linux, with sudo, once)
+  tw host vmcheck <workload> [flags]
+
+tw host <subcommand> --help   its flags
   (every command takes --state-dir, default ~/.tailworks, and --json)
 ```
 
@@ -1924,13 +1667,7 @@ flags:
 
 #### tw host ls
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
+Same flags as [tw host cordon](#tw-host-cordon).
 
 #### tw host rm
 
@@ -1970,13 +1707,7 @@ flags:
 
 #### tw host uncordon
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
+Same flags as [tw host cordon](#tw-host-cordon).
 
 #### tw host vmcheck
 
@@ -2001,7 +1732,8 @@ move secrets to setec to run several mgmt replicas
 ```text
 tw custody: move this install's secrets and store keys from file custody to setec, so it can run several mgmt replicas: every entry is mapped to its name (refused if one can't be), copied, read back, and tw.json switched; run with tailworks stopped
 
-usage: tw custody migrate --setec-url <url> [--dry-run]
+subcommands:
+  tw custody migrate --setec-url <url> [--dry-run]
 
 flags:
   -dry-run
@@ -2018,19 +1750,7 @@ flags:
 
 #### tw custody migrate
 
-```text
-flags:
-  -dry-run
-    	migrate: map every entry and check setec, but write nothing
-  -json
-    	machine-readable output
-  -setec-url string
-    	migrate: the setec server URL to move file custody to (what tw up --setec-url would take)
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -to string
-    	deprecated: setec is the only target; leave it out
-```
+Same flags as [tw custody](#tw-custody).
 
 ### tw release
 
@@ -2039,7 +1759,9 @@ release catalog for fleet hosts that upgrade themselves
 ```text
 tw release: tw-mgmt's release catalog: list known releases, import a release (its notes and tarball, for hosts that upgrade themselves)
 
-usage: tw release ls | release import <tw-<v>-<os>-<arch>.tar.gz>…
+subcommands:
+  tw release ls
+  tw release import <tw-<v>-<os>-<arch>.tar.gz>…
 
 flags:
   -json
@@ -2050,20 +1772,8 @@ flags:
 
 #### tw release import
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
+Same flags as [tw release](#tw-release).
 
 #### tw release ls
 
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
+Same flags as [tw release](#tw-release).

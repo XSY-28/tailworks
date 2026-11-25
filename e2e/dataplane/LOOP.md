@@ -58,7 +58,7 @@ change can be tried without a new run.
 | Fault | What it does |
 |---|---|
 | `kill-host` | SIGKILL hostd and its workerds; restart it after 1–5 s |
-| `crash-hostd` | SIGKILL hostd alone, as an OOM kill or a panic would (its workerds survive: #432); restart it and record the survivors |
+| `crash-hostd` | SIGKILL hostd alone, as an OOM kill or a panic would (its workerds, in process groups of their own, survive it); restart it. The new hostd must reap them (D7, #432) |
 | `kill-workerd` | SIGKILL the host's workerds; hostd restarts them |
 | `pause-short` | SIGSTOP hostd and its workerds for 3–20 s (under `FenceAfter`), then SIGCONT |
 | `pause-takeover` | SIGSTOP the host, `--force-takeover` to another host once mgmt allows it, SIGCONT 2–8 s later |
@@ -98,6 +98,7 @@ each grant and renew.
 | D4 | Every acknowledged D1 insert is there at the end |
 | D5 | Convergence: after healing, the deployment is active and serving within 60 s, both queues drain within 120 s, and the lock answers |
 | D6 | Availability: reported. Gated only outside fault windows (+60 s): ≥ 90% of ops succeed |
+| D7 | No workerd outlives its hostd: 10 s after a `crash-hostd` restart, none of the crashed hostd's workerds is still running (#432) |
 
 ## Each iteration
 

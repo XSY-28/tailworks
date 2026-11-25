@@ -85,7 +85,7 @@ func cmdQueues(args []string) error {
 	}
 	switch {
 	case sub == "":
-		return fail("bad_request", "tw queues needs a subcommand: "+queuesSubs, "usage: tw "+usageOf("queues"))
+		return needsSubcommand("queues")
 	case sub == "ls" && len(pos) != 0:
 		return fail("bad_request", "tw queues ls takes no arguments", "usage: tw "+usageOf("queues"))
 	case sub == "send" && (len(pos) < 1 || len(pos) > 2):

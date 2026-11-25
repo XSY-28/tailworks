@@ -50,7 +50,7 @@ type kvResult struct {
 }
 
 // kvUsageLine is tw kv's usage line (the commands table's).
-const kvUsageLine = "kv namespace create <NAME> | kv namespace ls | kv namespace rm <NAME> [--yes] | kv key put <KEY> [VALUE] [--path FILE] [--ttl S] [--expiration T] [--metadata JSON] | kv key get <KEY> | kv key rm <KEY> | kv key ls [--prefix P]   [--namespace <NAME|BINDING>] [--workload <workload>] [--tenant <tailnet>]"
+const kvUsageLine = "kv namespace create <NAME> | kv namespace ls | kv namespace rm <NAME> [--yes] | kv key put <KEY> [VALUE] [--namespace N] [--path FILE] [--ttl S] [--expiration T] [--metadata JSON] | kv key get <KEY> [--namespace N] | kv key rm <KEY> [--namespace N] | kv key ls [--namespace N] [--prefix P]   [--workload <workload>] [--tenant <tailnet>]"
 
 func kvUsage() string { return "usage: tw " + usageOf("kv") }
 
@@ -116,7 +116,7 @@ func cmdKV(args []string) error {
 		return fail("bad_request", fmt.Sprintf("unknown command %q", verb), kvUsage())
 	}
 	if !complete && verb != "" {
-		return fail("bad_request", "tw kv "+verb+" needs a command: namespace create|ls|rm, key put|get|rm|ls", kvUsage())
+		return needsSubcommand("kv")
 	}
 	f := newFlags("kv")
 	o := kvFlags(f, verb)
@@ -125,7 +125,7 @@ func cmdKV(args []string) error {
 		return err
 	}
 	if !complete {
-		return fail("bad_request", "tw kv needs a command: namespace create|ls|rm, key put|get|rm|ls", kvUsage())
+		return needsSubcommand("kv")
 	}
 	group, _, _ := strings.Cut(verb, " ")
 	switch n := kvVerbs[verb]; {

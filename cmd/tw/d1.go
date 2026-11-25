@@ -110,7 +110,7 @@ func cmdD1(args []string) error {
 		return fail("bad_request", fmt.Sprintf("unknown subcommand %q", sub), "usage: tw "+usageOf("d1"))
 	}
 	if !complete && sub != "" {
-		return fail("bad_request", "tw d1 "+sub+" needs a subcommand: create | ls | apply", "usage: tw "+usageOf("d1"))
+		return needsSubcommand("d1")
 	}
 	f := newFlags("d1")
 	o := d1Flags(f, sub)
@@ -119,7 +119,7 @@ func cmdD1(args []string) error {
 		return err
 	}
 	if !complete {
-		return fail("bad_request", "tw d1 needs a subcommand: create | ls | rm | execute | export | repair | migrations create|ls|apply", "usage: tw "+usageOf("d1"))
+		return needsSubcommand("d1")
 	}
 	if len(pos) != n {
 		return fail("bad_request", fmt.Sprintf("tw d1 %s takes %d argument(s)", sub, n), "usage: tw "+usageOf("d1"))

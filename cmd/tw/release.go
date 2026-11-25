@@ -31,7 +31,7 @@ func cmdRelease(args []string) error {
 		return err
 	}
 	if len(pos) == 0 {
-		return fail("bad_request", "usage: tw "+releaseUsage)
+		return needsSubcommand("release")
 	}
 	s, err := openState(*f.stateDir)
 	if err != nil {

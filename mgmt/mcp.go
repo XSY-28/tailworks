@@ -136,7 +136,7 @@ func mcpToolList() []mcpTool {
 			Input: obj([]string{"workload"}, map[string]any{"tenant": tenantArg, "workload": strProp("the workload"), "bundle": strProp("base64 bundle tar (optional)"),
 				"replace": boolProp("re-place the workload on a better host"), "dryRun": boolProp("only preflight the bundle against the tailnet policy")}), run: mcpDeploy},
 		{Name: "kill", Kind: "destructive", Description: "Kill an object: cut it off the tailnet in under a second and delete its node. No undo. Only after the user agreed to kill this object.",
-			Input: obj([]string{"object", "reason"}, map[string]any{"object": strProp("the object ID (from ls)"), "cascade": boolProp("also kill everything it spawned"), "reason": strProp("why (recorded in the audit trail)")}), run: mcpKill},
+			Input: obj([]string{"object", "reason"}, map[string]any{"object": strProp("the object ID (from ls)"), "cascade": boolProp("also kill everything it spawned (the tw kill CLI does by default; without it the reaper kills them within seconds)"), "reason": strProp("why (recorded in the audit trail)")}), run: mcpKill},
 		{Name: "undeploy", Kind: "destructive", Description: "Stop a workload: kill all its objects and release its host. No undo. Only after the user agreed to undeploy this workload.",
 			Input: obj([]string{"workload", "reason"}, map[string]any{"tenant": tenantArg, "workload": strProp("the workload"), "reason": strProp("why (recorded in the audit trail)")}), run: mcpUndeploy},
 	}
@@ -580,10 +580,14 @@ func mcpLs(c *mcpCtx, a map[string]any) (any, error) {
 	if err := c.call("GET", "/v1/deployments?latest=true&limit=500&"+q, nil, &deps); err != nil {
 		return nil, err
 	}
-	if err := c.call("GET", "/v1/objects?limit=500&"+q, nil, &objs); err != nil {
+	all := argBool(a, "all")
+	oq := q
+	if !all { // killed objects never eat the page (tw ls does the same)
+		oq += "&" + url.Values{"state": LiveStatuses}.Encode()
+	}
+	if err := c.call("GET", "/v1/objects?limit=500&"+oq, nil, &objs); err != nil {
 		return nil, err
 	}
-	all := argBool(a, "all")
 	shown := []map[string]any{}
 	for _, o := range objs.Items {
 		if all || !slices.Contains([]string{StatusKilled, StatusFailed, StatusTransferred}, fmt.Sprint(o["status"])) {

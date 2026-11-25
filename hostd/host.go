@@ -335,6 +335,10 @@ type Host struct {
 	lastHB     time.Time
 	fenced     bool
 
+	// children: workerd/Node process groups this hostd started, so the
+	// next run can reap any a crash left behind (childreap.go, #432).
+	children *childLedger
+
 	// consume: queue consumers' context, cancelled on self-fence (queuefence.go).
 	consume consumeGate
 
@@ -484,6 +488,7 @@ func New(cfg Config) (*Host, error) {
 	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
 		return nil, err
 	}
+	h.children = openChildLedger(cfg.DataDir, h.log) // childreap.go: before anything is spawned
 	h.pubCreates = newPublicCreates(h.publicCreatesPath())
 	h.admits = map[string]time.Time{}
 	os.Chmod(cfg.DataDir, 0o700)

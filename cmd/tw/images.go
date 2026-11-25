@@ -141,7 +141,7 @@ func cmdImage(args []string) error {
 		}
 	}
 	if len(words) == 0 {
-		return fail("bad_request", "tw image needs a subcommand: public add|ls|rm, push", "usage: tw "+usageOf("image"))
+		return needsSubcommand("image")
 	}
 	switch words[0] {
 	case "public":
