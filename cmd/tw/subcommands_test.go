@@ -39,7 +39,7 @@ func TestSubcommandHelp(t *testing.T) {
 		"queues":    {"create", "ls", "info", "rm", "purge", "messages", "send"},
 		"upgrade":   {"status|pause|resume|abort"},
 		"telemetry": {"set", "rm"},
-		"expose":    {"on|off"},
+		"expose":    {"on|off", "names", "release"},
 		"custody":   {"migrate"},
 		"up":        nil,
 		"deploy":    nil,
