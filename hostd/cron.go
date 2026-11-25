@@ -13,6 +13,7 @@ import (
 
 	"github.com/rosskukulinski/tailworks/hostd/gen"
 	"github.com/rosskukulinski/tailworks/internal/cron"
+	"github.com/rosskukulinski/tailworks/internal/wallclock"
 	"github.com/rosskukulinski/tailworks/netd"
 )
 
@@ -155,7 +156,7 @@ func (h *Host) now() time.Time {
 	if h.nowFn != nil {
 		return h.nowFn()
 	}
-	return time.Now()
+	return wallclock.Now() // cron is wall-clock time
 }
 
 // runScheduled runs one due trigger and clears its running mark.
@@ -219,7 +220,7 @@ func (h *Host) invokeCron(ctx context.Context, w *workload, cronExpr string, at 
 	blob, _ := json.Marshal(map[string]any{
 		// The ticket lets scheduled() create objects through its guarded env.
 		"tw": map[string]any{"kind": "scheduled", "cron": cronExpr, "scheduledTime": at.UnixMilli(), "workload": w.name,
-			"ticket": gen.CreateTicket(inst.macKey(), trace, time.Now())},
+			"ticket": gen.CreateTicket(inst.macKey(), trace, wallclock.Now())},
 		"traceId": trace,
 	})
 	req, _ := http.NewRequestWithContext(ctx, "POST", "http://platform/_tw/scheduled", nil)
