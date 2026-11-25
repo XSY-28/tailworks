@@ -43,6 +43,9 @@ func TestDataplane(t *testing.T) {
 		t.Skip("node not available (needed to bundle the app)")
 	}
 	scenario := envOr("TW_DP_SCENARIO", "mixed")
+	if strings.HasPrefix(scenario, "workflows") {
+		t.Skip("TestDataplaneWorkflows runs " + scenario)
+	}
 	names, ok := scenarios[scenario]
 	if !ok {
 		t.Fatalf("TW_DP_SCENARIO %q: one of queues, fencing, d1, mixed", scenario)

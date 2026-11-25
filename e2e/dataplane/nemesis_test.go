@@ -169,6 +169,7 @@ var faults = map[string]fault{
 	}},
 	// One replica's path to Postgres blackholed, slowed or reset (mgmtpg_test.go).
 	"pg-fault": {"pg-fault", faultPG},
+	"redeploy": redeployFault, // workflows_test.go
 	// mgmt crashes (SIGKILL) or restarts (SIGTERM) and comes back; with
 	// replicas (TW_DP_MGMT=pg3), one of them.
 	"restart-mgmt": {"restart-mgmt", func(n *nemesis, h string) string {
@@ -210,6 +211,10 @@ var scenarios = map[string][]string{
 	"fencing": {"pause-takeover", "pause-hostd-takeover", "cut-takeover", "move"},
 	"d1":      {"move", "kill-host", "pause-takeover", "restart-mgmt"},
 	"mixed":   {"kill-host", "crash-hostd", "kill-workerd", "pause-short", "pause-takeover", "pause-hostd-takeover", "cut-short", "cut-takeover", "move", "restart-mgmt"},
+
+	// TestDataplaneWorkflows (workflows_test.go).
+	"workflows":      {"kill-host", "crash-hostd", "kill-workerd", "pause-short", "cut-short", "redeploy", "restart-mgmt"},
+	"workflows-move": {"move", "pause-takeover", "cut-takeover", "redeploy", "kill-host"},
 }
 
 // runNemesis applies faults from the scenario until the deadline, with a

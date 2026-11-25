@@ -47,7 +47,7 @@ printed anywhere.
 400 · cli. **When:** `--tenant` named a tailnet that has more than one tenant (several teams on one tailnet, [teams.md](teams.md)). **Fix:** name the tenant by its ID; the error lists them (`tw tenant ls`).
 
 ### approval_not_pending
-409 · hostd, mgmt, cli. **When:** a decision (`tw approve`, the admin UI, `POST /_tw/approvals/<workflow>/<instance>`) names a Workflow instance that is not waiting for an approval: already approved or rejected, timed out, or it never asked. **Fix:** `tw approvals [workload] --all` shows what is waiting and what was decided ([approvals](approvals.md)).
+409 · hostd, mgmt, cli. **When:** a decision (`tw approve`, the admin UI, `POST /_tw/approvals/<workflow>/<instance>`) names a Workflow instance that is not waiting for an approval: already approved or rejected, being decided by another request right now, timed out, or it never asked. **Fix:** `tw approvals [workload] --all` shows what is waiting and what was decided ([approvals](approvals.md)).
 
 ### approval_requires_identity
 Thrown in the Worker · platform. **When:** app code sent an event of type `approval` or `approval-*` to a Workflow instance (for example the Agents SDK's `approveWorkflow()`). On tailworks an approval is a decision by a tailnet identity, so only tailworks delivers it. **Fix:** approve with `tw approve <workload> <instance>`, the admin UI, or a same-origin `POST /_tw/approvals/<workflow>/<instance>` from the app's page on the workload's node ([approvals](approvals.md)).
