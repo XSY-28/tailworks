@@ -22,4 +22,11 @@ Last update: 2026-11-25 PT. tw dev refreshes a tw-generated worker-configuration
 
 ## Tests
 
-See the PR's Tests section.
+- `make lint`: pass.
+- `make test` (on mbp via mbp-test.sh): all pass except two load-timing
+  flakes, both passing on rerun: `TestCLISingleProcess` (kill took 1.11 s
+  vs a 1 s bound) and `TestTenantAdminScope` (host heartbeat missed).
+- `go test ./cmd/tw -run 'TestDevRefreshTypes|TestTypesRemoteHeader|TestTypes'`: pass.
+- Manual: `tw dev --port 0` on a `hello` app, added a `kv_namespaces`
+  binding: the d.ts gained `CACHE: KVNamespace;`, one reload only.
+- `make e2e-compat`: skipped (needs tailnet credentials, ~60 min).
