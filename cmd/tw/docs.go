@@ -17,7 +17,7 @@ import (
 func cmdDocs(args []string) error {
 	sub, args, ok := splitSubcommand(args) // agent.go
 	if !ok {
-		return fail("bad_request", "tw docs needs a subcommand: search, show or ls", "usage: tw "+usageOf("docs"))
+		return needsSubcommand("docs")
 	}
 	f := newFlags("docs")
 	limit := f.Int("limit", 10, "search: at most this many sections")

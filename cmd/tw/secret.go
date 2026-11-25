@@ -52,7 +52,7 @@ func cmdSecret(args []string) error {
 		}
 	}
 	if sub < 0 {
-		return fail("bad_request", "tw secret needs a subcommand: put | ls | rm", "usage: tw "+usageOf("secret"))
+		return needsSubcommand("secret")
 	}
 	return cmdSecretSub(args[sub], append(append([]string{}, args[:sub]...), args[sub+1:]...))
 }

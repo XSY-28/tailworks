@@ -50,7 +50,7 @@ func cmdQueues(args []string) error {
 		}
 	}
 	if sub < 0 {
-		return fail("bad_request", "tw queues needs a subcommand: "+queuesSubs, "usage: tw "+usageOf("queues"))
+		return needsSubcommand("queues")
 	}
 	return cmdQueuesSub(args[sub], append(append([]string{}, args[:sub]...), args[sub+1:]...))
 }

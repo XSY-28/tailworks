@@ -412,7 +412,7 @@ Add a second machine as a host with `tw host add <host-id>`: mgmt records
 it (pending) and writes a single-use join key file; on the new machine run
 `tw-hostd join --host-id <id> --token-file <file> --control-url …`, then
 start `tw-hostd -host-id <id> -mgmt http://tw-mgmt.<tailnet> -tsnet-control-url …`.
-`tw host ls` / `tw host rm <id> [--drain]` manage hosts; `tw tenant set`
+`tw host ls` / `tw host rm <id> [--force]` manage hosts; `tw tenant set`
 (PATCH) and `tw tenant rm`, `tw undeploy <workload>` round out the CRUD.
 More hosts still share one mgmt; for more than one mgmt replica, see
 [When to switch to Postgres](#when-to-switch-to-postgres).
@@ -1004,7 +1004,7 @@ Ubuntu would make bash skip `~/.profile`.
 | `cgroups_v2` | unified hierarchy (and what's delegated to your user manager) | warn |
 | `systemd` | your systemd user manager answers; reports linger and `tw.service` | warn: no systemd / no user session |
 | `microvm_tier` | KVM + firecracker + cgroups v2 + guest image + privileges | skip: "microVM tier unavailable: …", with every reason |
-| `side_channels` | every `/sys/devices/system/cpu/vulnerabilities/*` entry is mitigated or not affected, SMT off, KSM off, no `mitigations=off` | warn, naming each problem and when it matters (a shared host, a Node-tier workload, the microVM tier; [security-model.md](security-model.md#side-channels)); on macOS: skip, the posture can't be read |
+| `side_channels` | every `/sys/devices/system/cpu/vulnerabilities/*` entry is mitigated or not affected, SMT off, KSM off, no `mitigations=off` | warn, naming each problem and when it matters (a shared host, a Node-runtime workload, the microVM tier; [security-model.md](security-model.md#side-channels)); on macOS: skip, the posture can't be read |
 | `system_tailscaled_not_used` | no tailworks process holds tailscaled's socket or state | **fail** |
 
 ### Run tailworks as a systemd user service
