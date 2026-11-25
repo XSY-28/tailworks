@@ -27,7 +27,7 @@ flags:
   -service
     	run the supervisor as a service that starts at login: Linux systemd user unit (~/.config/systemd/user/tw.service), macOS LaunchAgent (~/Library/LaunchAgents/dev.tailworks.up.plist). Default: on for a new default state dir where available; an existing state dir keeps how it runs (--service=false runs it in the background without a service)
   -yes
-    	skip the confirmation before --apply-policy writes the policy (tw up asks nothing else); needed without a terminal and with --json
+    	skip the confirmation before --apply-policy writes the policy; needed without a terminal and with --json
 
 Control plane (Tailscale or Headscale):
   -api-key-file string
@@ -110,6 +110,28 @@ flags:
     	kill every live object (audit: "tw down --purge") and delete its device before stopping (default with --ephemeral)
   -service
     	also disable and remove the service installed by tw up --service (systemd user unit / macOS LaunchAgent)
+
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
+```
+
+### tw uninstall
+
+remove tailworks from this machine
+
+```text
+tw uninstall: remove tailworks from this machine in one go: kill every object and delete its device, stop tailworks and remove its service, delete mgmt's own node, remove the coding agents' skills, the install and the state dir (--keep-state keeps the state dir's data); it prints what it removes and asks first
+
+usage: tw uninstall [--keep-state] [--dry-run] [--yes] [--force]
+
+flags:
+  -dry-run
+    	print what it would do and delete, and change nothing
+  -force
+    	go on when tailworks is set up here but tw-mgmt isn't running or healthy (the objects' devices are then left: delete them in the admin console)
+  -keep-state
+    	keep the state dir's data (tw.json, mgmt/, hostd/, backups/, …): remove the install, service, devices and skills only
+  -yes
+    	skip the confirmation before deleting; needed without a terminal and with --json
 
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 ```
