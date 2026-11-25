@@ -132,7 +132,7 @@ func cmdTenant(args []string) error {
 		}
 	}
 	if sub < 0 {
-		return fail("bad_request", "tw tenant needs a subcommand: add | ls | set | rm", "usage: tw "+usageOf("tenant"))
+		return needsSubcommand("tenant")
 	}
 	rest := append(append([]string{}, args[:sub]...), args[sub+1:]...)
 	switch args[sub] {

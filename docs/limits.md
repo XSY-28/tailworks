@@ -355,6 +355,7 @@ Details: [observability.md](observability.md#volume-bounds).
 | OTLP export interval: logs and spans / metrics | 2 s / 30 s | no | `hostd/telemetry.go:ExportEvery`, `hostd/telemetry.go:MetricsEvery` |
 | OTLP headers / header value / endpoint | 16 / 4 KiB / 2048 bytes | no | `mgmt/telemetry.go:TelemetryMaxHeaders`, `mgmt/telemetry.go:TelemetryMaxHeaderValue`, `mgmt/telemetry.go:TelemetryMaxEndpoint` |
 | `tw logs` lines | default 50, at most 10,000 | `tw logs -n` | `cmd/tw/ops.go:#logs-n`, `mgmt/logs.go:MaxLogLines` |
+| `tw audit` records (bare command: the newest) | default 50, fetched in pages of 500 | `tw audit -n` (an object, `--human`, `--trace` and `--all` are always complete) | `cmd/tw/ops.go:#audit-n` |
 | One `tw logs -f` stream | 1 h (the CLI reconnects) | no | `hostd/logs.go:maxLogFollow` |
 | Request record max age | none (0): only the rotation above | `tw up --request-log-max-age`, `tw-hostd -request-log-max-age` (e.g. `168h`) | `cmd/tw-hostd/main.go:-request-log-max-age`, `cmd/tw/up_retention.go:-request-log-max-age` |
 | Request record max age applied every | 10 min (or the max age, if shorter) | no | `hostd/telemetry_retention.go:RecordPruneEvery` |

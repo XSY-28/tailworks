@@ -250,37 +250,40 @@ func subDepth(args []string) int {
 }
 
 // helpCommands parses `tw help`: every command, and each subcommand of the
-// commands whose usage lists them ("tenant add … | tenant ls | …").
+// commands whose usage lists them (one "tw tenant add …" line per
+// subcommand, or "tenant add … | tenant ls | …").
 func helpCommands(help string) []string {
-	var out []string
 	sc := bufio.NewScanner(strings.NewReader(help))
 	cmdLine := regexp.MustCompile(`^  ([a-z]+) `)
+	subs := map[string]map[string]bool{} // command → its subcommands
 	var cur string
 	for sc.Scan() {
 		l := sc.Text()
 		if m := cmdLine.FindStringSubmatch(l); m != nil {
 			cur = m[1]
+			subs[cur] = map[string]bool{}
 			continue
 		}
 		u, ok := strings.CutPrefix(strings.TrimSpace(l), "tw ")
 		if !ok || cur == "" {
 			continue
 		}
-		subs := map[string]bool{}
 		for _, seg := range strings.Split(u, "|") {
 			w := strings.Fields(seg)
 			if len(w) < 2 || w[0] != cur || subDepth(w) == 1 {
 				continue
 			}
-			subs[strings.Join(w[:subDepth(w)], " ")] = true
+			subs[cur][strings.Join(w[:subDepth(w)], " ")] = true
 		}
-		if len(subs) == 0 {
-			out = append(out, cur)
+	}
+	var out []string
+	for c, s := range subs {
+		if len(s) == 0 {
+			out = append(out, c)
 		}
-		for s := range subs {
-			out = append(out, s)
+		for sub := range s {
+			out = append(out, sub)
 		}
-		cur = ""
 	}
 	sort.Strings(out)
 	return out

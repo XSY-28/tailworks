@@ -22,8 +22,15 @@ type page[T any] struct {
 }
 
 // listAll fetches a /v1 list, following nextCursor. max > 0 stops after
-// that many items (tw ls --limit); 0 fetches everything (--all).
+// that many items; 0 fetches everything.
 func listAll[T any](ctx context.Context, c *mgmtapi.Client, path string, max int) ([]T, error) {
+	out, _, err := listUpTo[T](ctx, c, path, max)
+	return out, err
+}
+
+// listUpTo is listAll that also says whether it stopped at max with items
+// left over (tw ls's "truncated").
+func listUpTo[T any](ctx context.Context, c *mgmtapi.Client, path string, max int) ([]T, bool, error) {
 	out := []T{} // never nil: --json prints an empty list as [], not null
 	cursor := ""
 	for {
@@ -42,11 +49,12 @@ func listAll[T any](ctx context.Context, c *mgmtapi.Client, path string, max int
 		}
 		var pg page[T]
 		if err := c.Do(ctx, "GET", u, nil, &pg); err != nil {
-			return out, err
+			return out, false, err
 		}
 		out = append(out, pg.Items...)
-		if pg.NextCursor == nil || *pg.NextCursor == "" || (max > 0 && len(out) >= max) {
-			return out, nil
+		more := pg.NextCursor != nil && *pg.NextCursor != ""
+		if !more || (max > 0 && len(out) >= max) {
+			return out, more, nil
 		}
 		cursor = *pg.NextCursor
 	}

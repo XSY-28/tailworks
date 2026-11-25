@@ -396,6 +396,10 @@
           "type": "boolean",
           "description": "every chain's hashes and host signatures verify"
         },
+        "truncated": {
+          "type": "boolean",
+          "description": "bare tw audit stopped at -n; older records exist (tw audit --all)"
+        },
         "chains": {
           "type": "array",
           "items": {
@@ -2059,13 +2063,18 @@
         },
         "nodes": {
           "$ref": "#/$defs/nodeBudget"
+        },
+        "truncated": {
+          "type": "boolean",
+          "description": "More objects matched than the ceiling (--limit, default 5000) let through."
         }
       },
       "required": [
         "tenant",
         "tenantID",
         "deployments",
-        "objects"
+        "objects",
+        "truncated"
       ]
     },
     "undeploy": {

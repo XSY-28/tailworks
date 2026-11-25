@@ -31,7 +31,7 @@ func cmdHost(args []string) error {
 		}
 	}
 	if sub < 0 {
-		return fail("bad_request", "usage: tw "+usageOf("host"))
+		return needsSubcommand("host")
 	}
 	rest := append(append([]string{}, args[:sub]...), args[sub+1:]...)
 	switch args[sub] {

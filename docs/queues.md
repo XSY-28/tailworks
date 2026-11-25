@@ -78,8 +78,8 @@ Delivery is at least once.
   `tw-hostd -queue-visibility`). hostd extends it while `queue()` runs. If
   workerd dies mid-batch, the batch is retried. If hostd or its host dies,
   the timeout expires and the batch is delivered again. A batch that never
-  reached `queue()` (workerd restarting) is handed back without counting
-  an attempt.
+  reached `queue()` (workerd restarting, or the workload moved away first)
+  is handed back without counting an attempt.
 - **Who consumes.** The host holding the consumer workload's lease runs
   the consumer, and only while its heartbeat to mgmt is fresh (the same
   rule as cron triggers). When the workload moves (`tw deploy --replace`,
