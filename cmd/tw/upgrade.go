@@ -720,7 +720,7 @@ func cmpOr(a, b string) string {
 }
 
 func latestTag(ctx context.Context, repo string) (string, error) {
-	req, _ := http.NewRequestWithContext(ctx, "GET", "https://api.github.com/repos/"+repo+"/releases/latest", nil)
+	req, _ := http.NewRequestWithContext(ctx, "GET", releaseAPI()+"/repos/"+repo+"/releases/latest", nil) // updatecheck.go
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", fail("network", "finding the latest release: "+err.Error())

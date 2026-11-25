@@ -6,7 +6,8 @@ Every `tw` command and subcommand with its `--help` output: the usage line
 and each flag with its default. `tw help` lists the commands by group;
 `tw <command> --help` prints one of these sections. Every command also
 takes `--state-dir` (default `$TW_STATE_DIR` or `~/.tailworks`) and `--json`
-([cli-json.md](cli-json.md)).
+([cli-json.md](cli-json.md)). The environment variables tw reads are at the
+end: [Environment](#environment).
 
 ## Set up
 
@@ -1610,3 +1611,30 @@ Same flags as [tw release](#tw-release).
 #### tw release ls
 
 Same flags as [tw release](#tw-release).
+
+## Environment
+
+The variables `tw` reads, and the ones `get.sh` and `install.sh` read
+("scripts"). A flag, where there is one, wins over the variable. The
+`tw up --service` unit sets only `PATH` and passes `--state-dir`, so
+none of these reach a tailworks that runs as a service unless the unit
+sets them. `TW_*` and `__TW*` names are reserved: a Worker never sees
+them, and secrets and `node.env` can't use them.
+
+| Variable | What it does | Flag | Read by |
+| --- | --- | --- | --- |
+| `TW_STATE_DIR` | the state dir (default `~/.tailworks`). A `tw up --service` unit passes `--state-dir` itself. | `--state-dir` | tw |
+| `TW_HOME` | where `get.sh` and `install.sh` install the release (the prefix; default `~/.tailworks`). It shares the state dir's default but is a different thing: [What is in ~/.tailworks](INSTALL.md#what-is-in-tailworks). | `install.sh --prefix` | scripts |
+| `TW_NO_UPDATE_CHECK` | set (to `1`): no once-a-day "newer release" notice after a command. `CI` does the same. |  | tw |
+| `CI` | set (as CI systems do): no update notice, as with `TW_NO_UPDATE_CHECK`. |  | tw |
+| `TW_WORKERD` | the workerd binary, when it isn't next to `tw` or in `~/.tailworks/bin`. | `--workerd` (`tw up`, `tw dev`) | tw |
+| `TW_NODE` | the Node.js binary that runs `"runtime": "node"` workloads (default: `node` on `PATH`). |  | tw |
+| `TW_CREATE_TAILWORKS` | the create-tailworks package directory (bundler and templates), when it isn't in the install or a checkout. |  | tw |
+| `TW_WRANGLER` | the wrangler CLI that builds a wrangler project (default: the project's `node_modules/.bin/wrangler`, then `PATH`). |  | tw |
+| `TW_REPO` | the GitHub repository releases come from (default `rosskukulinski/tailworks`), for `tw upgrade` and `tw version --check`. |  | tw, scripts |
+| `TW_RELEASE_BASE` | a mirror to download release tarballs and `SHA256SUMS` from instead of GitHub (the per-tag directory). The signature check still applies. |  | tw, scripts |
+| `TW_RELEASE_API` | a mirror of the GitHub API that answers "latest release" (default `https://api.github.com`), for `tw upgrade`, `tw version --check` and `get.sh`. For tests and private mirrors. |  | tw, scripts |
+| `TW_RELEASE_SIGNERS` | an `allowed_signers` file that replaces the pinned release keys. For tests and private builds; a host's self-upgrade (`tw-hostd`) ignores it. |  | tw, scripts |
+| `TW_ALLOW_UNSIGNED` | `1`: the per-invocation form of `--allow-unsigned`, for a build you made yourself. Don't export it in a shell profile: every later `get.sh`, `install.sh` and `tw upgrade` would skip the release signature check ([security-model.md](security-model.md)). A host's self-upgrade ignores it. | `--allow-unsigned` | tw, scripts |
+
+For debugging and the test harness only: `TW_KEEP_INSTANCES`, when set, keeps a workload instance's directory after it stops; its VM disks and tenant secrets stay on disk, so never set it on a production host. `TW_TEST_LINK_NAME` is the name `tw link` discovers instead of `tw-mgmt`, for hermetic tests.

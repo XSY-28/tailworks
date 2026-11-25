@@ -7,6 +7,7 @@
 #   ./install.sh --uninstall --purge   also remove the state in the prefix (run `tw down` first)
 #   ~/.tailworks/install.sh --rollback swap the previous install (bin.prev, share.prev) back in
 #   ./install.sh --allow-unsigned      install a release without a valid SHA256SUMS.sig (local builds)
+#   ./install.sh --force         with --rollback or --uninstall: go ahead while tailworks runs from the prefix (what tw upgrade passes after stopping it)
 #
 # The release must be signed: SHA256SUMS.sig, an SSH signature of SHA256SUMS
 # by a key pinned below (ssh-keygen -Y verify). Local builds (a version with
@@ -40,7 +41,7 @@ while [ $# -gt 0 ]; do
 	--force) FORCE=1 ;;
 	--rollback) MODE=rollback ;;
 	--allow-unsigned) ALLOW_UNSIGNED=1 ;;
-	-h | --help) sed -n '2,20p' "$0"; exit 0 ;;
+	-h | --help) sed -n '2,21p' "$0"; exit 0 ;;
 	*) echo "install.sh: unknown argument $1" >&2; exit 2 ;;
 	esac
 	shift

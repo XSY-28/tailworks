@@ -103,7 +103,7 @@ func TestCLIImages(t *testing.T) {
 	var up struct{ MgmtNode, MgmtIP string }
 	host.MustJSON(&up, "up", "--oauth-client-file", keyFile, "--tailnet", "ttest.ts.net", "--yes", "--ephemeral", "--control-url", ctl.URL,
 		"--tsapi-url", api.URL, "--hostname-prefix", "tw-i-", "--mgmt-hostname", "tw-mgmt", "--mgmt-authkey-file", authFile)
-	t.Setenv("TW_LINK_DISCOVER_NAME", "tw-mgmt-hermetic.invalid")
+	t.Setenv("TW_TEST_LINK_NAME", "tw-mgmt-hermetic.invalid")
 	var lk struct {
 		Actor   string
 		Tenants []struct{ TenantID string }
