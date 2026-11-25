@@ -60,7 +60,7 @@ func TestSubcommandHelp(t *testing.T) {
 		t.Fatalf("tw tenant --help: exit %d", code)
 	}
 	for _, want := range []string{
-		"subcommands:\n  tw tenant add <tailnet> --oauth-client-file <file>",
+		"subcommands:\n  tw tenant add <tailnet> [--oauth-client-file <file>]",
 		"\n  tw tenant ls\n",
 		"\n  tw tenant set <tenant> [--<setting> <value>]…  (tw tenant set --help; docs/limits.md)\n",
 		"tw tenant <subcommand> --help   its flags",
