@@ -70,4 +70,20 @@ Issues #482 and #484 from the interface-simplification audit (#434).
 
 ## Tests
 
-See the PR's Tests section for the final run.
+After merging origin/master (e879b14e), Go 1.27.4:
+
+- `make test-docs`: ok.
+- `go test -run 'DocPolicySnippets|OperatorSnippet' ./cmd/tw/`: ok; with a
+  port changed in headscale.md and an attr in public-ingress.md it fails
+  on both, as it should.
+- `make changes-check`: ok (no upgrade-relevant paths, no fragment).
+- `make lint`: ok.
+- `make test`: everything passed except five timing tests under heavy load
+  (`TestStartCloseBudget` start 4.2 s vs a 2 s budget, `TestTenantAdminScope`
+  `no_host` heartbeat, `TestDevPython`, `TestPublicIngress`,
+  `TestContainerPolyfill`); none touches code this branch changed, and each
+  passes rerun alone with `-race`.
+- A local Markdown anchor check over every tracked .md: no new broken
+  links.
+- Not run: `make e2e-headscale` (no Docker here); nothing else in the
+  AGENTS.md table applies (docs, skills and one cmd/tw test file).
