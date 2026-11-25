@@ -445,7 +445,7 @@ Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<bi
 429 · hostd. **When:** an object (or, for the Worker and plain-DO objects, the workload node) already has 256 open `connect()` sockets on this host; the new one is refused (stock `connect()` sees a lost connection, `ctx.tailnet.connect()` this code). **Fix:** close sockets you're done with, and reuse connections: a driver pool with a small `max`, or one connection kept in a Durable Object ([limits.md](limits.md)).
 
 ### spawn_budget_exceeded
-429 · mgmt, netd (SDK). **When:** too many live descendants (`maxLive`) or too deep a chain (`maxDepth`) under `tailnet.spawn` in `tailworks.jsonc`. **Fix:** kill finished sub-agents (`ttl` helps), or raise the budget.
+429 · mgmt, netd (SDK). **When:** too many live descendants (`maxLive`) or too deep a chain (`maxDepth`) under `tailnet.spawn` in `tailworks.jsonc`. **Fix:** kill finished sub-agents (`ttl` helps). The budget's ceiling is 64 live / depth 3 and cannot be raised; if `tailworks.jsonc` lowered it, raise it back toward that.
 
 ### state_conflict
 409 · cli. **When:** the state dir is bound to another mint mode, tailnet, `--local-dev` setting or mgmt hostname than this command asks for; the API key file already serves another tenant; mgmt already has this host ID bound to another node; `tw link` on a machine that runs tailworks itself; `tw custody migrate` on an install already on setec, or into a setec that holds another value under one of the install's names. **Fix:** the detail names the binding; use another `--state-dir`, or `tw down --purge` and start over.
