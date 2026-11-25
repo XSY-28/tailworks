@@ -585,8 +585,14 @@ Every `tw init` template ships the file along with a `tsconfig.json`
 (`@cloudflare/workers-types` plus `@tailworks/tailnet`, which declares
 `ctx.tailnet`), so `npm install && npx tsc --noEmit` passes. The templates
 use that global `Env` and don't declare their own: in an ES module a local
-`interface Env` would hide the generated one. Run
-`tw types` again after you change the config. In CI, run
+`interface Env` would hide the generated one. `tw dev` keeps the file
+current: on start and on each reload it rewrites a
+`worker-configuration.d.ts` that `tw types` wrote when the config has
+changed. It never creates the file, and it leaves alone a hand-written
+one, one written by `tw types --remote` (its header says so) or typed
+for an `--env`. It does nothing under `tw dev --env`, `--wrangler`,
+`--from-wrangler-out` or `--once`. Otherwise, run `tw types` again after
+you change the config. In CI, run
 `tw types --check`: it writes nothing and fails with
 [`types_stale`](errors.md#types_stale) if the file is missing or out of date.
 `.dev.vars` isn't committed, so for `--check` to see the same secrets on
