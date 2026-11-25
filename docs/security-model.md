@@ -431,6 +431,15 @@ On a single-machine install all three are usually you. When you run
 tailworks for other people, they trust the operators of mgmt and of every
 host their workloads are placed on.
 
+The CLI also runs some of your project's own code on the machine you
+deploy from. When the wrangler config has a custom build
+(`"build": {"command": "…"}`), `tw deploy`, `tw policy` and `tw dev` run
+that command in a shell before bundling, as wrangler does, and print it
+(`› build      <command>`); `--wrangler` runs the project's own wrangler,
+which runs it too. This is the same trust as `npm run build` in that
+directory: deploy only projects whose code you would run yourself
+([wrangler.md](wrangler.md#custom-builds)).
+
 ## Telemetry and the update check
 
 tailworks sends no telemetry, usage data or crash reports anywhere. (`tw

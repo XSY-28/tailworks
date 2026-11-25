@@ -292,15 +292,13 @@ func cloudflareProjects() []*Project {
 		with(tpl("durable-chat", "durable-chat-template"), func(p *Project) {
 			p.What = "Chat room on a hibernating Durable Object (PartyServer WebSockets)"
 			p.Exercises = []string{"websockets", "hibernation", "do-storage", "assets", "wrangler-bundling"}
-			// The project's wrangler.json "build" bundles the client; only
-			// the wrangler bundler runs it.
-			p.DeployArgs = []string{"--wrangler"}
+			// The project's wrangler.json "build" bundles the client into
+			// public/dist; the built-in path runs it first (issue #495).
 			p.Probe = probeDurableChat
 		}),
 		with(tpl("multiplayer-globe", "multiplayer-globe-template"), func(p *Project) {
 			p.What = "Multiplayer globe (PartyServer WebSockets, request.cf geo)"
 			p.Exercises = []string{"websockets", "assets", "wrangler-bundling"}
-			p.DeployArgs = []string{"--wrangler"}
 			p.Probe = func(r *Run) error {
 				if err := r.Get("/").Want(200, "<html"); err != nil {
 					return err
