@@ -96,7 +96,7 @@ func testTwUp(t *testing.T, extra []string) {
 	}
 	// The workload's and the test client's tags and grants (what the
 	// operator adds for their app).
-	if _, err := policy.ApplyWith(ctx, hs.Client, workloadSnippet(), policy.Options{Headscale: true, AllowTags: []string{TestTag}}); err != nil {
+	if _, err := policy.ApplyWith(ctx, hs.Client, workloadSnippet(), policy.Options{Headscale: true, AllowTags: []string{TestTag}, AllowSrcs: []string{"autogroup:member"}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -141,6 +141,24 @@ func testTwUp(t *testing.T, extra []string) {
 		t.Fatalf("workload answered %d %s; want the verified caller %s %s", resp.StatusCode, b, cst.Self.ID, TestTag)
 	}
 	t.Logf("PASS call over the Headscale tailnet: caller nodeId %s tags %v", body.Caller.NodeID, body.Caller.Tags)
+
+	// A new app deployed with --apply-policy gets the caller grant
+	// (autogroup:member → its tag, #552): Headscale accepts that source.
+	callers := filepath.Join(e.WorkDir, "callers")
+	e.MustJSON(nil, "init", callers, "--template", "hello", "--keep-tags")
+	editFile(t, filepath.Join(callers, "tailworks.jsonc"), func(s string) string {
+		return strings.Replace(s, `"connects": ["tag:db"]`, `"connects": []`, 1)
+	})
+	e.MustJSON(nil, "deploy", callers, "--apply-policy", "--yes")
+	pol, _, err = hs.Client.GetPolicyHuJSON(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cg := policy.Snippet{Grants: []map[string]any{{"src": []string{"autogroup:member"}, "dst": []string{"tag:tw-wl-callers"}, "ip": []string{"tcp:80"}}}}
+	if miss, err := policy.Missing(pol, cg); err != nil || !miss.Empty() {
+		t.Fatalf("caller grant not written by deploy --apply-policy (missing %+v, %v):\n%s", miss, err, pol)
+	}
+	t.Log("PASS deploy --apply-policy wrote the autogroup:member caller grant")
 
 	// tailnet.service needs Tailscale Services.
 	svc := filepath.Join(e.WorkDir, "svc")
