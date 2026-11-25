@@ -382,6 +382,9 @@ type deployResult struct {
 	// Replicas (tailworks.jsonc "replicas" > 1): every copy and its host.
 	Replicas []mgmt.ReplicaRef `json:"replicas,omitempty"`
 
+	// Images: what each container image was pinned to (deploypins.go).
+	Images []deployImage `json:"images,omitempty"`
+
 	// Warnings: wrangler config tailworks ignores, one line per key.
 	Warnings []string `json:"warnings,omitempty"`
 
@@ -587,11 +590,17 @@ func cmdDeploy(args []string) error {
 		return err
 	}
 	res.Replicas = dr.Replicas
+	res.Images = deployImages(v) // deploypins.go
 	res.Status, res.Endpoint, res.Public = v.Status, v.Endpoint, v.Public
 	res.Timings["ready"] = ms(time.Since(ds))
 	wurl := workloadURL(a.TwRaw, v.Endpoint.MagicDNS) // tailnethttps.go
-	ev.emit("ready", map[string]any{"deploymentID": dr.DeploymentID, "host": v.Host, "magicDNS": v.Endpoint.MagicDNS, "url": wurl})
+	ready := map[string]any{"deploymentID": dr.DeploymentID, "host": v.Host, "magicDNS": v.Endpoint.MagicDNS, "url": wurl}
+	if len(res.Images) > 0 {
+		ready["images"] = res.Images
+	}
+	ev.emit("ready", ready)
 	if !*f.json {
+		printDeployImages(os.Stdout, res.Images, builtImages)
 		fmt.Printf("✓ deployed   %s@%s · node %s · %s  (deploy → ready %.1fs)\n", orName(res.Preview, a.Name), v.Host, v.Endpoint.Node, wurl, res.Timings["ready"]/1000)
 		if res.Preview != "" {
 			fmt.Print(previewNotice(a.Name, res.Preview, wurl))
