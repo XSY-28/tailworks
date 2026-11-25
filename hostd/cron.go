@@ -103,11 +103,15 @@ func (h *Host) cronDue(now time.Time) []cronRun {
 			w.mu.Unlock()
 			continue
 		}
+		if w.cronLast.IsZero() {
+			w.cronLast = h.cronLasts.load(w.tenantID+"/"+w.name, now) // cronlast.go: what ran before a restart (#594)
+		}
 		if !minute.After(w.cronLast) {
 			w.mu.Unlock() // this minute (or a later one, before a clock step back) already ran
 			continue
 		}
 		w.cronLast = minute
+		h.cronLasts.save(w.tenantID+"/"+w.name, minute)
 		for _, expr := range inst.app.Crons {
 			s, err := cron.Parse(expr)
 			if err != nil || !s.Matches(minute) {
