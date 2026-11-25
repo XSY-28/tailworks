@@ -100,6 +100,8 @@ e2e-placement: deps
 ## tw-hostd processes on testcontrol + local DERP, a seeded nemesis (SIGKILL/SIGSTOP of hosts and workerd, cut-offs,
 ## takeovers, mgmt restarts) and checkers over the op history (Queues, DO/lock fencing, D1). TW_DP_SEED defaults to
 ## today's date; TW_DP_SCENARIO=queues|fencing|d1|mixed; TW_DP_DURATION (default 4m).
+## With TW_DP_SCENARIO unset it also runs the Workflows slice (#418, TestDataplaneWorkflows, 3m): scenario
+## workflows on an even seed, workflows-move on an odd one (TW_DP_SCENARIO=workflows|workflows-move runs only it).
 .PHONY: e2e-dataplane
 e2e-dataplane: deps
 	$(GO) test -tags e2edataplane -count=1 -v -timeout 25m -run TestDataplane ./e2e/dataplane/...
