@@ -249,10 +249,11 @@ additions and clean up by ID. The only policy entries the run may add are:
 
 ```jsonc
 "tagOwners": { "tag:tw-wl-compat": ["autogroup:admin", "tag:tw"] },
-"grants":    [{ "src": ["tag:ttest"], "dst": ["tag:tw-wl-compat"], "ip": ["tcp:80"] }]
+"grants":    [{ "src": ["tag:ttest"], "dst": ["tag:tw-wl-compat"], "ip": ["tcp:80", "tcp:443"] }]
 ```
 
-If anything else is missing, the run refuses to write the policy. Every
+`tcp:443` is for the projects deployed with `tailnet.https`
+(`ag-mcp-worker-auth`). If anything else is missing, the run refuses to write the policy. Every
 node it creates is named `ttest-compat-<run>-*` / `tw-compat-<run>-*`; the
 cleanup deletes them by ID and fails the run if any are left.
 
