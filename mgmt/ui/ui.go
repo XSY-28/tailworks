@@ -56,6 +56,7 @@ func Handler(api *http.Client, baseURL string) http.Handler {
 	mux.HandleFunc("POST /ui/deployments/{id}/undeploy", u.undeployForm)
 	mux.HandleFunc("GET /ui/hosts/{id}", u.host)
 	mux.HandleFunc("POST /ui/hosts/{id}/remove", u.removeHostForm)
+	mux.HandleFunc("POST /ui/hosts/{id}/cordon", u.cordonHostForm) // cordon.go
 	mux.HandleFunc("GET /ui/tenants/{id}", u.tenant)
 	// logs.go
 	mux.HandleFunc("GET /ui/tenants/{id}/workloads/{workload}/logs", u.workloadLogs)

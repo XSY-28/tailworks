@@ -87,6 +87,10 @@ type host struct {
 		URL  string `json:"url"`
 	} `json:"push"`
 	Leases []lease `json:"leases"`
+
+	// cordon.go
+	CordonedAt int64  `json:"cordonedAt"`
+	CordonedBy string `json:"cordonedBy"`
 }
 
 // PushTransport names how mgmt reaches the host's push listener.

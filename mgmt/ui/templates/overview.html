@@ -107,7 +107,7 @@
   </div></div>
   <div class="tbl">
   <table>
-    <thead><tr><th>Tailnet</th><th>Auth</th><th>Max objects</th><th>Registrations / min</th><th>Effective / min</th><th>Waiting to join</th><th>Pool / tier</th><th>Created</th></tr></thead>
+    <thead><tr><th>Tailnet</th><th title="How mgmt gets node keys from this tailnet's control plane (oauth, headscale, …)">Mint mode</th><th>Max objects</th><th>Registrations / min</th><th>Effective / min</th><th title="Objects waiting for a node key (registration throttle)">Mint queue</th><th>Pool / tier</th><th>Created</th></tr></thead>
     <tbody>
     {{range .Tenants}}<tr>
       <td class="mono"><a href="/ui/tenants/{{.TenantID}}"><b>{{.Tailnet}}</b></a><div class="sub-line">{{.TenantID}}</div></td>
@@ -159,7 +159,7 @@
     <dt>Version</dt><dd class="mono">{{or .Status.Version "—"}}</dd>
     <dt>Listeners</dt><dd class="mono">{{if .Status.Listeners}}{{join .Status.Listeners}}{{else}}—{{end}}</dd>
     <dt>Transport</dt><dd class="mono">{{.Status.Transport}}{{if .Who.Mgmt.HTTPS}} · https{{end}}</dd>
-    <dt>Tenant auth modes</dt><dd class="mono">{{if .MintModes}}{{join .MintModes}}{{else}}<span class="muted">no tenants</span>{{end}}</dd>
+    <dt>Tenant mint modes</dt><dd class="mono">{{if .MintModes}}{{join .MintModes}}{{else}}<span class="muted">no tenants</span>{{end}}</dd>
     <dt>Your connection</dt><dd><span class="mono">{{.Who.Actor}}</span> · {{.Who.Kind}}{{if .Who.Admin}} · admin{{end}}</dd>
   </dl>
 </details>{{end}}
