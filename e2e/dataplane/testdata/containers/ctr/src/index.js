@@ -5,7 +5,7 @@
 //         boot_id and 16 bytes of urandom; report them to the recorder from
 //         the object's own node (facet egress) and answer them
 //   down  destroy() it; answer how long that took
-//   kill  kill the object (its node goes away; the name is tombstoned)
+// (The test kills retired objects through mgmt, as `tw kill` does.)
 import { DurableObject } from "cloudflare:workers";
 
 const dec = new TextDecoder();
@@ -56,13 +56,6 @@ export class Box extends DurableObject {
         const t0 = Date.now();
         await c.destroy();
         return J({ ms: Date.now() - t0, running: c.running });
-      }
-      if (op === "kill") {
-        // After the answer: the kill ends this object's requests.
-        this.ctx.waitUntil(
-          new Promise((r) => setTimeout(r, 100)).then(() => this.ctx.tailnet.kill({ reason: "dataplane loop: rolling window" })),
-        );
-        return J({ ok: true });
       }
       return J({ error: "unknown op " + op }, 404);
     } catch (e) {

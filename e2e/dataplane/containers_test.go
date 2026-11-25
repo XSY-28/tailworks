@@ -157,9 +157,11 @@ type ctrRep struct {
 // vmRep is a microVM workload's first random draws, as the recorder got them.
 type vmRep struct {
 	At             time.Time
-	Node, StableID string
+	Node, StableID string // the recorder's WhoIs ("" for a client answer)
 	WL, UUID, Rnd  string
 	MR             float64
+	RecErr         string `json:",omitempty"` // the workload's report failed
+	Client         bool   `json:",omitempty"` // the /id answer, not the report
 }
 
 // hostObs is one poll of a host's status socket (only this loop's
@@ -322,9 +324,35 @@ func (l *ctrLoad) retire() {
 	}
 	l.mu.Unlock()
 	for _, o := range old {
-		l.call(o, "down")
-		l.call(o, "kill")
+		d := l.call(o, "down")
+		l.kill(o, d.ObjectID)
 	}
+}
+
+// kill ends an object as an operator does (`tw kill`: mgmt's DELETE), so
+// the answer says whether mgmt took it.
+func (l *ctrLoad) kill(obj, id string) {
+	if id == "" {
+		l.k.mu.Lock()
+		for _, o := range l.k.ops {
+			if o.Obj == obj && o.ObjectID != "" {
+				id = o.ObjectID
+			}
+		}
+		l.k.mu.Unlock()
+	}
+	o := ctrOp{Obj: obj, Op: "kill", Sent: time.Now(), ObjectID: id}
+	if id == "" {
+		o.Recv, o.Err = time.Now(), "no object ID seen"
+		l.k.op(o)
+		return
+	}
+	st, b, err := l.c.try("DELETE", "/v1/objects/"+id+"?reason=dataplane+loop+rolling+window", nil, nil)
+	o.Recv, o.Status, o.OK = time.Now(), st, err == nil && st/100 == 2
+	if !o.OK {
+		o.Err = fmt.Sprintf("%d %s %v", st, strings.TrimSpace(string(b)), err)
+	}
+	l.k.op(o)
 }
 
 func (l *ctrLoad) every(d time.Duration, f func()) {
@@ -618,7 +646,7 @@ func (v *vmBurster) burst(host string) string {
 			if err != nil {
 				out[i].err = err.Error()
 			} else {
-				var id struct{ UUID string }
+				var id vmRep
 				for try := 0; try < 30; try++ {
 					if _, err = getJSON(v.cli, "http://"+d.Endpoint.MagicDNS+"/id", &id); err == nil {
 						break
@@ -627,6 +655,12 @@ func (v *vmBurster) burst(host string) string {
 				}
 				if err != nil {
 					out[i].err = "id: " + err.Error()
+				} else {
+					id.At, id.Client = time.Now(), true
+					v.k.mu.Lock()
+					v.k.vms = append(v.k.vms, id)
+					v.k.mu.Unlock()
+					v.k.log("vmid", id)
 				}
 			}
 			if d.DeploymentID != "" {

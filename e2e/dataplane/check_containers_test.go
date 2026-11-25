@@ -316,6 +316,7 @@ func checkK3(in kInput) result {
 	}
 	seen := map[string]string{}
 	wls := map[string]bool{}
+	reported := 0
 	for _, v := range in.vms {
 		wls[v.WL] = true
 		for _, kv := range [][2]string{{"randomUUID", v.UUID}, {"getRandomValues", v.Rnd}, {"Math.random", fmt.Sprint(v.MR)}} {
@@ -325,6 +326,13 @@ func checkK3(in kInput) result {
 			}
 			seen[key] = v.WL
 		}
+		if v.Client {
+			if v.RecErr != "" {
+				r.note("%s's report to the recorder failed: %s", v.WL, v.RecErr)
+			}
+			continue
+		}
+		reported++
 		if firstLabel(v.Node) != firstLabel(v.WL) {
 			r.fail("%s's egress arrived from node %s", v.WL, v.Node)
 		}
@@ -343,8 +351,8 @@ func checkK3(in kInput) result {
 		srcs = append(srcs, fmt.Sprintf("%s %d", s, len(w)))
 	}
 	sort.Strings(srcs)
-	r.Summary = fmt.Sprintf("%d container boots, %d urandom draws; %d microVM copies reported (sources: %s)",
-		len(bootObj), len(rnds), len(wls), strings.Join(srcs, ", "))
+	r.Summary = fmt.Sprintf("%d container boots, %d urandom draws; %d microVM copies compared, %d reports over their own egress (sources seen: %s)",
+		len(bootObj), len(rnds), len(wls), reported, strings.Join(srcs, ", "))
 	return r
 }
 
