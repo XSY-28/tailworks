@@ -63,6 +63,7 @@ func TestDataplane(t *testing.T) {
 			}
 		}
 	}
+	clockLib, names := setupSkew(t, names) // skew_test.go
 	t.Logf("scenario %s, seed %d, duration %v, faults %v", scenario, seed, dur, names)
 
 	root, _ := filepath.Abs("results")
@@ -90,7 +91,7 @@ func TestDataplane(t *testing.T) {
 	c := &cluster{t: t, bin: cliflow.BuildBinariesTags(t, "twtestclock"), dir: rdir, work: work, ctl: ctl, tsURL: fakeTS(t).URL,
 		sock: filepath.Join(work, "mgmt.sock"), workerd: wd, hosts: []string{"h1", "h2", "h3"},
 		proxies: map[string]*sockProxy{}, pids: pids, procs: map[string]*proc{}, stopped: map[string]bool{},
-		clocks: &hostClocks{off: map[string]time.Duration{}}}
+		clocks: &hostClocks{lib: clockLib, off: map[string]time.Duration{}}}
 	t.Cleanup(c.stopAll)
 	c.hc = &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", c.sock)

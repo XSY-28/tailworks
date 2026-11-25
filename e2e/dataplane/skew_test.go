@@ -7,53 +7,49 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/rosskukulinski/tailworks/e2e/cliflow"
 )
 
 // Wall-clock skew on a host (H3, ADR-028). The hosts are a test build
 // (-tags twtestclock: internal/wallclock): each follows the offset in
-// <work>/<host>/clock, and with libfaketime its workerds follow it too, so
-// the whole host reads a wrong wall clock. Monotonic clocks are untouched.
-// Without libfaketime only hostd could be skewed, which no real host does
-// (its workerds would disagree with it), so the skew fault is left out.
+// <work>/<host>/clock, and through a preload library
+// (internal/wallclock/testdata/skewclock.c) its workerds follow it too, so
+// the whole host reads one wrong wall clock. Monotonic clocks are
+// untouched. The library is Linux only: elsewhere only hostd could be
+// skewed, which no real host does (its workerds would disagree with it), so
+// the skew fault is left out.
 
-// faketimeLib finds libfaketime: TW_DP_FAKETIME_LIB, or where apt and
-// Homebrew put it. "" if there is none.
-func faketimeLib() string {
-	if v := os.Getenv("TW_DP_FAKETIME_LIB"); v != "" {
-		return v
-	}
-	for _, pat := range []string{
-		"/usr/lib/*/faketime/libfaketime.so.1",
-		"/usr/lib/faketime/libfaketime.so.1",
-		"/opt/homebrew/lib/faketime/libfaketime.1.dylib",
-		"/usr/local/lib/faketime/libfaketime.1.dylib",
-	} {
-		if m, _ := filepath.Glob(pat); len(m) > 0 {
-			return m[0]
-		}
-	}
-	return ""
-}
-
-// skewFaults are the scenarios that get the skew fault when libfaketime is
-// there (init, so the scenario lists in nemesis_test.go stay as they are).
-var skewFaults = []string{"fencing", "mixed"}
+// skewScenarios get the skew fault (here, so the scenario lists in
+// nemesis_test.go stay as they are). setupSkew drops it where the preload
+// library can't be built.
+var skewScenarios = []string{"fencing", "mixed"}
 
 func init() {
 	faults["skew"] = fault{"skew", skewHost}
-	if faketimeLib() == "" {
-		return
-	}
-	for _, s := range skewFaults {
+	for _, s := range skewScenarios {
 		scenarios[s] = append(scenarios[s], "skew")
 	}
 }
 
+// setupSkew builds the preload library and returns it with the faults to
+// run: without it, names without "skew".
+func setupSkew(t *testing.T, names []string) (string, []string) {
+	lib, why := cliflow.BuildClockPreload(t)
+	if lib == "" && slices.Contains(names, "skew") {
+		t.Logf("skew: %s, so no skew fault", why)
+		names = slices.DeleteFunc(slices.Clone(names), func(n string) bool { return n == "skew" })
+	}
+	return lib, names
+}
+
 // hostClocks is each host's current offset, as the harness last set it.
 type hostClocks struct {
+	lib string // the preload library ("" = hostd isn't asked to skew workerd)
 	mu  sync.Mutex
 	off map[string]time.Duration
 	cli *http.Client // reads the workload's /clock
@@ -68,8 +64,8 @@ func (c *cluster) clockEnv(name string) []string {
 	}
 	os.MkdirAll(filepath.Join(c.work, name), 0o700)
 	env := []string{"TW_TEST_WALL_CLOCK_FILE=" + c.clockFile(name)}
-	if lib := faketimeLib(); lib != "" {
-		env = append(env, "TW_TEST_FAKETIME_LIB="+lib)
+	if c.clocks.lib != "" {
+		env = append(env, "TW_TEST_CLOCK_PRELOAD="+c.clocks.lib)
 	}
 	return env
 }
@@ -81,8 +77,8 @@ func (c *cluster) offset(host string) time.Duration {
 	return c.clocks.off[host]
 }
 
-// setClock steps host's wall clock (hostd at once, its workerds within
-// about a second).
+// setClock steps host's wall clock (hostd within 100 ms, its workerds
+// within 100 ms of that).
 func (c *cluster) setClock(host string, d time.Duration) {
 	c.clocks.mu.Lock()
 	c.clocks.off[host] = d
@@ -122,11 +118,10 @@ func (c *cluster) waitClock(dns string, want time.Duration) (time.Duration, erro
 
 // checkSkewHook proves the hook works before the nemesis relies on it:
 // the workload on h (the first holder) reads a +90 s clock, then the true
-// one again. Without libfaketime it does nothing.
+// one again. Without the preload library it does nothing.
 func checkSkewHook(t *testing.T, c *cluster, cli *http.Client, h, dns string) {
 	c.clocks.cli = cli
-	if faketimeLib() == "" {
-		t.Logf("skew: no libfaketime (set TW_DP_FAKETIME_LIB), so no skew fault")
+	if c.clocks.lib == "" {
 		return
 	}
 	c.setClock(h, 90*time.Second)
@@ -139,7 +134,7 @@ func checkSkewHook(t *testing.T, c *cluster, cli *http.Client, h, dns string) {
 	if _, err := c.waitClock(dns, 0); err != nil {
 		t.Fatalf("skew hook: back to 0: %v", err)
 	}
-	t.Logf("skew hook works: dp on %s read +%v, then the true clock", h, got.Round(time.Millisecond))
+	t.Logf("skew hook works: dp on %s read %+.1fs, then the true clock", h, got.Seconds())
 }
 
 // skewHost steps the lease holder's wall clock forward or back by 1–6 min
