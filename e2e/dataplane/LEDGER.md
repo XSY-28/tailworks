@@ -3,6 +3,10 @@
 Issue #415. Process: `LOOP.md`. Findings are filed as GitHub issues
 labelled `dataplane-chaos`.
 
+Other loops on this harness keep their own ledger in `ledger/`:
+
+- `ledger/containers.md`: containers, pooled nodes and snapshot restore (#423)
+
 ## Status
 
 | Scenario | Clean seeds (consecutive) | Notes |

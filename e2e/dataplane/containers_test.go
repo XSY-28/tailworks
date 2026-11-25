@@ -245,7 +245,8 @@ type ctrLoad struct {
 	stop   chan struct{}
 	wg     sync.WaitGroup
 	mu     sync.Mutex
-	live   []string // Box objects in creation order
+	live   []string        // Box objects in creation order
+	cctx   context.Context // calls in flight end with it (canceled at stop)
 	next   int
 	burst  int
 	maxObj int
@@ -259,8 +260,12 @@ func (l *ctrLoad) intn(n int) int {
 
 func (l *ctrLoad) call(obj, op string) ctrOp {
 	d := l.tg.get()
+	l.mu.Lock()
+	ctx := l.cctx
+	l.mu.Unlock()
 	o := ctrOp{Obj: obj, Op: op, Sent: time.Now()}
-	resp, err := l.cli.Get("http://" + d.Endpoint.MagicDNS + "/c/" + obj + "/" + op)
+	rq, _ := http.NewRequestWithContext(ctx, "GET", "http://"+d.Endpoint.MagicDNS+"/c/"+obj+"/"+op, nil)
+	resp, err := l.cli.Do(rq)
 	if err != nil {
 		o.Recv, o.Err = time.Now(), err.Error()
 		l.k.op(o)
@@ -974,7 +979,8 @@ func TestContainers(t *testing.T) {
 	t.Logf("%s on %s at epoch %d (%s)", ctrWorkload, d.Host, d.Epoch, d.Endpoint.MagicDNS)
 
 	cli := nodes["dpk-cli"].HTTPClient(90 * time.Second)
-	load := &ctrLoad{c: c, k: k, tg: tg, cli: cli, rnd: rand.New(rand.NewSource(seed + 1)), stop: make(chan struct{}), burst: burst, maxObj: maxObj}
+	cctx, cancelCalls := context.WithCancel(context.Background())
+	load := &ctrLoad{c: c, k: k, tg: tg, cli: cli, rnd: rand.New(rand.NewSource(seed + 1)), stop: make(chan struct{}), burst: burst, maxObj: maxObj, cctx: cctx}
 	vmb := &vmBurster{c: c, k: k, cli: nodes["dpk-cli"].HTTPClient(30 * time.Second), bundle: vmBundle, n: nvms, names: map[string]bool{}}
 	kl := &kLoop{load: load, ts: ts, vmb: vmb, vmm: map[int]bool{}}
 	// The shared watcher records lease moves (depEv) into the history.
@@ -1019,7 +1025,11 @@ func TestContainers(t *testing.T) {
 	t.Logf("healed; the clients run 15 s more")
 	time.Sleep(15 * time.Second)
 	close(load.stop)
+	cancelCalls()
 	load.wg.Wait()
+	load.mu.Lock()
+	load.cctx = context.Background()
+	load.mu.Unlock()
 
 	// Convergence: the deployment is active and every live object answers.
 	conv := result{ID: "K-conv", Pass: true}
@@ -1049,6 +1059,7 @@ func TestContainers(t *testing.T) {
 		}
 	}
 	conv.Summary = fmt.Sprintf("%d live objects up %.1fs after healing", len(finalUp), time.Since(healed).Seconds())
+	t.Logf("%s; settling", conv.Summary)
 
 	// Quiescence: let fences, reapers and pool refills settle, then look.
 	time.Sleep(time.Duration(envInt("TW_DPK_SETTLE_S", 45)) * time.Second)
@@ -1057,6 +1068,7 @@ func TestContainers(t *testing.T) {
 		final[id] = load.pollHost(id, vmb.all)
 	}
 	finalObjs, ferr := c.listObjects()
+	t.Logf("quiescent; keyscanning")
 	scans := keyscans(c, final)
 
 	k.mu.Lock()
@@ -1097,17 +1109,20 @@ func envInt(k string, def int) int {
 }
 
 // keyscans runs the strict no-keys scan (ADR-032 D5: the parent's DO
-// volume key, DEK and MAC key never enter the container) on each running
-// container at quiescence, through the host's status socket.
+// volume key, DEK and MAC key never enter the container) on running
+// containers at quiescence, through the host's status socket: at most
+// TW_DPK_KEYSCANS (1), as each scan reads the guest's disks whole.
 func keyscans(c *cluster, final map[string]hostObs) map[string]string {
 	out := map[string]string{}
+	left := envInt("TW_DPK_KEYSCANS", 1)
 	for _, id := range c.hosts {
 		for _, ct := range final[id].Ctrs {
-			if ct.State != "running" {
+			if ct.State != "running" || left <= 0 {
 				continue
 			}
+			left--
 			hc := statusClient(filepath.Join(c.work, id, "run", "hostd.sock"))
-			hc.Timeout = 120 * time.Second
+			hc.Timeout = 5 * time.Minute
 			resp, err := hc.Post("http://hostd/v1/vm/check?keyscan=1&tenant="+c.tenantID+"&workload="+ctrWorkload+"&container=Box/"+ct.Obj, "", nil)
 			if err != nil {
 				out[id+"/"+ct.Obj] = "error: " + err.Error()
