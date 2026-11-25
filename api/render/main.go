@@ -64,7 +64,7 @@ func render(b *strings.Builder, doc *openapi3.T, src string) {
 	b.WriteString("## Route table\n\n")
 	b.WriteString("| Method | Path | Role | Audited | Operation | Summary |\n|---|---|---|---|---|---|\n")
 	for _, o := range ops {
-		fmt.Fprintf(b, "| `%s` | `%s` | %s | %s | `%s` | %s |\n", o.method, o.path, oneLine(role(o.op)), audited(o.op), o.op.OperationID, oneLine(o.op.Summary))
+		fmt.Fprintf(b, "| `%s` | `%s` | %s | %s | `%s` | %s |\n", o.method, o.path, oneLine(role(o.op)), audited(o.op), o.op.OperationID, summary(o.op))
 	}
 	b.WriteString("\n")
 
@@ -249,6 +249,14 @@ func typeOf(ref *openapi3.SchemaRef) string {
 		t += ": " + strings.Join(vals, " \\| ")
 	}
 	return t
+}
+
+// summary is the route table's Summary cell; a deprecated operation says so.
+func summary(o *openapi3.Operation) string {
+	if o.Deprecated {
+		return "**Deprecated.** " + oneLine(o.Summary)
+	}
+	return oneLine(o.Summary)
 }
 
 func role(o *openapi3.Operation) string {

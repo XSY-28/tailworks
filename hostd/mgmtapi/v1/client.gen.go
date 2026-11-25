@@ -5780,6 +5780,17 @@ type ClientInterface interface {
 	// of the tenant has that node (the receiver then applies the WhoIs caps
 	// unchanged: the peer is not a tailworks object); `410 killed` for a tombstone.
 	//
+	// The certificate is the one mgmt signed at `ready` (re-issued on fetch
+	// when missing or within 1 h of expiry). The receiving netd verifies it
+	// against the tenant's `oboPublicKey` and narrows the caller's caps to
+	// `cert.lim`; a certificate that fails verification, names another node
+	// or cannot be fetched makes netd withhold the caller's caps.
+	//
+	// To read an object's certificate, pass the object's `stableNodeID` and
+	// `tenantID` (the admin UI's object page does). Replaces
+	// `GET /v0/certs/{nodeID}` and the deprecated
+	// `GET /v1/objects/{id}/certificate`.
+	//
 	// Corresponds with GET /v1/certificates/{stableNodeID} (the `GetCertificate` operationId).
 	GetCertificate(ctx context.Context, stableNodeID string, params *GetCertificateParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -6531,15 +6542,16 @@ type ClientInterface interface {
 
 	// GetObjectCertificate Read the object's node certificate
 	//
-	// The certificate mgmt signed at `ready` (re-issued on fetch when missing
-	// or within 1 h of expiry). The receiving netd verifies it against the
-	// tenant's `oboPublicKey` and narrows the caller's caps to `cert.lim`;
-	// a certificate that fails verification, names another node or cannot
-	// be fetched makes netd withhold the caller's caps. `410 killed` for
-	// tombstones. Replaces `GET /v0/certs/{nodeID}`; see also
-	// `GET /v1/certificates/{stableNodeID}` for lookup by node.
+	// **Deprecated:** use `GET /v1/certificates/{stableNodeID}?tenant=`
+	// with the object's `stableNodeID` and `tenantID` (both on `Object`).
+	// This route returns the same certificate, sends a `Deprecation` header
+	// and a `Link` to that route (`rel="successor-version"`), and will be
+	// removed no earlier than two releases later. `409 not_ready` when the
+	// object has no node yet; `410 killed` for tombstones.
 	//
 	// Corresponds with GET /v1/objects/{id}/certificate (the `GetObjectCertificate` operationId).
+	//
+	// Deprecated: this operation has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	GetObjectCertificate(ctx context.Context, id ObjectID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateObjectCredential Mint a single-use auth key for the object's node
@@ -8032,6 +8044,17 @@ func (c *Client) GetAuditVerification(ctx context.Context, reqEditors ...Request
 // of the tenant has that node (the receiver then applies the WhoIs caps
 // unchanged: the peer is not a tailworks object); `410 killed` for a tombstone.
 //
+// The certificate is the one mgmt signed at `ready` (re-issued on fetch
+// when missing or within 1 h of expiry). The receiving netd verifies it
+// against the tenant's `oboPublicKey` and narrows the caller's caps to
+// `cert.lim`; a certificate that fails verification, names another node
+// or cannot be fetched makes netd withhold the caller's caps.
+//
+// To read an object's certificate, pass the object's `stableNodeID` and
+// `tenantID` (the admin UI's object page does). Replaces
+// `GET /v0/certs/{nodeID}` and the deprecated
+// `GET /v1/objects/{id}/certificate`.
+//
 // Corresponds with GET /v1/certificates/{stableNodeID} (the `GetCertificate` operationId).
 func (c *Client) GetCertificate(ctx context.Context, stableNodeID string, params *GetCertificateParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetCertificateRequest(c.Server, stableNodeID, params)
@@ -9215,15 +9238,15 @@ func (c *Client) UpdateObjectWithApplicationMergePatchPlusJSONBody(ctx context.C
 
 // GetObjectCertificate Read the object's node certificate
 //
-// The certificate mgmt signed at `ready` (re-issued on fetch when missing
-// or within 1 h of expiry). The receiving netd verifies it against the
-// tenant's `oboPublicKey` and narrows the caller's caps to `cert.lim`;
-// a certificate that fails verification, names another node or cannot
-// be fetched makes netd withhold the caller's caps. `410 killed` for
-// tombstones. Replaces `GET /v0/certs/{nodeID}`; see also
-// `GET /v1/certificates/{stableNodeID}` for lookup by node.
+// **Deprecated:** use `GET /v1/certificates/{stableNodeID}?tenant=`
+// with the object's `stableNodeID` and `tenantID` (both on `Object`).
+// This route returns the same certificate, sends a `Deprecation` header
+// and a `Link` to that route (`rel="successor-version"`), and will be
+// removed no earlier than two releases later. `409 not_ready` when the
+// object has no node yet; `410 killed` for tombstones.
 //
 // Corresponds with GET /v1/objects/{id}/certificate (the `GetObjectCertificate` operationId).
+// Deprecated: this operation has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 func (c *Client) GetObjectCertificate(ctx context.Context, id ObjectID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetObjectCertificateRequest(c.Server, id)
 	if err != nil {
@@ -17884,6 +17907,17 @@ type ClientWithResponsesInterface interface {
 	// of the tenant has that node (the receiver then applies the WhoIs caps
 	// unchanged: the peer is not a tailworks object); `410 killed` for a tombstone.
 	//
+	// The certificate is the one mgmt signed at `ready` (re-issued on fetch
+	// when missing or within 1 h of expiry). The receiving netd verifies it
+	// against the tenant's `oboPublicKey` and narrows the caller's caps to
+	// `cert.lim`; a certificate that fails verification, names another node
+	// or cannot be fetched makes netd withhold the caller's caps.
+	//
+	// To read an object's certificate, pass the object's `stableNodeID` and
+	// `tenantID` (the admin UI's object page does). Replaces
+	// `GET /v0/certs/{nodeID}` and the deprecated
+	// `GET /v1/objects/{id}/certificate`.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /v1/certificates/{stableNodeID} (the `GetCertificate` operationId).
@@ -18679,17 +18713,18 @@ type ClientWithResponsesInterface interface {
 
 	// GetObjectCertificateWithResponse Read the object's node certificate
 	//
-	// The certificate mgmt signed at `ready` (re-issued on fetch when missing
-	// or within 1 h of expiry). The receiving netd verifies it against the
-	// tenant's `oboPublicKey` and narrows the caller's caps to `cert.lim`;
-	// a certificate that fails verification, names another node or cannot
-	// be fetched makes netd withhold the caller's caps. `410 killed` for
-	// tombstones. Replaces `GET /v0/certs/{nodeID}`; see also
-	// `GET /v1/certificates/{stableNodeID}` for lookup by node.
+	// **Deprecated:** use `GET /v1/certificates/{stableNodeID}?tenant=`
+	// with the object's `stableNodeID` and `tenantID` (both on `Object`).
+	// This route returns the same certificate, sends a `Deprecation` header
+	// and a `Link` to that route (`rel="successor-version"`), and will be
+	// removed no earlier than two releases later. `409 not_ready` when the
+	// object has no node yet; `410 killed` for tombstones.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /v1/objects/{id}/certificate (the `GetObjectCertificate` operationId).
+	//
+	// Deprecated: this operation has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	GetObjectCertificateWithResponse(ctx context.Context, id ObjectID, reqEditors ...RequestEditorFn) (*GetObjectCertificateResponse, error)
 
 	// CreateObjectCredentialWithResponse Mint a single-use auth key for the object's node
@@ -30303,6 +30338,17 @@ func (c *ClientWithResponses) GetAuditVerificationWithResponse(ctx context.Conte
 // of the tenant has that node (the receiver then applies the WhoIs caps
 // unchanged: the peer is not a tailworks object); `410 killed` for a tombstone.
 //
+// The certificate is the one mgmt signed at `ready` (re-issued on fetch
+// when missing or within 1 h of expiry). The receiving netd verifies it
+// against the tenant's `oboPublicKey` and narrows the caller's caps to
+// `cert.lim`; a certificate that fails verification, names another node
+// or cannot be fetched makes netd withhold the caller's caps.
+//
+// To read an object's certificate, pass the object's `stableNodeID` and
+// `tenantID` (the admin UI's object page does). Replaces
+// `GET /v0/certs/{nodeID}` and the deprecated
+// `GET /v1/objects/{id}/certificate`.
+//
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /v1/certificates/{stableNodeID} (the `GetCertificate` operationId).
@@ -31358,17 +31404,18 @@ func (c *ClientWithResponses) UpdateObjectWithApplicationMergePatchPlusJSONBodyW
 
 // GetObjectCertificateWithResponse Read the object's node certificate
 //
-// The certificate mgmt signed at `ready` (re-issued on fetch when missing
-// or within 1 h of expiry). The receiving netd verifies it against the
-// tenant's `oboPublicKey` and narrows the caller's caps to `cert.lim`;
-// a certificate that fails verification, names another node or cannot
-// be fetched makes netd withhold the caller's caps. `410 killed` for
-// tombstones. Replaces `GET /v0/certs/{nodeID}`; see also
-// `GET /v1/certificates/{stableNodeID}` for lookup by node.
+// **Deprecated:** use `GET /v1/certificates/{stableNodeID}?tenant=`
+// with the object's `stableNodeID` and `tenantID` (both on `Object`).
+// This route returns the same certificate, sends a `Deprecation` header
+// and a `Link` to that route (`rel="successor-version"`), and will be
+// removed no earlier than two releases later. `409 not_ready` when the
+// object has no node yet; `410 killed` for tombstones.
 //
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /v1/objects/{id}/certificate (the `GetObjectCertificate` operationId).
+//
+// Deprecated: this operation has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 func (c *ClientWithResponses) GetObjectCertificateWithResponse(ctx context.Context, id ObjectID, reqEditors ...RequestEditorFn) (*GetObjectCertificateResponse, error) {
 	rsp, err := c.GetObjectCertificate(ctx, id, reqEditors...)
 	if err != nil {

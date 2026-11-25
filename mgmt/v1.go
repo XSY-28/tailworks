@@ -1280,6 +1280,7 @@ func (a *v1api) CreateObjectCredential(w http.ResponseWriter, r *http.Request, i
 
 func (a *v1api) GetObjectCertificate(w http.ResponseWriter, r *http.Request, id v1.ObjectID) {
 	o, err := a.s.M.store.GetObject(r.Context(), id)
+	setObjectCertDeprecation(w, o, err) // deprecated_routes.go
 	if err != nil {
 		writeErr(w, r, err)
 		return

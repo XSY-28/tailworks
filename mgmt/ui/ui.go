@@ -466,7 +466,7 @@ func (u *ui) object(w http.ResponseWriter, r *http.Request) {
 	d.Children = len(d.Down) - 1
 	if d.Obj.Live() && d.Obj.StableNodeID != "" {
 		var nc nodeCert
-		if err := u.call(r, "GET", "/v1/objects/"+url.PathEscape(id)+"/certificate", &nc); err == nil {
+		if err := u.call(r, "GET", "/v1/certificates/"+url.PathEscape(d.Obj.StableNodeID)+"?tenant="+url.QueryEscape(d.Obj.TenantID), &nc); err == nil {
 			d.Cert = &nc
 		} else {
 			d.CertErr = err.Error()
