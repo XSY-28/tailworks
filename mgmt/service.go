@@ -3084,13 +3084,17 @@ func (m *Mgmt) IngestAudit(ctx context.Context, hostID string, recs []json.RawMe
 		if err != nil {
 			return 0, ChainStatus{}, err
 		}
-		if first := parsed[0].PrevHash; first != head && first != "" {
+		// A batch the host re-sends (its POST failed after mgmt stored it)
+		// overlaps the stored chain: skip what is stored. That holds for
+		// a batch that starts a new segment (prevHash "") too: storing it
+		// twice would break the chain at the copy (#427).
+		if first := parsed[0].PrevHash; first != head {
 			for k := range parsed {
 				if parsed[k].Hash == head {
 					start = k + 1 // already stored up to here
 				}
 			}
-			if start == 0 {
+			if start == 0 && first != "" {
 				return 0, ChainStatus{}, errf(400, "bad_request", "record 0: prevHash does not link to the head of chain %s", chain)
 			}
 		}
