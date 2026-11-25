@@ -221,8 +221,9 @@ func (n *nemesis) takeover(h string, fail, heal func()) string {
 }
 
 var scenarios = map[string][]string{
-	// Redeploy the cron workloads with the other schedule (cron_test.go).
-	"reschedule": {"reschedule", cronReschedule},
+	// Cron triggers and alarms (runCron, cron_test.go).
+	"alarms": {"kill-host", "kill-workerd", "pause-short", "pause-takeover", "pause-hostd-takeover", "cut-takeover", "move", "restart-mgmt"},
+	"cron":   {"clock-back", "clock-forward", "kill-host", "crash-hostd", "kill-workerd", "pause-boundary", "pause-takeover", "cut-short", "cut-takeover", "move", "reschedule", "restart-mgmt"},
 	// The deploys loop (deploys_test.go, issue #421).
 	"deploys-hosts": {"deploy-cut", "deploy-cut-takeover", "deploy-kill-host", "deploy-move", "deploy-pause-host", "deploy-pause-takeover", "deploy-race", "kill-workerd"},
 	"deploys-mgmt":  {"deploy-kill-mgmt", "deploy-race", "pg-fault", "restart-mgmt"},
