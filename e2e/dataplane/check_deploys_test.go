@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -171,7 +172,7 @@ func createdTimes(d *deploysRun) map[string]time.Time {
 type copyInfo struct {
 	wl, host, build string
 	first           time.Time // first answer received
-	minEpoch        int64     // the lowest epoch it answered at
+	minEpoch        int64     // the lowest epoch it answered at (0 answers, where self() failed, don't count)
 	dep             depRec    // the newest that fits (DeploymentID "" if none)
 	deps            []depRec  // every deployment that fits (a rollback reuses its target's bundle)
 }
@@ -190,10 +191,12 @@ func copies(d *deploysRun) map[string]*copyInfo {
 		}
 		c := out[o.Inst]
 		if c == nil {
-			c = &copyInfo{wl: o.Workload, host: o.Host, build: o.Build, first: o.Recv, minEpoch: o.Epoch}
+			c = &copyInfo{wl: o.Workload, host: o.Host, build: o.Build, first: o.Recv, minEpoch: math.MaxInt64}
 			out[o.Inst] = c
 		}
-		c.minEpoch = min(c.minEpoch, o.Epoch)
+		if o.Epoch > 0 {
+			c.minEpoch = min(c.minEpoch, o.Epoch)
+		}
 		if o.Recv.Before(c.first) {
 			c.first = o.Recv
 		}
@@ -229,7 +232,7 @@ func checkV3(d *deploysRun) result {
 		known[l] = true
 	}
 	cs := copies(d)
-	bad, handovers, n, overlap := 0, 0, 0, 0
+	bad, handovers, n, overlap, unknownEpoch := 0, 0, 0, 0, 0
 	for _, o := range d.dh.obs {
 		if !o.OK {
 			continue
@@ -246,6 +249,8 @@ func checkV3(d *deploysRun) result {
 			bad++
 			r.fail("%s on %s answered %s at epoch %d (sent %s): no deployment of %s on %s was created before that copy first answered",
 				o.Workload, o.Host, o.Build, o.Epoch, ts(o.Sent), o.Build, o.Host)
+		case o.Epoch == 0:
+			unknownEpoch++ // self() failed (the object not ready yet): the lock template refuses then
 		case c.dep.Epoch > o.Epoch:
 			bad++
 			r.fail("%s on %s: a copy of %s (epoch %d) answered at the older epoch %d (sent %s)", o.Workload, o.Host, c.dep.DeploymentID, c.dep.Epoch, o.Epoch, ts(o.Sent))
@@ -276,8 +281,8 @@ func checkV3(d *deploysRun) result {
 			}
 		}
 	}
-	r.Summary = fmt.Sprintf("%d answers from %d copies, %d not from their deployment, %d from an older copy after a newer one on the same host, %d handover answers",
-		n, len(cs), bad, overlap, handovers)
+	r.Summary = fmt.Sprintf("%d answers from %d copies, %d not from their deployment, %d from an older copy after a newer one on the same host, %d handover answers, %d without an epoch",
+		n, len(cs), bad, overlap, handovers, unknownEpoch)
 	return r
 }
 
