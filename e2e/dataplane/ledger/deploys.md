@@ -75,4 +75,5 @@ as a note naming the issue (`known_deploys_test.go`), not a failure.
 | …-deploys-mixed-4 | deploys-mixed 4 | pass |
 | …-deploys-mixed-5 | deploys-mixed 5, 90 s, after merging master (workflows loop) | pass |
 | …-mixed-5 (`TW_DP_MGMT=pg3`) | the #415 `mixed` scenario on 3 replicas, 90 s | pass (D1–D7) |
+| …-deploys-mgmt-6 | deploys-mgmt 6, 2 min, after merging master (the R2 loop: the Postgres proxy is now `e2e/chaoskit`'s) | pass |
 | twd-dev VM 20261125T080908Z-deploys-mixed-1 | deploys-mixed 1, Linux arm64, `TW_DP_MGMT=sqlite` (no Docker in the VM) | V1–V5 pass. V6: F5 (#604) |
