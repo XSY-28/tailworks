@@ -146,25 +146,34 @@ func checkKV(h *history) result {
 				continue // its put failed: it may or may not be there
 			}
 			p := ps[0]
-			// The host that wrote it stamped expiry on its own clock, and the
-			// host that reads it compares with its own: their offsets shift
-			// when it expires, in real time. Once some holder saw it expire
-			// (and its alarm journaled the delete), a later step back doesn't
-			// bring it back: it must still be there only while no holder's
-			// clock, sampled by every KV op in between, had reached expiry.
-			adj := p.Off - g.Off
-			maxOff := max(p.Off, g.Off)
+			// Expiry is stamped and checked on the holder's wall clock, so
+			// clock offsets shift when it happens in real time. A Durable
+			// Object's clock never goes back (workerd holds it at the
+			// latest value it returned), so the clock that stamps or checks
+			// can be ahead of the host's by as much as the host was ahead
+			// earlier. Every KV op samples the holder's offset:
+			//   - it must be gone once the reader's clock has passed the
+			//     latest expiry the writer could have stamped (preMax: the
+			//     largest offset before the put);
+			//   - it must be there while no holder's clock, at any time in
+			//     between (inMax), could have passed the expiry stamped on
+			//     the writer's clock. Once one has, its alarm journals the
+			//     delete, and a step back doesn't bring the key back.
+			preMax, inMax := p.Off, max(p.Off, g.Off)
 			for _, o := range h.kvs {
+				if !o.Sent.After(p.Recv) {
+					preMax = max(preMax, o.Off)
+				}
 				if !o.Sent.Before(p.Sent) && !o.Sent.After(g.Recv) {
-					maxOff = max(maxOff, o.Off)
+					inMax = max(inMax, o.Off)
 				}
 			}
 			switch {
-			case g.V != 0 && g.Sent.After(p.Recv.Add(kvTTL+adj+slack)):
+			case g.V != 0 && g.Sent.After(p.Recv.Add(kvTTL+preMax-g.Off+slack)):
 				expiredSeen++
 				r.fail("expired key served: %s put at %s (on %s, clock %+v), read at %s (on %s, clock %+v), %.1fs after the put",
 					g.K, p.Recv.Format("15:04:05.000"), p.Host, p.Off, g.Sent.Format("15:04:05.000"), g.Host, g.Off, g.Sent.Sub(p.Recv).Seconds())
-			case g.V == 0 && g.Recv.Before(p.Sent.Add(kvTTL-time.Second+p.Off-maxOff-slack)):
+			case g.V == 0 && g.Recv.Before(p.Sent.Add(kvTTL-time.Second-(inMax-p.Off)-slack)):
 				lostTTL++
 				r.fail("acknowledged key missing before its expiry: %s put at %s (on %s, clock %+v), read at %s (on %s, clock %+v), %.1fs after the put",
 					g.K, p.Recv.Format("15:04:05.000"), p.Host, p.Off, g.Sent.Format("15:04:05.000"), g.Host, g.Off, g.Sent.Sub(p.Recv).Seconds())
