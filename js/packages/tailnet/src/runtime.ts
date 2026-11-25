@@ -128,17 +128,17 @@ export interface Spawned<T = unknown> {
 
 export interface TailnetContext {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
-  forward(request: Request, to: string | URL, init?: RequestInit): Promise<Response>;
   spawn<T = any>(ns: any, opts: SpawnOptions): Promise<Spawned<T>>;
   kill(opts?: { reason?: string; cascade?: boolean; target?: { class: string; name: string } }): Promise<{ killed: string[] }>;
   audit(records: Array<Record<string, unknown>>): Promise<void>;
   /**
-   * This object's (or the workload's) node, and `epoch`: the workload's
-   * lease epoch on this host. mgmt raises it on every deploy and every move
-   * to another host, so it orders this incarnation after every earlier one
-   * (fencing tokens, docs/locks.md).
+   * This object's (or the workload's) node; `workload`, the name of the
+   * workload it belongs to, and `deploymentId`, the deployment running now;
+   * and `epoch`: the workload's lease epoch on this host. mgmt raises it on
+   * every deploy and every move to another host, so it orders this
+   * incarnation after every earlier one (fencing tokens, docs/locks.md).
    */
-  self(): Promise<{ objectId: string; hostname: string; magicDNS?: string; status: string; kind: string; epoch: number }>;
+  self(): Promise<TailnetSelf>;
   /**
    * A raw TCP socket from this object's own node (facet mode) or, in the
    * Worker, the workload node, under the same policy as fetch(). Refusals
@@ -147,6 +147,20 @@ export interface TailnetContext {
    * workload node).
    */
   connect(address: SocketAddress, options?: TailnetSocketOptions): TailnetSocket;
+}
+
+/** What ctx.tailnet.self() answers. */
+export interface TailnetSelf {
+  objectId: string;
+  hostname: string;
+  magicDNS?: string;
+  status: string;
+  kind: string;
+  /** The workload's name (what `tw deploy` named it). */
+  workload: string;
+  /** The deployment running now. */
+  deploymentId: string;
+  epoch: number;
 }
 
 export type BindingMap = Record<string, string>; // env binding name -> DO class
@@ -182,11 +196,14 @@ export function createTailnetContext(tw: TailnetApiStub, env: Record<string, any
     if (err) throw err;
     return r;
   };
-  const tn: TailnetContext = {
+  const tn: TailnetContext & { forward: unknown } = {
     fetch: tfetch,
+    // forward is no longer part of TailnetContext: signed on-behalf-of
+    // assertions (RFC §4.6) are not built, so it was only fetch with the
+    // request's headers copied. Kept, unlisted, for one minor release so
+    // deployed apps that call it keep working; use
+    // ctx.tailnet.fetch(new Request(url, request)) instead.
     forward(request: Request, to: string | URL, init?: RequestInit) {
-      // MVP: re-issues the request from this node. Signed act-chain
-      // assertions (RFC §4.6) are not implemented yet.
       const hasBody = request.method !== "GET" && request.method !== "HEAD";
       return tfetch(new Request(String(to), { method: request.method, headers: request.headers, body: hasBody ? request.body : undefined, ...init }));
     },

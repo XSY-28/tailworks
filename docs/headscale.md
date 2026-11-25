@@ -26,8 +26,9 @@ an older server with `profile_unsupported`. Tested against v0.29.7 with
 | Policy owners | `autogroup:admin`, `tag:tw` | `tag:tw` only. Headscale rejects `autogroup:admin` |
 
 Everything else works the same way: Durable Objects with their own nodes,
-WhoIs callers (`getCaller`), on-behalf-of assertions, spawn narrowing, the
-pre-joined node pool, audit and deploy preflight.
+WhoIs callers (`getCaller`), spawn narrowing, the pre-joined node pool,
+audit and deploy preflight. (On-behalf-of assertions aren't built on either
+profile: RFC §4.6.)
 
 ## Set up Headscale
 

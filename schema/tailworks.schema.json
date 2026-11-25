@@ -33,8 +33,8 @@
           "additionalProperties": { "type": "string" },
           "description": "Extra environment variables."
         },
-        "listen": { "type": "string", "description": "Where the app listens." },
-        "health": { "type": "string", "description": "Health check path." },
+        "listen": { "type": "string", "description": "Where the app listens: \"tcp\" (default: PORT on 127.0.0.1) or \"unix\" (TW_SOCKET). \"unix\" keeps AF_UNIX open to the app, so a host with a reachable system tailscaled socket can't be shared with other tenants (docs/node-tier.md); prefer the default." },
+        "health": { "type": "string", "description": "Health check path. Default \"/\": any HTTP answer there counts as up, so most apps don't need it." },
         "args": { "type": "array", "items": { "type": "string" }, "description": "Extra node arguments." }
       }
     },

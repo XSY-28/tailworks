@@ -420,6 +420,8 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 			}
 			v := h.objView(o)
 			v["epoch"] = wl.epochNow() // the lease epoch: fencing tokens (docs/locks.md)
+			v["workload"] = wl.name
+			v["deploymentId"] = inst.depID
 			writeJSON(w, 200, v)
 		case "spawn":
 			c := inst.app.Classes[req.Class]
