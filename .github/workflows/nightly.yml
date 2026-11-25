@@ -74,6 +74,11 @@ jobs:
           - target: e2e-dataplane
             timeout: 30
             allow_failure: ""
+          # The data-plane loop's cron and alarms scenarios, one after the
+          # other (#419).
+          - target: e2e-dataplane-cron
+            timeout: 40
+            allow_failure: ""
           # Deploys, rollbacks, previews and secrets through 3 tw-mgmt
           # replicas on the runner's Docker Postgres (#421).
           - target: e2e-dataplane-deploys

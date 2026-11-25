@@ -3,6 +3,7 @@
 Issue #415. Process: `LOOP.md`. Findings are filed as GitHub issues
 labelled `dataplane-chaos`.
 
+- Cron triggers and DO alarms (#419, scenarios `cron`, `alarms`): [ledger/cron-alarms.md](ledger/cron-alarms.md)
 - Deploys, rollback and secrets (#421, scenarios `deploys-hosts`, `deploys-mgmt`, `deploys-mixed`): [ledger/deploys.md](ledger/deploys.md)
 - R2 buckets (#420, `TestR2`): [ledger/r2.md](ledger/r2.md)
 - Routing (#422, `TestRouting`): [ledger/routing.md](ledger/routing.md)

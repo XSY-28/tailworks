@@ -106,6 +106,16 @@ e2e-placement: deps
 e2e-dataplane: deps
 	$(GO) test -tags e2edataplane -count=1 -v -timeout 25m -run TestDataplane ./e2e/dataplane/...
 
+## e2e-dataplane-cron: the same loop's cron-trigger and DO-alarm scenarios (issue #419, e2e/dataplane/LOOP.md
+## "Cron triggers and alarms"): a stateless and a stateful cron workload, alarm chains on a plain DO, a facet and an
+## Agents SDK agent, under the nemesis plus minute-boundary pauses and schedule changes. Runs the `cron` then the
+## `alarms` scenario (TW_DP_SCENARIO picks one), TW_DP_DURATION (default 4m) each, seed as for e2e-dataplane.
+.PHONY: e2e-dataplane-cron
+e2e-dataplane-cron: deps
+	for s in $${TW_DP_SCENARIO:-cron alarms}; do \
+		TW_DP_SCENARIO=$$s $(GO) test -tags e2edataplane -count=1 -v -timeout 25m -run 'TestCronCheckers|TestDataplane$$' ./e2e/dataplane/... || exit 1; \
+	done
+
 ## e2e-dataplane-deploys: the data-plane loop's deploys scenario (issue #421, e2e/dataplane/LOOP.md "Deploys"):
 ## concurrent deploys, rollbacks, previews, promotions and secret puts/deletes through 3 tw-mgmt replicas on
 ## Postgres (docker context PG_CTX), under host, mgmt-replica and Postgres faults; checks V1-V6.

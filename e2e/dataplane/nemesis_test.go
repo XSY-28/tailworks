@@ -26,6 +26,9 @@ type nemesis struct {
 	rnd    *rand.Rand
 	bundle string
 
+	// cron is the cron loop's rig (cron_test.go); nil in the dp scenarios.
+	cron *cronRig
+
 	// dep is the deploys loop (deploys_test.go), nil in other scenarios.
 	dep *deploysRun
 }
@@ -51,6 +54,9 @@ func (n *nemesis) other(host string) string {
 // takeover of a host that may still be running (docs/locks.md "Failure
 // modes"). Refusals are retried until within.
 func (n *nemesis) moveTo(host string, live bool, within time.Duration) (deployment, string, error) {
+	if n.cron != nil {
+		return n.cron.moveTo(n, host, live, within)
+	}
 	deadline := time.Now().Add(within)
 	refused := map[int]int{}
 	start := time.Now()
@@ -86,6 +92,10 @@ var faults = map[string]fault{
 		n.c.waitHostsLive(h)
 		return fmt.Sprintf("down %v", down)
 	}},
+	// Step every host's wall clock back, or forward, and later back to
+	// true (cron_test.go).
+	"clock-back":    {"clock-back", clockBack},
+	"clock-forward": {"clock-forward", clockForward},
 	// SIGKILL hostd alone, as an OOM kill or a panic would: its workerds
 	// (each in a process group of its own) survive it. Restart hostd and
 	// record which of the old workerds are still alive afterwards.
@@ -126,6 +136,8 @@ var faults = map[string]fault{
 		time.Sleep(3 * time.Second)
 		return fmt.Sprintf("%d workerd killed", k)
 	}},
+	// SIGSTOP the host across a minute boundary (cron_test.go).
+	"pause-boundary": {"pause-boundary", pauseBoundary},
 	// SIGSTOP the host (hostd + workerd) for less than FenceAfter.
 	"pause-short": {"pause-short", func(n *nemesis, h string) string {
 		d := n.between(3*time.Second, 20*time.Second)
@@ -175,6 +187,8 @@ var faults = map[string]fault{
 	// One replica's path to Postgres blackholed, slowed or reset (mgmtpg_test.go).
 	"pg-fault": {"pg-fault", faultPG},
 	"redeploy": redeployFault, // workflows_test.go
+	// Redeploy the cron workloads with the other schedule (cron_test.go).
+	"reschedule": {"reschedule", cronReschedule},
 	// mgmt crashes (SIGKILL) or restarts (SIGTERM) and comes back; with
 	// replicas (TW_DP_MGMT=pg3), one of them.
 	"restart-mgmt": {"restart-mgmt", func(n *nemesis, h string) string {
@@ -207,6 +221,9 @@ func (n *nemesis) takeover(h string, fail, heal func()) string {
 }
 
 var scenarios = map[string][]string{
+	// Cron triggers and alarms (runCron, cron_test.go).
+	"alarms": {"kill-host", "kill-workerd", "pause-short", "pause-takeover", "pause-hostd-takeover", "cut-takeover", "move", "restart-mgmt"},
+	"cron":   {"clock-back", "clock-forward", "kill-host", "crash-hostd", "kill-workerd", "pause-boundary", "pause-takeover", "cut-short", "cut-takeover", "move", "reschedule", "restart-mgmt"},
 	// The deploys loop (deploys_test.go, issue #421).
 	"deploys-hosts": {"deploy-cut", "deploy-cut-takeover", "deploy-kill-host", "deploy-move", "deploy-pause-host", "deploy-pause-takeover", "deploy-race", "kill-workerd"},
 	"deploys-mgmt":  {"deploy-kill-mgmt", "deploy-race", "pg-fault", "restart-mgmt"},

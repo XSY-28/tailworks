@@ -71,6 +71,10 @@ func TestDataplane(t *testing.T) {
 	}
 	clockLib, names := setupSkew(t, names) // skew_test.go
 	t.Logf("scenario %s, seed %d, duration %v, faults %v", scenario, seed, dur, names)
+	if cronScenarios[scenario] { // cron_test.go: its own workloads and checkers
+		runCron(t, wd, scenario, names, seed, dur)
+		return
+	}
 	if strings.HasPrefix(scenario, "deploys") { // deploys_test.go (#421)
 		testDeploys(t, scenario, names, seed, dur)
 		return
