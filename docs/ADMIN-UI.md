@@ -75,7 +75,8 @@ spec.
 ## Pages
 
 - **`/ui/` overview**: summary tiles (hosts online, deployments, tenants,
-  objects with pending device deletes, audit chain verification); then
+  objects with pending device deletes, and an audit tile only when the
+  chain fails verification); then
   **deployments**, **hosts**, **tenants**, **objects** and **recent
   activity**, each with a one-line explanation; and a collapsed
   "Control plane details" panel for mgmt itself (DNS name, tailnet,
@@ -89,11 +90,11 @@ spec.
   across every tenant (indented by depth; status badge; node name linking
   to the object page; MagicDNS link; tags; TTL; short node ID; acting-for;
   age; killed and failed rows dimmed); the **25 most recent audit
-  records** with `tw audit`'s descriptions.
+  records**: who did what, with `tw audit`'s descriptions.
 - **`/ui/objects/{id}`**: every field of the object, the lineage up (root
   to parent), the subtree below (this object and its descendants), caps,
   the node certificate when the object has a node, the object's audit
-  records (newest first) with chain status, a **Logs** link, and the
+  records (newest first; chain status only when it fails), a **Logs** link, and the
   **Kill** form (cascade checkbox, checked by default like `tw kill`; reason). A killed object renders its tombstone / kill record (the
   `/v1` 410 body: killed at, by, reason, cascade root, device deletion)
   and offers no kill form.
@@ -169,9 +170,10 @@ spec.
   `nextCursor` paging (Older →, ← Newest) that keeps the filters. Filters
   combine and all go to the API: tenant, app (`workload`), event kind
   (suggested from the spec's `AuditKind` values), caller (the `human` the
-  records act for), object and trace. Page size; the
-  verification report and the per-chain status (`ok`, `signature ok` for
-  host chains, `BROKEN at <seq>`). Tenant-written notes are rendered as
+  records act for), object and trace. Page size. The integrity card (the
+  verification report and the per-chain status: `ok`, `signature ok` for
+  host chains, `BROKEN at <seq>`) sits below the records, and moves to the
+  top when a chain fails. Tenant-written notes are rendered as
   `~tenant_note` and labelled unverified (RT-02).
 
 Every activity list (overview, object page, audit) is newest first; the

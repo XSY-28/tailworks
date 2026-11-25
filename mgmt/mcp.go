@@ -132,7 +132,7 @@ func mcpToolList() []mcpTool {
 				"status": strProp("only this status (404) or class (5xx)"), "object": strProp("only this object (ID, Class/name, Class or name)"),
 				"outcome": strProp("only this outcome (ok, exception, canceled, …)"), "caller": strProp("only callers whose login or node name contains this (public: Funnel requests)"),
 				"trace": strProp("only this trace ID")}), run: mcpLogs},
-		{Name: "audit", Kind: "read", Description: "The hash-chained audit trail: who created, called, spawned or killed what, like `tw audit`.",
+		{Name: "audit", Kind: "read", Description: "The audit trail, like `tw audit`: who created, called, spawned or killed what, when and why.",
 			Input: obj(nil, map[string]any{"tenant": tenantArg, "object": strProp("records about this object ID"), "human": strProp("records acting for this principal (login or caller node)"), "trace": strProp("records of this trace ID"), "limit": intProp("at most this many records; default 100", 500)}), run: mcpAudit},
 		{Name: "deploy", Kind: "write", Description: "Deploy a workload. With bundle (base64 of the tar `tw deploy` uploads) it deploys that; without, it redeploys the workload's current bundle (with replace=true, re-placed on the best host). Returns at once; poll ls for status.",
 			Input: obj([]string{"workload"}, map[string]any{"tenant": tenantArg, "workload": strProp("the workload"), "bundle": strProp("base64 bundle tar (optional)"),

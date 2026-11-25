@@ -280,7 +280,7 @@ func TestPagesRenderPopulated(t *testing.T) {
 	}
 	// Audit page: filters echo back, paging link carries them, chains shown.
 	ab := get(t, h, "/ui/audit?object=obj_root&limit=5").Body.String()
-	for _, want := range []string{`value="obj_root"`, "cursor=c2", "object=obj_root", "limit=5", "signature ok", "~tenant_note"} {
+	for _, want := range []string{`value="obj_root"`, "cursor=c2", "object=obj_root", "limit=5", "BROKEN at 4 (hash mismatch)", "~tenant_note"} {
 		if !strings.Contains(ab, want) {
 			t.Errorf("audit page lacks %q", want)
 		}
