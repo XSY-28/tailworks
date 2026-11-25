@@ -92,6 +92,27 @@ Delivery is best effort. Like Cloudflare's, it is not exactly once.
 - **No retries.** Outcomes (`ok`, `exception`, …) and failures go to hostd's
   log, tagged with workload, cron and `scheduledTime`.
 
+**Known gap (#566).** No-overlap is enforced per host. A **stateless**
+workload isn't fenced, so a long run that started before its host was cut
+off from mgmt (or stalled) goes on after mgmt moves the workload, and the
+new host's next run of that trigger can overlap it. A stateful workload's
+run stops with the fence. For a job that must never overlap, use a stateful
+workload or a [lock](locks.md).
+
+These rules are tested at two levels. `hostd:TestCronDueOncePerMinute`,
+`TestCronDueNoBackfill`, `TestCronDueSkipsOverlap`,
+`TestCronDueNeedsFreshHeartbeat`, `TestCronDueFollowsDeployment` and
+`TestRT3_H17_CronOverlap` (the time limit) pin each rule with a chosen
+clock. The data-plane chaos loop (`e2e/dataplane:TestDataplane`, scenarios
+`cron` and `alarms`, nightly, [LOOP.md](../e2e/dataplane/LOOP.md)) checks
+them on three real hosts under SIGKILL, SIGSTOP across minute boundaries,
+cut-offs from mgmt, takeovers, moves and schedule changes. It checks that
+every (trigger, minute) runs at most once across hosts (C1), that runs of a
+trigger don't overlap (C2), that no host runs a trigger past its fence or
+after the workload moved off it (C3), and that a new schedule takes effect
+at the next minute and the old one stops (C4). Stepping a host's wall
+clock isn't in the loop yet.
+
 ## Identity and security
 
 - A cron run has **no caller**. `getCaller()` has nothing to return,

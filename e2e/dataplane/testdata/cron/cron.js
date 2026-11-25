@@ -33,11 +33,15 @@ export async function epochOf(ctx) {
   }
 }
 
+// report posts to the recorder and says whether it got there.
 export async function report(rec, path, params) {
   try {
     const r = await fetch(rec + path + "?" + new URLSearchParams(params), { method: "POST" });
     await r.body?.cancel();
-  } catch {}
+    return r.ok;
+  } catch {
+    return false;
+  }
 }
 
 export async function scheduled(wl, controller, env, ctx) {

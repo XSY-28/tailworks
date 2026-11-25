@@ -10,10 +10,11 @@
 //
 //   POST /alarm?cls&name&chain&seq&kind=fire|set&delay&epoch
 //
-// fire is reported before the storage writes, so an alarm() killed half
-// way is seen (and retried by workerd), never lost from the record. Alm is
-// a plain DO (workerd's alarms); FAlm and Sch are facets, whose alarms
-// tailworks delegates to the Host DO.
+// fire is reported before the storage writes, and alarm() throws if the
+// report didn't get through (workerd then retries it), so an alarm() that
+// ran is never missing from the record. Alm is a plain DO (workerd's
+// alarms); FAlm and Sch are facets, whose alarms tailworks delegates to the
+// Host DO.
 import { DurableObject } from "cloudflare:workers";
 import { Agent, getAgentByName } from "agents";
 import { scheduled, epochOf, report } from "../../cron.js";
@@ -24,7 +25,7 @@ class Chain extends DurableObject {
   }
   async rep(kind, name, chain, seq, delay) {
     const epoch = await epochOf(this.ctx);
-    await report(this.env.REC, "/alarm", { cls: this.cls(), name, chain, seq, kind, delay, epoch });
+    return report(this.env.REC, "/alarm", { cls: this.cls(), name, chain, seq, kind, delay, epoch });
   }
   async fetch(req) {
     const name = new URL(req.url).searchParams.get("name");
@@ -40,7 +41,8 @@ class Chain extends DurableObject {
     if (!chain) return;
     const seq = st.get("seq");
     const name = st.get("name");
-    await this.rep("fire", name, chain, seq, 0);
+    // Unrecorded, the fire would look lost: throw, and workerd retries alarm().
+    if (!(await this.rep("fire", name, chain, seq, 0))) throw new Error("recorder unreachable");
     await this.ctx.storage.put("seq", seq + 1);
     await this.ctx.storage.setAlarm(Date.now() + 2000);
     await this.rep("set", name, chain, seq + 1, 2000);

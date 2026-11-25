@@ -74,6 +74,11 @@ jobs:
           - target: e2e-dataplane
             timeout: 30
             allow_failure: ""
+          # The data-plane loop's cron and alarms scenarios, one after the
+          # other (#419).
+          - target: e2e-dataplane-cron
+            timeout: 40
+            allow_failure: ""
           - target: e2e-headscale
             timeout: 45
             allow_failure: ""

@@ -3,6 +3,8 @@
 Issue #415. Process: `LOOP.md`. Findings are filed as GitHub issues
 labelled `dataplane-chaos`.
 
+- Cron triggers and DO alarms (#419): `ledger/cron-alarms.md`
+
 ## Status
 
 | Scenario | Clean seeds (consecutive) | Notes |
