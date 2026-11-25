@@ -66,7 +66,7 @@ func cmdKV(args []string) error {
 		return err
 	}
 	if len(pos) < 2 {
-		return fail("bad_request", "tw kv needs a command: namespace create|list|delete, key put|get|delete|list", kvUsage())
+		return needsSubcommand("kv")
 	}
 	group, verb, rest := pos[0], pos[1], pos[2:]
 	switch verb {

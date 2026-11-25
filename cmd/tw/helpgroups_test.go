@@ -61,7 +61,7 @@ func TestHelpGroups(t *testing.T) {
 		t.Fatalf("tw help --all: exit %d", code)
 	}
 	for _, c := range commands {
-		if !c.hidden && !strings.Contains(so.String(), "tw "+c.usage) {
+		if !c.hidden && !hasUsage(so.String(), c) {
 			t.Errorf("tw help --all lacks %s's usage", c.name)
 		}
 	}

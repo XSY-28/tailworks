@@ -41,7 +41,7 @@ func TestHelp(t *testing.T) {
 		}
 		for _, args := range [][]string{{c.name, "--help"}, {c.name, "-h"}, {c.name, "-help"}, {"help", c.name}, {"--state-dir", "/nonexistent", c.name, "--help"}, {c.name, "--help", "extra", "--flags"}} {
 			out := runOK(args...)
-			if !strings.Contains(out, "usage: tw "+c.usage) || !strings.Contains(out, c.help) {
+			if !hasUsage(out, c) || !strings.Contains(out, c.help) {
 				t.Errorf("tw %s: want the %s usage line, got:\n%s", strings.Join(args, " "), c.name, out)
 			}
 		}
