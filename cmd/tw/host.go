@@ -220,7 +220,7 @@ func cmdHostAdd(args []string) error {
 	if err := s.mgmt().DoHeaders(ctx, "POST", "/v1/hosts", map[string]any{"hostID": pos[0], "tenantID": tn.TenantID}, &hj,
 		map[string]string{"Tw-Actor": actor()}); err != nil {
 		if me, ok := mgmtapi.AsError(err); ok && me.Code == "exists" {
-			return fail("exists", me.Message).withFix("tw host rm " + pos[0] + " --drain, then tw host add again")
+			return fail("exists", me.Message).withFix("tw host rm " + pos[0] + " --force, then tw host add again")
 		}
 		return err
 	}
@@ -265,7 +265,7 @@ func cmdHostLs(args []string) error {
 	type hostRow struct {
 		HostID    string   `json:"hostID"`
 		Status    string   `json:"status"`
-		Tiers     []string `json:"tiers"`
+		Tiers     []string `json:"tiers"` // what it offers (HostTier): its isolation tiers and containers
 		Pool      string   `json:"pool"`
 		NodeID    string   `json:"nodeID"`
 		DNSName   string   `json:"dnsName"`
@@ -275,13 +275,22 @@ func cmdHostLs(args []string) error {
 			Namespace string `json:"namespace"`
 			Epoch     int64  `json:"epoch"`
 		} `json:"leases"`
+
+		// The host's GOARCH (container images must match it) and features.
+		Arch     string   `json:"arch,omitempty"`
+		Features []string `json:"features"`
 	}
 	hosts, err := listAll[hostRow](ctx, s.mgmt(), "/v1/hosts", 0)
 	if err != nil {
 		return err
 	}
+	for i := range hosts {
+		if hosts[i].Features == nil {
+			hosts[i].Features = []string{} // empty lists are [], never null (docs/cli-json.md)
+		}
+	}
 	emit(f, hosts, func() {
-		fmt.Printf("  %-16s %-8s %-18s %-36s %-6s %-10s %s\n", "HOST", "STATUS", "TIERS", "NODE", "LIVE", "SEEN", "LEASES")
+		fmt.Printf("  %-16s %-8s %-26s %-6s %-36s %-6s %-10s %s\n", "HOST", "STATUS", "OFFERS", "ARCH", "NODE", "LIVE", "SEEN", "LEASES")
 		for _, h := range hosts {
 			seen := "never"
 			if h.LastSeen > 0 {
@@ -291,16 +300,25 @@ func cmdHostLs(args []string) error {
 			for _, l := range h.Leases {
 				ls = append(ls, fmt.Sprintf("%s@%d", l.Namespace, l.Epoch))
 			}
-			fmt.Printf("  %-16s %-8s %-18s %-36s %-6d %-10s %s\n", tsafe(h.HostID), tsafe(h.Status), tsafe(strings.Join(h.Tiers, ",")), tsafe(h.DNSName), h.LiveNodes, seen, tsafe(strings.Join(ls, " ")))
+			arch := h.Arch
+			if arch == "" {
+				arch = "-"
+			}
+			fmt.Printf("  %-16s %-8s %-26s %-6s %-36s %-6d %-10s %s\n", tsafe(h.HostID), tsafe(h.Status), tsafe(strings.Join(h.Tiers, ",")), tsafe(arch), tsafe(h.DNSName), h.LiveNodes, seen, tsafe(strings.Join(ls, " ")))
 		}
 	})
 	return nil
 }
 
-// cmdHostRm is `tw host rm <host-id> [--drain]` (DELETE /v1/hosts/{id}).
+// cmdHostRm is `tw host rm <host-id> [--force]` (DELETE /v1/hosts/{id}).
+// --force sends the API's ?drain=true: it kills the host's objects and
+// releases its leases, losing whatever they kept on that host. It is not
+// `tw host drain`, which moves workloads off without losing data. The flag
+// used to be --drain; that spelling is still accepted, as a deprecated alias.
 func cmdHostRm(args []string) error {
 	f := newFlags("host rm")
-	drain := f.Bool("drain", false, "kill the host's objects and release its leases first")
+	force := f.Bool("force", false, "kill the host's objects and release its leases first (their data on that host is lost; to move them instead, tw host drain)")
+	drain := f.Bool("drain", false, "deprecated: same as --force")
 	yes := yesFlag(f)
 	pos, err := f.parse(args)
 	if err != nil {
@@ -322,7 +340,7 @@ func cmdHostRm(args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	q := ""
-	if *drain {
+	if *force || *drain {
 		q = "?drain=true"
 	}
 	var res struct {
@@ -333,7 +351,7 @@ func cmdHostRm(args []string) error {
 	}
 	if err := s.mgmt().DoHeaders(ctx, "DELETE", "/v1/hosts/"+pos[0]+q, nil, &res, map[string]string{"Tw-Actor": actor()}); err != nil {
 		if me, ok := mgmtapi.AsError(err); ok && me.Code == "host_holds_leases" {
-			return fail("host_holds_leases", me.Message).withFix("tw host rm " + pos[0] + " --drain --yes")
+			return fail("host_holds_leases", me.Message).withFix("tw host drain "+pos[0]+"   (move its workloads off first)", "or tw host rm "+pos[0]+" --force --yes   (kill them; their data on that host is lost)")
 		}
 		return err
 	}

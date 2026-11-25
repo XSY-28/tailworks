@@ -135,7 +135,7 @@ func printHostStatus(s *state, r statusResult, hv hostd.StatusView, hostOK bool)
 		if w.Egress != "" {
 			sb += ", egress " + w.Egress
 			if w.Egress == hostd.EgressUnenforced {
-				sb += " (Node tier: the egress proxy is cooperative here, not a boundary)"
+				sb += " (Node runtime: the egress proxy is cooperative here, not a boundary)"
 			}
 		}
 		fmt.Printf("%s workload    %s %s (tenant %s, %s, epoch %d, %d requests%s)%s\n", statusMark(w.Status == "active"), w.Workload, w.Status, w.TenantID, w.DeploymentID, w.Epoch, w.Requests, sb, e)
@@ -157,7 +157,7 @@ func printRemoteStatus(s *state, w *mgmt.WhoAmI, hosts []mgmt.Host, tenants []re
 	degraded []mgmt.StoreInfo, capv []hostCapacity, resv []mgmt.ContainerReservation) {
 	fmt.Printf("tw status · %s · linked to %s · tailnet %s · you are %s (admin by WhoIs)\n", statusVerdict(live > 0), s.Link.Endpoint, w.Mgmt.Tailnet, w.Actor)
 	for _, h := range hosts {
-		fmt.Printf("%s host        %s · heartbeat %.1fs ago · %d live nodes · tiers %s\n", statusMark(h.Live(time.Now())), h.ID, time.Since(time.UnixMilli(h.LastSeen)).Seconds(), h.LiveNodes, strings.Join(h.Tiers, ","))
+		fmt.Printf("%s host        %s · heartbeat %.1fs ago · %d live nodes · offers %s\n", statusMark(h.Live(time.Now())), h.ID, time.Since(time.UnixMilli(h.LastSeen)).Seconds(), h.LiveNodes, strings.Join(h.Tiers, ","))
 	}
 	for _, t := range tenants {
 		n := fmt.Sprintf("%d deployments", len(t.Deployments))

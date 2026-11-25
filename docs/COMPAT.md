@@ -141,7 +141,7 @@ from the suite's results, and `make lint` fails if they are edited by hand.
 |---|---|---|---|---|---|---|
 | <a id="cli-json"></a>CLI `--json` output | ✅ | — (tw-only) | every command's result is one JSON document matching [`schema/cli.schema.json`](../schema/cli.schema.json); every error is `{code, message, hint, doc_url}` with a code from [errors.md](errors.md); `tw deploy` streams progress events (stderr), `tw dev` and `tw logs` stream NDJSON (stdout). [Details](cli-json.md) | not a Cloudflare surface (wrangler's `--json` covers some commands) | `status`'s `workloads[]`, `image push` and `host vmcheck --container` use Go field names | `cmd/tw:TestCLIJSONContract`, `cmd/tw:TestAgentEval`, `cmd/tw:TestDevJSONEvents`, `cmd/tw:TestRemoteLogs` |
 | <a id="agent-skills"></a>Coding-agent skills (`tw agent`) | ✅ | — (tw-only) | ten skills built into the CLI (scaffold, dev, deploy, debug, policy, secrets, cron, public routes, teardown); `tw agent setup` installs them for Claude Code, Codex, Cursor, Gemini CLI and OpenCode, per user or per project, after showing what it writes; `tw agent remove` undoes it. [Details](agents.md) | not a Cloudflare surface | per-user Cursor rules (Cursor keeps them in its settings) | `cmd/tw:TestSkillCommandsExist`, `cmd/tw:TestSkillsWellFormed`, `cmd/tw:TestAgentEval`, `cmd/tw:TestAgentSetupSnapshot`, `agent:TestPlanBlock`, `agent:TestPlanStaleAndForeign` |
-| <a id="vitest-plugin"></a>Testing: `@cloudflare/vitest-plugin` | ⚠️ | — (Cloudflare's test runner; it brings its own workerd via miniflare) | `@tailworks/tailnet/testing`: `withCaller` / `withPublic` (a caller in `request.cf`, which survives service bindings and Durable Object stubs) and a fake `ctx.tailnet` (spawn, kill, audit, self, fetch); black-box tests through `tw dev --caller` and `@tailworks/tailnet/testing/dev`; every template ships an `npm test`. [Details](testing.md) | plain Worker, Durable Object (storage, alarms), Agents SDK, Workflows and MCP-handler logic run as on Cloudflare; `getCaller` and `ctx.tailnet` need the helper (nothing delivers a caller in vitest-plugin) | approvals and per-object egress can only be tested against `tw dev`; `tw dev` can't choose a caller's login and has no policy evaluator yet; no `withCaller` for the Node tier | `e2e/vitest/test/lock.test.ts:withCaller reaches getCaller through the Worker and the Durable Object stub`, `e2e/vitest/test/agent.test.ts:Agents SDK state and SQL: one agent per caller`, `e2e/vitest/test/mcp.test.ts:a granted tool runs; a tool outside the grant is cap_missing; a limit is enforced`, `e2e/vitest/test/refund-approval.test.ts:a refund request starts a Workflow that waits for approval`, `js/packages/tailnet/test/testing.test.js:withCaller refuses to run outside test mode`, `cmd/tw:TestDevCallers`, `cmd/tw:TestTemplateTests` |
+| <a id="vitest-plugin"></a>Testing: `@cloudflare/vitest-plugin` | ⚠️ | — (Cloudflare's test runner; it brings its own workerd via miniflare) | `@tailworks/tailnet/testing`: `withCaller` / `withPublic` (a caller in `request.cf`, which survives service bindings and Durable Object stubs) and a fake `ctx.tailnet` (spawn, kill, audit, self, fetch); black-box tests through `tw dev --caller` and `@tailworks/tailnet/testing/dev`; every template ships an `npm test`. [Details](testing.md) | plain Worker, Durable Object (storage, alarms), Agents SDK, Workflows and MCP-handler logic run as on Cloudflare; `getCaller` and `ctx.tailnet` need the helper (nothing delivers a caller in vitest-plugin) | approvals and per-object egress can only be tested against `tw dev`; `tw dev` can't choose a caller's login and has no policy evaluator yet; no `withCaller` for the Node runtime | `e2e/vitest/test/lock.test.ts:withCaller reaches getCaller through the Worker and the Durable Object stub`, `e2e/vitest/test/agent.test.ts:Agents SDK state and SQL: one agent per caller`, `e2e/vitest/test/mcp.test.ts:a granted tool runs; a tool outside the grant is cap_missing; a limit is enforced`, `e2e/vitest/test/refund-approval.test.ts:a refund request starts a Workflow that waits for approval`, `js/packages/tailnet/test/testing.test.js:withCaller refuses to run outside test mode`, `cmd/tw:TestDevCallers`, `cmd/tw:TestTemplateTests` |
 | <a id="tw-mcp"></a>tailworks' MCP server (`/mcp`, `tw mcp`) | ✅ | — (tw-only) | mgmt serves `whoami`, `status`, `ls`, `logs`, `audit`, `deploy`, `kill` and `undeploy` as MCP tools next to `/v1`, authorized by the caller's tailnet identity; `deploy`, `kill` and `undeploy` only with a `github.com/rosskukulinski/tailworks/cap/mcp` grant naming them; `tw mcp` is a stdio bridge for any agent. [Details](agents.md#tws-mcp-server), [ADR-035](design/adr/035-mgmt-mcp.md) | not a Cloudflare surface | tools for secrets, tenants, hosts, expose and telemetry; `deploy` takes a bundle (or redeploys the current one), it doesn't build | `mgmt:TestMCPServer`, `cmd/tw:TestAgentEval` |
 | <a id="docs-for-agents"></a>Docs for agents (`llms.txt`, `tw docs`) | ✅ | — (tw-only) | [`llms.txt`](../llms.txt) indexes the docs; `tw docs search` and `tw docs show <doc>#<anchor>` read the docs built into the CLI, offline | not a Cloudflare surface | — | `docs:TestLLMsTxt`, `docs:TestShowAndSearch` |
 
@@ -389,12 +389,12 @@ separate processes).
 | `toUIMessageStreamResponse()` (SSE, what `useChat` reads) | ✅ | `ToolLoopAgent/*` | 36–38 events; first event 50–400 ms after the request on this Mac |
 | `@ai-sdk/mcp` `createMCPClient` (HTTP transport) → tailworks MCP server over the tailnet | ✅ with `mcpFetch` | `ToolLoopAgent/*` | `tools()` from both `mcp-handler` and CF `createMcpHandler`; allowed tool output and denied tool (`cap_missing`) reach the model |
 | `@ai-sdk/mcp` with the default `fetch` | ❌ | — | its default `redirect: "error"` throws in workerd ("Invalid redirect value"). `@tailworks/mcp` `mcpFetch(ctx)` emulates it (manual + check) |
-| `@ai-sdk/mcp` stdio transport | ❌ | — | `child_process` (Node process tier) |
+| `@ai-sdk/mcp` stdio transport | ❌ | — | `child_process` (Node runtime) |
 | `mcp-handler` `createMcpHandler` + `withTailnet` | ✅ | `McpHandlerWithTailnet` | Web-standard handler mounted at `/mcp`; per-request caller, allow/deny, `whoami` |
 | Typed egress refusals through the MCP client | ✅ | `EgressRefusalIsTyped` | `mcpFetch` throws `TailnetError`; the template renders it (`403 peer_not_visible`) instead of a 500 |
 | `traceparent` propagation | ✅ | `TraceparentPropagated`, `TestTelemetry/TraceparentAcrossDOAndEgress` | `mcpFetch` sends `00-<caller traceId>-<span>-01`, and tailworks itself propagates the W3C trace across ingress, DO calls and egress (ADR-045). The **audit** trace ID (`getCaller().traceId`) is still each hop's own: the header is never trusted for audit or identity |
 | On-behalf-of (`actingFor`) assertions on MCP calls | ❌ | — | RFC §4.6 not implemented: the server sees the agent's node, not the human it acts for |
-| `WorkflowAgent` / Workflow SDK | ❌ | — | `node:vm` (ADR-022: Node process tier, branch m9) |
+| `WorkflowAgent` / Workflow SDK | ❌ | — | `node:vm` (ADR-022: Node runtime, branch m9) |
 | `HarnessAgent`, Vercel Sandbox, hosted Vercel services | ❌ | — | client-only or process tier (Cloudflare's Sandbox SDK: see below) |
 
 ### Upstream examples: Vercel AI SDK
@@ -632,7 +632,8 @@ unless `tailworks.jsonc` lists `public.routes` ([public-ingress.md](public-ingre
   setting, present the canonical origin yourself:
   `e2e/sdk/apps/oauthkv` shows how.
 
-## Node process tier (M9)
+<a id="node-process-tier-m9"></a>
+## Node runtime (M9)
 
 See [node-tier.md](node-tier.md) for the full table and the security
 caveat: on Linux with Landlock ABI ≥ 4 (kernel 6.7+) and on macOS (Seatbelt)
@@ -649,7 +650,7 @@ The microVM tier is the strongest boundary.
 | `TW_EGRESS_PROXY`, `HTTP_PROXY`, `HTTPS_PROXY` (+ lower case) | `http://tw:<token>@127.0.0.1:<port>` |
 | `NODE_USE_ENV_PROXY` | `1` (Node's `fetch()` and `http` honour the proxy vars) |
 | `NO_PROXY` | only the app's own port (self-calls, e.g. the Workflow queue) and the proxy itself |
-| Thing | Version | Status on the Node tier |
+| Thing | Version | Status on the Node runtime |
 |---|---|---|
 | Node.js | 25.1 (macOS), 24.x (Lima) | ✅ (needs ≥ 24 for `NODE_USE_ENV_PROXY`) |
 | `workflow` (Vercel Workflow SDK) | 5.6.1 | ✅ `"use workflow"`, steps, `sleep`, `createHook`/`resumeHook`, kill/resume |

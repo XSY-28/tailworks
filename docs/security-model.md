@@ -113,7 +113,7 @@ changes them is noticed (ledger `C-clocks`, `H-sidechannel-inproc`).
 | Signals | only itself and its own children (`same-sandbox`): not tw-hostd, tw-mgmt or another workload | only itself and its own process group | same as ABI ≥ 4 |
 | Other syscalls | not filtered; exec only of the runtime binary, its own dirs and the OS dirs (`/bin`, `/usr`, `/opt`, …) | seccomp refuses ptrace, `process_vm_readv/writev`, mount, bpf, perf, keyrings, new namespaces, kexec, modules, io_uring, … | same as ABI ≥ 4 |
 | Environment | the list hostd builds for it (`hostd.WorkerdEnv`), not hostd's own: only `TZ`, and only when hostd has one. Nothing of the operator's shell (a foreground `tw up`) or of the service manager (`--service`) reaches workerd, whichever way it is started: `sandbox-exec`, the Landlock launcher or no sandbox. A Node app gets the list in [node-tier.md](node-tier.md). (On the microVM tier, tw-guestd gives its workerd `HOME=/tmp PATH=/usr/bin:/bin TZ=UTC`.) | same | same |
-| Node-tier egress (`tw status`) | `enforced` | `enforced` | `unenforced`: the egress proxy is cooperative |
+| Node-runtime egress (`tw status`) | `enforced` | `enforced` | `unenforced`: the egress proxy is cooperative |
 
 On every platform the process tier caps each workload's V8 heap and sets
 no other CPU or memory limit (see
@@ -123,7 +123,7 @@ workload runs as the same user as tailworks.
 So on Landlock ABI 1–3, a hostile Node app, or workerd code after a V8
 escape, can open TCP connections with the host's network identity
 (including to other tenants' loopback ports and to services on your LAN).
-[node-tier.md](node-tier.md) describes what the Node tier still guarantees
+[node-tier.md](node-tier.md) describes what the Node runtime still guarantees
 there. On macOS, `tw-hostd -sandbox seatbelt-legacy` keeps the previous
 profile for one release in case the strict one breaks a workload: it
 confines reads, writes and unix socket connects under the deny list only,
@@ -222,14 +222,14 @@ Spectre-class attacks for any isolation technology; the mitigations make
 them impractical, not impossible.
 
 "No native code" does not hold on two tiers, so don't count on it there.
-The Node tier runs native code by design (`node:vm`, child processes,
+The Node runtime runs native code by design (`node:vm`, child processes,
 native modules, with precise timers and threads), and a microVM guest runs
 whatever the tenant ships. workerd on the process tier runs only
 JavaScript and WebAssembly, which is a weaker attacker but still one with
 timers and shared-memory threads.
 
 What the operator keeps on, on a Linux host that serves more than one
-tenant, runs a Node-tier workload or offers the microVM tier:
+tenant, runs a Node-runtime workload or offers the microVM tier:
 
 - **Kernel mitigations on**: the kernel's defaults, no `mitigations=off`;
   every entry in `/sys/devices/system/cpu/vulnerabilities/` reads
@@ -321,7 +321,7 @@ limit is `429 rate_limited` ([limits.md](limits.md#management-api)).
   added with `tw host add`) turns it off for a whole host. A refused
   destination is `internet_egress_unavailable`.
 - **What a workload can do with the host's address.** Since ADR-052,
-  `connect()` (and `node:net`, and the Node tier's CONNECT) reaches any
+  `connect()` (and `node:net`, and the Node runtime's CONNECT) reaches any
   public address on any TCP port, from the host's own address, and the
   destination can't tell tenants on one host apart: whatever a workload
   sends, the operator's address takes the blame for. The controls are

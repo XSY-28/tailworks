@@ -56,7 +56,7 @@ and names the bad expression. The host checks again before it runs anything.
 
 The `node` runtime has no `scheduled()` handler, so it does not support cron
 triggers. A Node bundle that declares them is rejected. Vercel-style path
-crons for the Node tier are on the roadmap (STATUS.md, Next steps).
+crons for the Node runtime are on the roadmap (STATUS.md, Next steps).
 
 ## Delivery
 

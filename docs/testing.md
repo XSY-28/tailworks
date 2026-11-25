@@ -187,7 +187,7 @@ a deployed app. As a guard against a stray import, the top-level
 `withCaller()` / `withPublic()` throw unless the test opted in with
 `enableTestCallers()` or `createTestTailnet()`.
 
-## The Node tier
+## The Node runtime
 
 The `node-workflow` template's test is a black-box test too
 (`startDev`, `/whoami` as a caller). `@tailworks/node` verifies a signed caller

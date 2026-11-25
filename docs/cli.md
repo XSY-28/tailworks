@@ -1050,7 +1050,7 @@ flags:
   -component string
     	mgmt | hostd | supervisor: the daemons' logs
   -console
-    	the app's raw output (workerd.log, the node tier's app.log, the microVM console) instead of request records
+    	the app's raw output (workerd.log, the Node runtime's app.log, the microVM console) instead of request records
   -errors
     	only errors (status ≥ 400, an outcome other than ok, or an exception)
   -f	follow
@@ -1560,7 +1560,9 @@ Same flags as [tw host cordon](#tw-host-cordon).
 ```text
 flags:
   -drain
-    	kill the host's objects and release its leases first
+    	deprecated: same as --force
+  -force
+    	kill the host's objects and release its leases first (their data on that host is lost; to move them instead, tw host drain)
   -json
     	machine-readable output
   -state-dir string
