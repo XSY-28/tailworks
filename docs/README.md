@@ -91,7 +91,7 @@ design records (`design/`) don't; read them here on GitHub.
 - What works from Cloudflare Workers: [COMPAT.md](COMPAT.md)
 - Error codes and their fixes: [errors.md](errors.md)
 - `--json` output: [cli-json.md](cli-json.md)
-- The management API: [contracts/mgmt-api.md](contracts/mgmt-api.md)
+- The management API: [contracts/mgmt-api.md](contracts/mgmt-api.md#operator-api)
 - The host agent's own API: [contracts/hostd-api.md](contracts/hostd-api.md)
 - Every limit, and the ones that don't exist: [limits.md](limits.md)
 - What changed in each release: [CHANGELOG.md](../CHANGELOG.md)
