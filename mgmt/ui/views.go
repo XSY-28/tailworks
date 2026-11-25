@@ -381,7 +381,7 @@ func ttl(secs int64) string {
 }
 
 // badge maps a status to its CSS class: ready/live/running green,
-// pending/minted/stale amber, killed/stopped/superseded grey, failed and
+// pending/minted/stale amber, killed/stopped/superseded/transferred grey, failed and
 // crashloop red.
 func badge(st string) string {
 	switch st {
@@ -389,7 +389,7 @@ func badge(st string) string {
 		return "ok"
 	case "pending", "minted", "assigned", "stale", "deploying":
 		return "warn"
-	case "killed", "stopped", "superseded":
+	case "killed", "stopped", "superseded", "transferred":
 		return "off"
 	case "failed", "error", "broken",
 		"crashloop": // served, now restarting with backoff (hostd/restart.go)
