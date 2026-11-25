@@ -259,6 +259,13 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### needs_root
 1 · cli. **When:** `tw host setup` changes the system and was not run as root. **Fix:** `sudo ~/.tailworks/bin/tw host setup --microvm` (sudo's PATH lacks `~/.tailworks/bin`).
 
+### network
+1 · cli. **When:** `tw upgrade` could not reach the release repository to find the latest release or to download its tarball. **Fix:** check the connection and retry, or download the tarball yourself and run `tw upgrade --from <tarball>`; `TW_REPO` and `TW_RELEASE_BASE` point it at another repository or a mirror, as for `get.sh`.
+
+### no_cgroup2
+1 · cli. **When:** `tw host setup --microvm` on a Linux host without the cgroup v2 unified hierarchy (`/sys/fs/cgroup/cgroup.controllers` is missing). **Fix:** boot with the unified hierarchy (`systemd.unified_cgroup_hierarchy=1`, the default on current distributions); the process tier works without it.
+
+
 ### no_host
 503 · mgmt. **When:** a deployment has no live host to run on (none registered, none in the tenant's pool, or all stale). **Fix:** `tw status` on the host; `tw host ls`.
 
@@ -340,6 +347,10 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### precondition_failed
 412 · mgmt. **When:** `If-Match` did not match the record's current `ETag`. **Fix:** re-read, then retry with the new ETag.
 
+### prefix_mismatch
+1 · cli. **When:** the `tw` running `tw upgrade` lives in another install (or in none, like an extracted tarball or a dev build) than the one that runs the state dir, so `tw upgrade` won't guess which to replace. The message names both and where the state dir's install came from (tw.json, the service, the running supervisor, or the state dir itself). **Fix:** `tw upgrade --prefix <dir>` to name the install to replace, or run the `tw` installed there: `<dir>/bin/tw upgrade` ([upgrading.md](upgrading.md#a-tw-up-machine)).
+
+
 ### preview_conflict
 409 · mgmt, cli. **When:** `tw deploy --preview` would run the preview as `<workload>--preview-<alias>`, and a workload of that name exists that is not a preview of this workload. **Fix:** pick another `--preview-alias`, or undeploy that workload.
 
@@ -353,10 +364,10 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 400 · mgmt, cli. **When:** the tenant's control-plane profile can't serve what was asked. On the Headscale profile (ADR-015): `tailnet.service` (Headscale has no Tailscale Services), public routes or `publicIngress: allow` (no Funnel), or an OAuth client (`--oauth-client-file`: Headscale mints with its API key). **Fix:** remove `tailnet.service` and reach the workload at its own workload node's MagicDNS name; serve public traffic some other way. See [docs/headscale.md](headscale.md).
 
 ### public_name_in_use
-409 · mgmt. **When:** a release of a public name (`DELETE /v1/tenants/{id}/public-names/{name}`) while the workload still serves it: its latest deployment declares `"public"` routes, or its public node is live. **Fix:** `tw undeploy <workload>`, or remove `"public"` from its `tailworks.jsonc` and redeploy, then release the name ([public-ingress](public-ingress.md#name-ownership)).
+409 · mgmt. **When:** `tw expose release <name>` (`DELETE /v1/tenants/{id}/public-names/{name}`) while the workload still serves it: its latest deployment declares `"public"` routes, or its public node is live. **Fix:** `tw undeploy <workload>`, or remove `"public"` from its `tailworks.jsonc` and redeploy, then `tw expose release <name>` ([public-ingress](public-ingress.md#name-ownership)).
 
 ### public_name_owned
-409 · mgmt, cli. **When:** a deploy (or `--dry-run`) declares `"public"` routes under a workload name that another tenant on the same tailnet owns as its public name. The first tenant to deploy public routes under a name keeps `https://<name>.<tailnet>.ts.net/` across undeploys, until it releases the name, so its public traffic (webhooks, OAuth callbacks) can't move to someone else. **Fix:** deploy under another workload name, or ask the operator to have the owning tenant release the name ([public-ingress](public-ingress.md#name-ownership)).
+409 · mgmt, cli. **When:** a deploy (or `--dry-run`) declares `"public"` routes under a workload name that another tenant on the same tailnet owns as its public name. The first tenant to deploy public routes under a name keeps `https://<name>.<tailnet>.ts.net/` across undeploys, until it releases the name, so its public traffic (webhooks, OAuth callbacks) can't move to someone else. **Fix:** deploy under another workload name, or ask the operator to have the owning tenant release the name (`tw expose release <name> --tenant <owner>`; `tw expose names --tenant <owner>` lists its names) ([public-ingress](public-ingress.md#name-ownership)).
 
 ### public_unreachable
 1 · cli. **When:** `tw deploy --wait-public` waited for the workload's public URL and it didn't answer from the public internet in time. The deploy itself succeeded. **Fix:** a new public name's certificate and DNS can take minutes; retry with a longer `--wait-public`, check the tailnet has HTTPS certificates on, and see [docs/public-ingress.md](public-ingress.md).
@@ -434,7 +445,7 @@ Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<bi
 429 · hostd. **When:** an object (or, for the Worker and plain-DO objects, the workload node) already has 256 open `connect()` sockets on this host; the new one is refused (stock `connect()` sees a lost connection, `ctx.tailnet.connect()` this code). **Fix:** close sockets you're done with, and reuse connections: a driver pool with a small `max`, or one connection kept in a Durable Object ([limits.md](limits.md)).
 
 ### spawn_budget_exceeded
-429 · mgmt, netd (SDK). **When:** too many live descendants (`maxLive`) or too deep a chain (`maxDepth`) under `tailnet.spawn` in `tailworks.jsonc`. **Fix:** kill finished sub-agents (`ttl` helps), or raise the budget.
+429 · mgmt, netd (SDK). **When:** too many live descendants (`maxLive`) or too deep a chain (`maxDepth`) under `tailnet.spawn` in `tailworks.jsonc`. **Fix:** kill finished sub-agents (`ttl` helps). The budget's ceiling is 64 live / depth 3 and cannot be raised; if `tailworks.jsonc` lowered it, raise it back toward that.
 
 ### state_conflict
 409 · cli. **When:** the state dir is bound to another mint mode, tailnet, `--local-dev` setting or mgmt hostname than this command asks for; the API key file already serves another tenant; mgmt already has this host ID bound to another node; `tw link` on a machine that runs tailworks itself; `tw custody migrate` on an install already on setec, or into a setec that holds another value under one of the install's names. **Fix:** the detail names the binding; use another `--state-dir`, or `tw down --purge` and start over.
@@ -520,8 +531,19 @@ Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<bi
 ### update_check_failed
 1 · cli. **When:** `tw version --check` could not find the latest release: GitHub was unreachable, answered with an error (rate limit), or the repository has no published release. **Fix:** retry later, or look at the releases page; `TW_REPO` names another repository, as for `get.sh`.
 
+### upgrade_aborted
+409 · cli. **When:** `tw upgrade` was following a fleet upgrade run that was aborted (`tw upgrade abort`). **Fix:** `tw upgrade status <run>` shows where it stopped; `tw upgrade --plan`, then `tw upgrade` to start a new run.
+
+
 ### upgrade_blocked
 409 · mgmt, cli. **When:** `tw upgrade` can't start a fleet upgrade run because its plan has blockers: a release missing from the catalog, a host's tarball not imported, parts of the fleet more than one release line behind, or an intermediate release with contract migrations. **Fix:** `tw upgrade --plan` prints each blocker and its fix ([upgrading.md](upgrading.md)).
+
+### upgrade_failed
+1 · cli. **When:** `tw upgrade` on a `tw up` machine failed at a step the message names: the store backup, `tw down`, `install.sh` (the old release is still installed), or the health check of the new release. **Fix:** if the message says it rolled back (the old release runs with the store restored), `tw logs --component mgmt` shows why the new release failed. If it did not roll back (`--no-rollback`, or a contract migration ran) or the rollback failed too: `tw logs --component mgmt` and `tw doctor`; to go back by hand, `tw down`, `tw restore <backup> --yes` (the backup the message names), `<prefix>/install.sh --rollback`, then `tw up` ([upgrading.md](upgrading.md#roll-back-by-hand)). `tw restore` alone leaves the failed release installed.
+
+### upgrade_paused
+409 · cli. **When:** `tw upgrade` was following a fleet upgrade run that paused: a step failed (the reason is in the message) or someone ran `tw upgrade pause`. **Fix:** fix the cause, then `tw upgrade resume <run>`, or `tw upgrade abort <run>`.
+
 
 ### upgrade_state
 409 · mgmt, cli. **When:** `tw upgrade pause|resume|abort` on a run that isn't running (pause), paused (resume) or active (abort). **Fix:** `tw upgrade status` shows the run's state.

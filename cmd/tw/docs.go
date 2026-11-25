@@ -19,13 +19,17 @@ func cmdDocs(args []string) error {
 	if !ok {
 		return needsSubcommand("docs")
 	}
+	sub = normalizeVerb(sub)
 	f := newFlags("docs")
-	limit := f.Int("limit", 10, "search: at most this many sections")
+	limit := new(int)
+	if sub == "search" {
+		limit = f.Int("limit", 10, "at most this many sections")
+	}
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
 	}
-	switch normalizeVerb(sub) {
+	switch sub {
 	case "ls":
 		ds := repodocs.List()
 		emit(f, map[string]any{"docs": ds}, func() {

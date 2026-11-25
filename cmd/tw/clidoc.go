@@ -10,7 +10,8 @@ import (
 
 // cliReference renders docs/cli.md (issue #51): every command in `tw
 // help`'s groups, and under it the `tw <path> --help` output of each
-// command path the completion tree knows (`tw kv`, `tw kv key put`, …).
+// command path the completion tree knows (`tw kv`, `tw kv key put`, …),
+// then the environment variables tw reads (envvars.go).
 // A subcommand's section has only its flags, or, when they are its
 // command's or an earlier subcommand's (`tw d1` has one flag set for every
 // subcommand), a "Same flags as" link to the section that lists them.
@@ -27,7 +28,8 @@ func cliReference() string {
 	b.WriteString("and each flag with its default. `tw help` lists the commands by group;\n")
 	b.WriteString("`tw <command> --help` prints one of these sections. Every command also\n")
 	b.WriteString("takes `--state-dir` (default `$TW_STATE_DIR` or `~/.tailworks`) and `--json`\n")
-	b.WriteString("([cli-json.md](cli-json.md)).\n")
+	b.WriteString("([cli-json.md](cli-json.md)). The environment variables tw reads are at the\n")
+	b.WriteString("end: [Environment](#environment).\n")
 
 	tree := buildCompletionTree()
 	titles, groups := groupedCommands()
@@ -66,6 +68,7 @@ func cliReference() string {
 			}
 		}
 	}
+	b.WriteString(envReference()) // envvars.go
 	return b.String()
 }
 
