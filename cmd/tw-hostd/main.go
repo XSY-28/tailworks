@@ -81,7 +81,6 @@ func run() error {
 		tombstone  = flag.Duration("kill-tombstone", 10*time.Second, "keep killed nodes RST-ing new connections this long")
 		logLevel   = flag.String("log-level", "info", "debug|info|warn|error")
 		tsnetLogs  = flag.Bool("tsnet-logs", false, "forward tsnet logs at debug level")
-		tier       = flag.String("default-tier", "process", "tier for deployments and tenants that name none: process | microvm")
 		vmKernel   = flag.String("vm-kernel", hostdrun.VMAsset(home, "vmlinux"), "microVM tier: guest kernel (Firecracker on Linux, Virtualization.framework on macOS)")
 		vmRootfs   = flag.String("vm-rootfs", hostdrun.VMAsset(home, "rootfs.ext4"), "microVM tier: guest image from guest/build-image.sh")
 		vmHelper   = flag.String("vm-helper", helperapi.DefaultSocket, "microVM tier: tw-vmhelper socket (sudo tw host setup --microvm)")
@@ -134,6 +133,7 @@ func run() error {
 	nodeHeap := flag.Int("node-heap-mib", hostd.DefaultNodeHeapMiB, "Node tier: the app's --max-old-space-size in MiB, unless node.args or NODE_OPTIONS set one (-1 = no cap)")
 	var r2f r2.Flags // R2 bucket blob backend (ADR-036)
 	r2f.Register(flag.CommandLine)
+	defaultTier := hostdDeprecatedFlags(flag.CommandLine) // deprecated.go
 	flag.Parse()
 	r2b, err := r2f.Open(*dataDir, os.Getenv)
 	if err != nil {
@@ -144,12 +144,15 @@ func run() error {
 		return err
 	}
 	log := slog.New(netd.NewRedactingHandler(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl})))
+	if err := hostdCheckDefaultTier(*defaultTier, log); err != nil {
+		return err
+	}
 	o := hostdrun.Options{MgmtAddr: *mgmtAddr, LocalDev: *localDev, MgmtTokenFile: *tokenFile,
 		TSNetDir: *tsDir, TSNetControlURL: *tsControl, TSNetKeyTagsOnly: *tsKeyTags, JoinTokenFile: *joinFile, PushPort: *pushPort, PortMapping: *portMap,
 		MetricsPort: *metricsPrt,
 		HostID:      *hostID, DataDir: *dataDir, RunDir: *runDir, Workerd: *workerd,
 		Heartbeat: *hb, FenceAfter: *fenceAfter, Ephemeral: *ephemeral, HostnamePrefix: *prefix, ControlURL: *controlURL, CapacityNodes: *capacity,
-		KillTombstone: *tombstone, TSNetLogs: *tsnetLogs, PoolNodes: *poolNodes, PathEvery: *pathEvery, DefaultTier: *tier,
+		KillTombstone: *tombstone, TSNetLogs: *tsnetLogs, PoolNodes: *poolNodes, PathEvery: *pathEvery,
 		QueueVisibility: *queueVis,
 		VM: hostdrun.VMOptions{Kernel: *vmKernel, Rootfs: *vmRootfs, Firecracker: *vmFC, Jailer: *vmJailer, Helper: *vmHelper,
 			MemMiB: *vmMem, VCPUs: *vmCPUs, VolumeMiB: *vmVolMiB, HugePages: *vmHuge, ContainerKernel: *ctrKernel, VzVMM: *vzVMM, Rosetta: *vmRosetta,

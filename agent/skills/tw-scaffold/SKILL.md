@@ -30,9 +30,9 @@ cd hello-mcp
   `tag:tw-wl-<workload>` for the workload node and
   `tag:tw-<workload>-<class>` for each Durable Object class. Each new tag
   needs a `tagOwners` line in the user's tailnet policy before the first
-  deploy (`tw deploy` prints it; see `tw-policy`). `--keep-tags` keeps
-  the template's class tag names instead; `--tags` sets the workload's,
-  for tags the user already owns.
+  deploy (`tw deploy` prints it; see `tw-policy`). For tags the user
+  already owns, `--tags` sets the workload's and `--object-tags
+  [<Class>=]<tag>` the classes'.
 
 ## The files
 

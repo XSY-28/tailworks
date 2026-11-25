@@ -574,7 +574,7 @@ config and `tailworks.jsonc`.
 | `kv_namespaces`, `r2_buckets`, `d1_databases` | `KVNamespace`, `R2Bucket`, `D1Database` |
 | `queues.producers` | `Queue` |
 | `workflows` | `Workflow` |
-| secret names: `.dev.vars`, `.dev.vars.example`, `secrets.required`, and with `--remote` the workload's secrets in mgmt (`tw secret ls`) | `string` |
+| secret names: `.dev.vars`, `.dev.vars.example`, `secrets.required` | `string` |
 
 Bindings tailworks doesn't support are left out, because on tailworks they are
 undefined. `--env <name>` types that environment. A `"runtime": "node"` app

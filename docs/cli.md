@@ -194,8 +194,6 @@ tw init: create an app from a template (--list: every template, with the demos a
 usage: tw init <dir> [--template hello|agent|mcp|static-site] [--name <workload>] [--tags <tag>,…] [--object-tags [<Class>=]<tag>,…]…  |  init --list
 
 flags:
-  -keep-tags
-    	keep the template's object class tags instead of naming them after the app (tag:tw-<workload>-<class>); the workload tag follows the app either way (--tags sets it)
   -list
     	list every template: the starting points, then demos and patterns (templates.go)
   -name string
@@ -252,9 +250,9 @@ global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 generate Env types from tailworks.jsonc and wrangler config
 
 ```text
-tw types: write the app's TypeScript Env (vars, Durable Object, KV, R2, D1, Queue and Workflow bindings, secret names) from its wrangler config and tailworks.jsonc, like wrangler types; --check fails when the file is stale (CI)
+tw types: write the app's TypeScript Env (vars, Durable Object, KV, R2, D1, Queue and Workflow bindings, secret names) from its wrangler config and tailworks.jsonc, like wrangler types; secret names come from .dev.vars, .dev.vars.example (names and placeholder values only) and secrets.required; --check fails when the file is stale (CI)
 
-usage: tw types [dir] [--env <name>] [--out worker-configuration.d.ts] [--check] [--remote]
+usage: tw types [dir] [--env <name>] [--out worker-configuration.d.ts] [--check]
 
 flags:
   -check
@@ -263,10 +261,8 @@ flags:
     	wrangler environment: type env.<name> from the wrangler config, as 'tw deploy --env' deploys it
   -out string
     	the declaration file to write, relative to the app directory (default "worker-configuration.d.ts")
-  -remote
-    	also declare the workload's secrets from mgmt (the names 'tw secret ls' lists); needs a running or linked tw
 
-global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · --tenant <tailnet|id> (default: the tw up tenant)
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 ```
 
 ### tw docs
@@ -289,15 +285,20 @@ tw docs <subcommand> --help   its flags
 
 ```text
 flags:
-  -limit int
-    	search: at most this many sections (default 10)
+  (none besides the global ones)
 
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 ```
 
 #### tw docs search
 
-Same flags as [tw docs ls](#tw-docs-ls).
+```text
+flags:
+  -limit int
+    	at most this many sections (default 10)
+
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
+```
 
 #### tw docs show
 
@@ -1158,7 +1159,7 @@ tw notify: tell people when a Workflow waits for an approval: mgmt POSTs JSON wi
 
 subcommands:
   tw notify [show]
-  tw notify set --webhook <url|-> [--header NAME[=VALUE]]... [--events approval_requested]
+  tw notify set --webhook <url|-> [--header NAME[=VALUE]]...
   tw notify test
   tw notify rm
   common flags: [--tenant <tailnet>]
@@ -1177,8 +1178,6 @@ Same flags as [tw notify](#tw-notify).
 
 ```text
 flags:
-  -events string
-    	what to send, comma-separated (default approval_requested)
   -header value
     	a header for every notification, NAME=VALUE, or NAME alone to read its value from stdin (repeatable)
   -webhook string
