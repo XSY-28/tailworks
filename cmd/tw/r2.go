@@ -69,7 +69,7 @@ func cmdR2(args []string) error {
 		}
 	}
 	if len(pos) < 2 {
-		return fail("bad_request", "tw r2 needs a subcommand: bucket ls|create|rm, object ls", "usage: tw "+r2Usage)
+		return needsSubcommand("r2")
 	}
 	what, sub := args[pos[0]], args[pos[1]]
 	rest := append(append(append([]string{}, args[:pos[0]]...), args[pos[0]+1:pos[1]]...), args[pos[1]+1:]...)
