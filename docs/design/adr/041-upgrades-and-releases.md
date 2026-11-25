@@ -67,7 +67,7 @@ The per-branch list is in the status file.
 ### 1. One release train, one version
 
 - **Every artifact in a tarball shares one SemVer version.** That includes
-  `tw`, `tw-mgmt`, `tw-hostd`, `tw-netd`, `tw-vmhelper`, `tw-vz`, the
+  `tw`, `tw-mgmt`, `tw-hostd`, `tw-vmhelper`, `tw-vz`, the
   guest image (rootfs with `tw-guestd` and workerd, plus the kernel), the
   embedded platform JS, the admin UI, the create-tailworks templates and the
   `@tailworks/*` npm packages.

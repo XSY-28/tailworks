@@ -181,7 +181,7 @@ process tier only.
 
 **Hardware side channels** (H-host-sidechannel, #334) are a residual on
 every tier, because every tier shares the host's cores and kernel with
-tw-hostd, tw-netd, tw-mgmt (assets A1–A3) and the other tenants; the
+tw-hostd (which embeds netd), tw-mgmt (assets A1–A3) and the other tenants; the
 process or VM boundary is where the OS's and CPU's mitigations apply, and
 tailworks turns none of them on. Per tier:
 

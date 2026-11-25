@@ -956,11 +956,7 @@ func cmdSupervise(args []string) error {
 		"-heartbeat", s.Cfg.Heartbeat, "-kill-tombstone", s.Cfg.KillTombstone, "-hostname-prefix", s.Cfg.HostnamePrefix,
 		// No tenant's workerd may touch tailworks' state (mgmt custody, every
 		// tenant's node keys and DO storage) or its sockets, except its own.
-		"-sandbox", "auto", "-sandbox-deny", strings.Join([]string{filepath.Join(s.Dir, "mgmt"), filepath.Join(s.Dir, "hostd"),
-			s.logDir(), s.configPath(), filepath.Join(s.Dir, "tenants"), s.runDir()}, ",")}
-	if s.Cfg.OAuthClientFile != "" {
-		hargs[len(hargs)-1] += "," + s.Cfg.OAuthClientFile // the OAuth client secret (also denied via the tenant list)
-	}
+		"-sandbox", "auto", "-sandbox-deny", strings.Join(s.sandboxDenyList(), ",")} // sandbox_layout.go
 	if s.Cfg.LocalDev {
 		hargs = append(hargs, "-local-dev", "-mgmt", "unix://"+s.mgmtSock(), "-mgmt-token-file", s.hostTokenFile())
 	} else {
