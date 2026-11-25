@@ -359,7 +359,7 @@ func (m *Mgmt) CreateHost(ctx context.Context, r HostCreate) (HostJoin, bool, er
 	if err != nil {
 		if tsapi.IsTagsNotPermitted(err) {
 			e := errf(403, "policy_missing_tag_owners", "the control plane refused to mint a %s key with tenant %s's %s credential: %v", HostTag, t.ID, t.MintMode, err)
-			e.Snippet = TagOwnersSnippet()
+			e.Snippet = HostTagOwnersSnippet()
 			return HostJoin{}, false, e
 		}
 		return HostJoin{}, false, errf(502, "bootstrap_failed", "mint host join key: %v", err)
@@ -742,9 +742,11 @@ func (m *Mgmt) deploymentStatus(ctx context.Context, d Deployment) (string, stri
 
 var _ = fmt.Sprintf
 
-// TagOwnersSnippet is the tagOwners tailworks' own nodes need: tag:tw (the
-// mint credential's tag) must own the mgmt and host tags so an OAuth
-// client or trust credential tagged tag:tw can mint their keys.
-func TagOwnersSnippet() string {
-	return `"tagOwners": { "tag:tw": ["autogroup:admin"], "` + MgmtTag + `": ["autogroup:admin", "tag:tw"], "` + HostTag + `": ["autogroup:admin", "tag:tw"] }`
+// HostTagOwnersSnippet is the one tagOwners entry a refused host join key
+// lacks (issue #443). mgmt is running, so tag:tw and tag:tw-mgmt are
+// already in the policy: only tag:tw-host needs tag:tw among its owners.
+// It is one line to paste inside the existing "tagOwners" section; a whole
+// second "tagOwners" block would not parse (issue #389).
+func HostTagOwnersSnippet() string {
+	return `"` + HostTag + `": ["autogroup:admin", "tag:tw"], // inside the existing "tagOwners" section (replace any line for ` + HostTag + `; don't add a second section)`
 }
