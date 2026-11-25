@@ -38,6 +38,7 @@ they are load-bearing. Moving any to logs is a security and protocol
 
 - `go test ./mgmt/ui/ ./mgmt/ ./cmd/tw/` targeted runs: pass (new
   `TestAuditVerificationQuietWhenOK`, mgmt/ui/audit_quiet_test.go).
-- `make lint`: pass.
+- `make lint`: pass (local).
+- `make test` (offloaded to mbp with mbp-test.sh, after merging origin/master): pass.
 - `make changes-check`: fragment changes/audit-who-did-what.md
   (`config-default`: CLI output).
