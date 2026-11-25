@@ -413,6 +413,21 @@ func checkK4(in kInput) result {
 			}
 		}
 	}
+	// An acknowledged kill ends the object (and so its node).
+	idOf, killedOK := map[string]string{}, map[string]bool{}
+	for _, o := range in.ops {
+		if o.ObjectID != "" {
+			idOf[o.Obj] = o.ObjectID
+		}
+		if o.Op == "kill" && o.OK {
+			killedOK[o.Obj] = true
+		}
+	}
+	for obj := range killedOK {
+		if m, ok := mgmtStatus[idOf[obj]]; ok && live(m.Status) {
+			r.fail("%s (%s): kill acknowledged, still %s at quiescence", obj, m.ObjectID, m.Status)
+		}
+	}
 	leaked := 0
 	for _, o := range in.finalObjs {
 		if o.Namespace == "_pool" && o.Status == "ready" && onHost[o.ObjectID] == "" {

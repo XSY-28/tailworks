@@ -58,7 +58,10 @@ export class Box extends DurableObject {
         return J({ ms: Date.now() - t0, running: c.running });
       }
       if (op === "kill") {
-        await this.ctx.tailnet.kill({ reason: "dataplane loop: rolling window" });
+        // After the answer: the kill ends this object's requests.
+        this.ctx.waitUntil(
+          new Promise((r) => setTimeout(r, 100)).then(() => this.ctx.tailnet.kill({ reason: "dataplane loop: rolling window" })),
+        );
         return J({ ok: true });
       }
       return J({ error: "unknown op " + op }, 404);
