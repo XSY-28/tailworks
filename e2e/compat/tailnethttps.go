@@ -38,8 +38,9 @@ func deployedClient(dial func(ctx context.Context, network, addr string) (net.Co
 }
 
 // tailnetHTTPSCertWait bounds waitTailnetCert: a new node name's first
-// ts.net certificate takes 30–100 s, sometimes minutes (netd/certprefetch.go).
-const tailnetHTTPSCertWait = 5 * time.Minute
+// ts.net certificate takes 30–100 s, sometimes minutes
+// (netd/certprefetch.go).
+const tailnetHTTPSCertWait = 8 * time.Minute
 
 // waitTailnetCert waits until a TLS handshake with the workload's :443
 // listener completes for name, i.e. its certificate has been issued, so
@@ -66,7 +67,10 @@ func waitTailnetCert(ctx context.Context, dial func(ctx context.Context, network
 		last = err
 		select {
 		case <-ctx.Done():
-			return time.Since(st), fmt.Errorf("no TLS handshake with %s within %s: %v", name, tailnetHTTPSCertWait, last)
+			// Seen on tailnet 1 (#614): the LocalAPI cert request of any
+			// new name, even the client node's own, times out. That is
+			// certificate issuance for the tailnet, not the app.
+			return time.Since(st), fmt.Errorf("the tailnet issued no HTTPS certificate for %s within %s (certificate issuance for the tailnet, not the app; last handshake error: %v)", name, tailnetHTTPSCertWait, last)
 		case <-time.After(2 * time.Second):
 		}
 	}
