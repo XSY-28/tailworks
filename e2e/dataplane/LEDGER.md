@@ -3,9 +3,9 @@
 Issue #415. Process: `LOOP.md`. Findings are filed as GitHub issues
 labelled `dataplane-chaos`.
 
-Other loops on this harness keep their own ledger in `ledger/`:
+Containers, pooled nodes and snapshot restore (#423, `make e2e-dataplane-vm`): [ledger/containers.md](ledger/containers.md).
 
-- `ledger/containers.md`: containers, pooled nodes and snapshot restore (#423)
+Workflows and approvals (#418, scenarios `workflows`, `workflows-move`): [ledger/workflows.md](ledger/workflows.md).
 
 ## Status
 

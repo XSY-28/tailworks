@@ -71,6 +71,9 @@ change can be tried without a new run.
 Scenarios are fault mixes: `queues`, `fencing`, `d1`, `mixed`
 (`nemesis_test.go`). The nemesis always targets the current lease holder.
 
+Workflows and approvals (#418) have their own test, workload and checkers
+(W1–W5): see [ledger/workflows.md](ledger/workflows.md).
+
 Not yet: wall-clock skew on a host. `TW_TEST_WALL_CLOCK_OFFSET` only exists
 in `tw-mgmt` (and with SQLite mgmt uses the local clock). hostd fences on its
 monotonic clock and workerd reads the wall clock directly, so skewing a

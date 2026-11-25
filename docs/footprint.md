@@ -17,10 +17,10 @@ section.
   children instead, `tw-mgmt` and `tw-hostd`, which the supervisor
   restarts with backoff. netd (the tailnet nodes, WhoIs, the egress
   guard) is part of the host agent, not a process of its own
-  ([INSTALL.md](INSTALL.md#one-process-by-default-scale-out-with-tw-host-add)).
+  ([hosts.md](hosts.md#one-process-by-default-scale-out-with-tw-host-add)).
 - **One runtime process per deployed workload:** workerd, or Node.js for
   a `"runtime": "node"` app, each in a process sandbox (Seatbelt on
-  macOS, Landlock and seccomp on Linux; [Isolation](INSTALL.md#isolation)).
+  macOS, Landlock and seccomp on Linux; [Isolation tiers](security-model.md#isolation-tiers)).
 - **On the microVM tier**, one microVM per workload or container instead:
   Firecracker under its jailer on Linux, `tw-vz` (Virtualization.framework)
   on macOS ([containers.md](containers.md#how-it-works)).
@@ -36,7 +36,7 @@ process), not on the machine's own interfaces, except the loopback proxy.
 |---|---|---|
 | mgmt's node `tw-mgmt` (`tag:tw-mgmt`) | `tcp:80`, and `tcp:443` when the tailnet has HTTPS certificates | the `/v1` API and the admin console (`/ui`), authorized by WhoIs |
 | `tw-mgmt` | `tcp:9464` | Prometheus `/metrics` (mgmt's, and the embedded host's in the default layout); `tw-mgmt -metrics-port 0` turns it off ([observability.md](observability.md#metrics-get-metrics)) |
-| a host node `tw-host-<id>` (`tag:tw-host`), only with `--separate-host` or a host added with `tw host add` | `tcp:7474` | mgmt pushes kills to the host (`tw up --push-port`) |
+| a host node `tw-host-<id>` (`tag:tw-host`), only with `--separate-host` or a host added with `tw host add` | `tcp:7474` | mgmt pushes kills to the host |
 | a host node | `tcp:9464` | the host's `/metrics` |
 | each workload and object node | `tcp:80` | your app, behind netd's WhoIs and header stripping |
 | a workload node with [public routes](public-ingress.md) | `tcp:443` over Funnel | the paths you opted in, and nothing else |
@@ -44,7 +44,7 @@ process), not on the machine's own interfaces, except the loopback proxy.
 
 The policy grants these need are the ones `tw up` prints: host ⇄ mgmt on
 `tcp:80,443` and `tcp:7474`, admins to `tag:tw-mgmt`, and an optional
-`tcp:9464` grant for your Prometheus ([The OAuth client](INSTALL.md#the-oauth-client)).
+`tcp:9464` grant for your Prometheus ([observability.md](observability.md)).
 
 ## Devices on your tailnet
 
@@ -82,7 +82,7 @@ the microVM tier, the setup below.
 
 Workloads can't read any of it: the sandbox denies `mgmt/`, `hostd/`,
 `logs/`, `run/`, `tw.json` and the OAuth client file to every tenant's
-runtime. Disk use and retention: [INSTALL.md](INSTALL.md#disk-storage-quotas-and-retention).
+runtime. Disk use, quotas and retention: [limits.md](limits.md#tenant-storage).
 Removing it all: [Uninstall](INSTALL.md#uninstall).
 
 ## The microVM tier's root-owned part (Linux)

@@ -923,6 +923,10 @@
             "type": "string"
           }
         },
+        "console": {
+          "type": "string",
+          "description": "the admin console URL this identity may open (<endpoint>/ui/, or <endpoint>/ui/approvals for an approver who isn't an admin); only through tw link, not --tsnet"
+        },
         "can": {
           "type": "object",
           "properties": {
@@ -1277,6 +1281,10 @@
         },
         "unlinked": {
           "type": "boolean"
+        },
+        "console": {
+          "type": "string",
+          "description": "the admin console URL (<endpoint>/ui/); omitted under --tsnet"
         }
       },
       "required": [
@@ -2266,6 +2274,43 @@
         "tenantID",
         "secret",
         "created"
+      ]
+    },
+    "secret bulk": {
+      "type": "object",
+      "description": "the names set, in input order; never values (a failure is an error naming set, failed and not attempted)",
+      "properties": {
+        "workload": {
+          "type": "string"
+        },
+        "tenantID": {
+          "type": "string"
+        },
+        "set": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "failed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notAttempted": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "workload",
+        "tenantID",
+        "set",
+        "failed",
+        "notAttempted"
       ]
     },
     "secret ls": {
