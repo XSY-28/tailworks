@@ -7060,6 +7060,12 @@ components:
         from: { type: string }
         to: { type: string }
         arch: { type: string, description: '"" = every arch.' }
+        source:
+          type: string
+          description: >-
+            A digest-pinned external image (`ghcr.io/…:<tag>@sha256:…`) that fills `to` when it is not in
+            tailworks' registry yet: mgmt copies it into `public/` at deploy (unless `-no-mirror`), and
+            `tw deploy` builds from it. Absent: `to` must be pushed (`tw image push`).
     ImageAliasList:
       type: object
       required: [items]

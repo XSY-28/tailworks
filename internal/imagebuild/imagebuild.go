@@ -285,7 +285,7 @@ func aliasContexts(ctx context.Context, dockerfile, arch, work string, o Options
 		if len(written) == 0 {
 			continue
 		}
-		src, dir, err := aliasSource(ctx, a.To, arch, work, o)
+		src, dir, err := aliasSource(ctx, a, arch, work, o)
 		if err != nil {
 			cleanup()
 			return nil, func() {}, fmt.Errorf("alias %s → %s (linux/%s): %w", a.From, a.To, arch, err)
@@ -319,12 +319,15 @@ func refForms(r oci.Ref) []string {
 	return forms
 }
 
-// aliasSource is where BuildKit gets an alias target, always as a local
-// OCI layout (oci-layout://dir@digest): from tailworks' registry (public/, the
-// very image mgmt pins for this arch), else from the local Docker image
-// store (docker save). A docker-image:// context naming a tw.local image
-// would make BuildKit try to resolve it over the network first.
-func aliasSource(ctx context.Context, to, arch, work string, o Options) (string, string, error) {
+// aliasSource is where BuildKit gets an alias target: as a local OCI
+// layout (oci-layout://dir@digest) from tailworks' registry (public/, the
+// very image mgmt pins for this arch); else the alias's digest-pinned
+// Source as docker-image:// (the bytes mgmt fills the target from); else
+// from the local Docker image store (docker save). A docker-image://
+// context naming a tw.local image would make BuildKit try to resolve it
+// over the network first.
+func aliasSource(ctx context.Context, a registry.Alias, arch, work string, o Options) (string, string, error) {
+	to := a.To
 	r, err := oci.ParseRef(to)
 	if err != nil {
 		return "", "", err
@@ -349,6 +352,16 @@ func aliasSource(ctx context.Context, to, arch, work string, o Options) (string,
 		} else {
 			regErr = err
 		}
+	}
+	if src == nil && a.Source != "" {
+		// Not in tailworks' registry yet: the published rebuild mgmt
+		// fills it from at deploy, pinned by digest.
+		sr, err := a.SourceRef()
+		if err != nil {
+			return fail(err)
+		}
+		os.RemoveAll(dir)
+		return "docker-image://" + sr.String(), "", nil
 	}
 	if src == nil {
 		// Not in tailworks' registry: the local Docker image, if it has one.
