@@ -31,6 +31,7 @@ type kInput struct {
 	finalUp        map[string]ctrOp
 	vmmEver        map[int]string
 	crashSurvivors map[int]bool
+	leftovers      []string // Linux: dead hostds' netns (#587)
 	deletes        map[string]time.Time
 	scans          map[string]string
 	hosts          []string
@@ -363,6 +364,9 @@ func checkK3(in kInput) result {
 // a host, and no container holds a parent's key (the strict keyscan).
 func checkK4(in kInput) result {
 	r := result{ID: "K4", Pass: true}
+	for _, l := range in.leftovers {
+		r.fail("%s: left by a hostd that is no longer running", l)
+	}
 	for p := range in.crashSurvivors {
 		r.fail("VMM pid %d outlived its hostd's crash (still running 15 s after the restart)", p)
 	}

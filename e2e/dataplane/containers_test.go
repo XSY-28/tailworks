@@ -30,6 +30,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1109,7 +1110,7 @@ func TestContainers(t *testing.T) {
 	h.mu.Lock()
 	in := kInput{ops: k.ops, reps: k.reps, vms: k.vms, obs: k.obs, snaps: k.snaps, faults: h.faults, deps: h.deps,
 		final: final, finalObjs: finalObjs, finalErr: ferr, finalUp: finalUp, vmmEver: k.vmmEv, crashSurvivors: kl.vmm,
-		deletes: ts.deleted(), scans: scans, hosts: c.hosts}
+		deletes: ts.deleted(), scans: scans, hosts: c.hosts, leftovers: vmLeftovers(c)}
 	res := []result{checkK1(in), checkK2(in), checkK3(in), checkK4(in), conv}
 	writeJSON(rdir, "faults.json", h.faults)
 	writeJSON(rdir, "final.json", map[string]any{"hosts": final, "objects": finalObjs})
@@ -1200,4 +1201,41 @@ func pushPublicImage(t *testing.T, c *cluster, images, ref string) {
 	if _, err := oci.Copy(context.Background(), l, "", l.Top.Digest, mc.OCI(), registry.PublicNamespace+"/"+r.Repository, nil, r.Tag); err != nil {
 		t.Fatalf("push %s: %v", ref, err)
 	}
+}
+
+// vmLeftovers lists, on Linux, the in-process VM helpers' network
+// namespaces (twp<hostd pid>-…) of hostds this run started that are no
+// longer running: a dead hostd's netns left behind (#587). Other netns on
+// the machine are not this run's and are ignored.
+func vmLeftovers(c *cluster) []string {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	started := map[string]bool{}
+	if b, err := os.ReadFile(filepath.Join(c.dir, "pids")); err == nil {
+		for _, ln := range strings.Split(string(b), "\n") {
+			if f := strings.Fields(ln); len(f) == 3 && slices.Contains(c.hosts, f[1]) {
+				started[f[2]] = true
+			}
+		}
+	}
+	running := map[string]bool{}
+	for _, id := range c.hosts {
+		if p := c.pid(id); p != 0 {
+			running[strconv.Itoa(p)] = true
+		}
+	}
+	var out []string
+	ents, _ := os.ReadDir("/run/netns")
+	for _, e := range ents {
+		rest, ok := strings.CutPrefix(e.Name(), "twp")
+		if !ok {
+			continue
+		}
+		pid, _, _ := strings.Cut(rest, "-")
+		if started[pid] && !running[pid] {
+			out = append(out, "netns "+e.Name())
+		}
+	}
+	return out
 }
