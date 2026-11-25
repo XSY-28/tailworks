@@ -225,8 +225,8 @@ only a name and a tag. Anything more is in the last column.
 
 Upstream: [cloudflare/agents](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples) `examples/` at commit `95dacf84dcdf`. Versions: `agents` 0.34.0 (the examples depend on `"agents": "*"`, a workspace link; the suite installs the published version the repo carries at that commit, with `npm install`), `@modelcontextprotocol/server` 2.4.0 and `@modelcontextprotocol/sdk` 1.32.2 (pinned by the examples themselves). No other versions were run, so none is known not to work.
 
-- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-25 on darwin/arm64, tailworks `2ba614fbdf75`.
-- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-25 on darwin/arm64, tailworks `2ba614fbdf75`.
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-25 on darwin/arm64, tailworks `63468dbf80f0`.
+- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-25 on darwin/arm64, tailworks `63468dbf80f0`.
 
 69 examples: **20 pass, 1 pass with a change, 2 fail, 46 not run.** (The repo has 56 example directories. One of them, `next/`, holds 14 examples of its own, counted here one by one, with `next/harnesses` as one.) A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
 
@@ -234,10 +234,10 @@ Upstream: [cloudflare/agents](https://github.com/cloudflare/agents/tree/95dacf84
 |---|---|---|---|---|---|
 | [`mcp-server`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/mcp-server) | Stateless MCP server (createMcpHandler) | pass | pass | **pass** | — |
 | [`mcp`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/mcp) | Stateful MCP server on an Agents SDK McpAgent (Durable Object state) | pass | pass | **pass** | — |
-| [`cross-domain`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/cross-domain) | Agent behind onBeforeConnect / onBeforeRequest token checks: HTTP and WebSocket | fail | fail | **fail** | The example passes the imported env (`import { env } from "cloudflare:workers"`) to the Agents SDK; tailworks creates a new object only through the `env` it hands the handler, so the first request for a new agent is `403 create_not_admitted` ([#355](https://github.com/rosskukulinski/tailworks/issues/355)). With the handler's `env` (a one-line change) it runs |
+| [`cross-domain`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/cross-domain) | Agent behind onBeforeConnect / onBeforeRequest token checks: HTTP and WebSocket | fail | pass | **fail** under `tw dev` (pass deployed) | Under `tw dev`: the example passes the imported env (`import { env } from "cloudflare:workers"`) to the Agents SDK. `tw dev` gives every Durable Object class a node, and creates a new one only through the `env` it hands the handler, so the first request for a new agent is `403 create_not_admitted` ([#355](https://github.com/rosskukulinski/tailworks/issues/355)). Deployed, a class not in `tailnet.objects` has no node and needs no create admission ([#359](https://github.com/rosskukulinski/tailworks/issues/359)). With the handler's `env` (a one-line change) it runs under `tw dev` too |
 | [`github-webhook`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/github-webhook) | GitHub webhook receiver: HMAC check, one agent per repo, SQL event log, state sync | pass | pass | **pass** | — |
 | [`mcp-client`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/mcp-client) | Agent as MCP client (addMcpServer, @callable RPC) | pass | pass | **pass** | — |
-| [`mcp-elicitation`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/mcp-elicitation) | Stateful MCP server with elicitation (MCP SDK v1 on a Durable Object, WorkerTransport) | fail | fail | **fail** | The example passes the imported env (`import { env } from "cloudflare:workers"`) to the Agents SDK; tailworks creates a new object only through the `env` it hands the handler, so the first request for a new agent is `403 create_not_admitted` ([#355](https://github.com/rosskukulinski/tailworks/issues/355)). With the handler's `env` (a one-line change) it runs |
+| [`mcp-elicitation`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/mcp-elicitation) | Stateful MCP server with elicitation (MCP SDK v1 on a Durable Object, WorkerTransport) | fail | pass | **fail** under `tw dev` (pass deployed) | Under `tw dev`: the example passes the imported env (`import { env } from "cloudflare:workers"`) to the Agents SDK. `tw dev` gives every Durable Object class a node, and creates a new one only through the `env` it hands the handler, so the first request for a new agent is `403 create_not_admitted` ([#355](https://github.com/rosskukulinski/tailworks/issues/355)). Deployed, a class not in `tailnet.objects` has no node and needs no create admission ([#359](https://github.com/rosskukulinski/tailworks/issues/359)). With the handler's `env` (a one-line change) it runs under `tw dev` too |
 | [`mcp-elicitation-mrtr`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/mcp-elicitation-mrtr) | Stateless MCP elicitation, multi-round-trip requests (MCP 2026-07-28 only) | pass | pass | **pass** | — |
 | [`mcp-worker`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/mcp-worker) | Stateless MCP server in a Worker (createMcpHandler) + React tool tester | pass | pass | **pass** | — |
 | [`mcp-worker-authenticated`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/mcp-worker-authenticated) | MCP server behind OAuth 2.1 (@cloudflare/workers-oauth-provider on KV) | pass | not run | **pass with change** | (1) `vars.MCP_RESOURCE` in wrangler.jsonc set to the served URL + `/mcp`, as the example's README says to. (2) Deployed: `"tailnet": {"https": true}` in tailworks.jsonc, so the resource URL is the workload's `https://` tailnet URL ([#360](https://github.com/rosskukulinski/tailworks/issues/360)). |
@@ -413,8 +413,8 @@ streaming and agent loop running on tailworks, not a model.
 
 Upstream: [vercel/ai](https://github.com/vercel/ai/tree/8956ca55ed9c31b4b7680621a10ad0269f9629b1/examples) `examples/` at commit `8956ca55ed9c`. Versions: `ai` 7.0.181 and `@ai-sdk/openai` 4.0.122 (the examples depend on `workspace:*`; the suite installs the published versions the repo carries at that commit). No other versions were run.
 
-- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-25 on darwin/arm64, tailworks `2ba614fbdf75`.
-- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-25 on darwin/arm64, tailworks `2ba614fbdf75`.
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-25 on darwin/arm64, tailworks `63468dbf80f0`.
+- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-25 on darwin/arm64, tailworks `63468dbf80f0`.
 
 26 examples: **0 pass, 4 pass with a change, 3 fail, 19 not run.** (`mcp` is one directory of MCP server and client script pairs; two of its servers run here, one row each, so it is counted twice.) A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
 
@@ -447,8 +447,8 @@ The three examples in [vercel/mcp-handler](https://github.com/vercel/mcp-handler
 
 Upstream: [vercel/mcp-handler](https://github.com/vercel/mcp-handler/tree/5518e8af4386a92756d189169a97601a4a7162ee/examples) `examples/` at commit `5518e8af4386`. Versions: `mcp-handler` 2.4.0 (the repo's version at that commit), `@modelcontextprotocol/server` 2.4.0, `zod` 4.6.7. No other versions were run.
 
-- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-25 on darwin/arm64, tailworks `2ba614fbdf75`.
-- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-25 on darwin/arm64, tailworks `2ba614fbdf75`.
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-25 on darwin/arm64, tailworks `63468dbf80f0`.
+- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-25 on darwin/arm64, tailworks `63468dbf80f0`.
 
 3 examples: **0 pass, 3 pass with a change, 0 fail, 0 not run.** A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
 
@@ -471,8 +471,8 @@ repository ([Python Workers](#python)).
 
 Upstream: [cloudflare/python-workers-examples](https://github.com/cloudflare/python-workers-examples/tree/47ec7d69f4052cd57bed5d3676cb7af76ca0656b), every top-level directory, at commit `47ec7d69f405`. Versions: the Pyodide bundles the pinned workerd runs (`internal/pyodide`); no package is vendored (`python_modules/`), so an example that needs one is not run. No other versions were run.
 
-- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-25 on darwin/arm64, tailworks `2ba614fbdf75`.
-- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-25 on darwin/arm64, tailworks `2ba614fbdf75`.
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-25 on darwin/arm64, tailworks `63468dbf80f0`.
+- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-25 on darwin/arm64, tailworks `63468dbf80f0`.
 
 28 examples: **14 pass, 0 pass with a change, 2 fail, 12 not run.** A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
 

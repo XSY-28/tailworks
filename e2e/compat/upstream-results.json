@@ -1,7 +1,7 @@
 {
   "dev": {
     "date": "2026-11-25",
-    "commit": "2ba614fbdf757c068fa5278159f047ad6efe2370",
+    "commit": "63468dbf80f00a77da347b53d31d3335d6efab0f",
     "platform": "darwin/arm64",
     "results": {
       "ag-cross-domain": {
@@ -247,12 +247,13 @@
   },
   "deployed": {
     "date": "2026-11-25",
-    "commit": "2ba614fbdf757c068fa5278159f047ad6efe2370",
+    "commit": "63468dbf80f00a77da347b53d31d3335d6efab0f",
     "platform": "darwin/arm64",
     "results": {
       "ag-cross-domain": {
-        "outcome": "XFAIL",
-        "source": "cloudflare/agents/examples/cross-domain@95dacf84dcdf"
+        "outcome": "PASS",
+        "source": "cloudflare/agents/examples/cross-domain@95dacf84dcdf",
+        "steps": 3
       },
       "ag-github-webhook": {
         "outcome": "PASS",
@@ -265,8 +266,9 @@
         "steps": 4
       },
       "ag-mcp-elicitation": {
-        "outcome": "XFAIL",
-        "source": "cloudflare/agents/examples/mcp-elicitation@95dacf84dcdf"
+        "outcome": "PASS",
+        "source": "cloudflare/agents/examples/mcp-elicitation@95dacf84dcdf",
+        "steps": 10
       },
       "ag-mcp-elicitation-mrtr": {
         "outcome": "PASS",
