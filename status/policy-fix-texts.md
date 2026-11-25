@@ -25,3 +25,18 @@ its own PR).
 ## Tests
 
 See the PR's Tests section (commands and results).
+
+## Test results (2026-11-24, machine at load average ~150)
+
+- `make lint`: pass.
+- `go test ./cmd/tw -count=1`: pass on the first run (82 s). A rerun
+  after merging origin/master failed only on timing budgets under load
+  (TestCLIEndToEnd/TestCLIOAuth `(e) kill` > 1 s, TestDevPython workerd
+  health timeout). Nothing in them touches the policy step.
+- `make test`: the first run failed on a full disk (ENOSPC in go build,
+  sqlite "disk I/O error"). `go test ./mgmt` rerun alone: pass.
+- `make e2e-tw-upgrade`: TestTwUpgradeSingleMachine PASS (the upgrade
+  restart with `--apply-policy=false`, and both rollbacks to the old
+  release). TestUpDownBudget FAIL: `tw up` took 2.08–5.6 s against a 2 s
+  budget under load.
+- New: TestDeployPolicyWriteDenied (cmd/tw/deploy_policy_test.go).
