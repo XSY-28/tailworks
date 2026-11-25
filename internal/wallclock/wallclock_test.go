@@ -45,7 +45,7 @@ func TestFollow(t *testing.T) {
 	if Offset() != 5*time.Minute || ft() != "+300" {
 		t.Fatalf("offset %v, secs file %q; want 5m, +300", Offset(), ft())
 	}
-	if d := Now().Sub(time.Now()); d < 5*time.Minute-time.Second || d > 5*time.Minute+time.Second {
+	if d := time.Until(Now()); d < 5*time.Minute-time.Second || d > 5*time.Minute+time.Second {
 		t.Fatalf("Now is %v ahead, want 5m", d)
 	}
 	env, read := Workerd()
