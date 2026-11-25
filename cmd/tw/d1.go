@@ -171,8 +171,7 @@ func cmdD1(args []string) error {
 	workload := *o.workload
 	if workload == "" {
 		if appErr != nil {
-			return fail("bad_request", "no app in the current directory to take the workload from").
-				withFix("cd <app dir> && tw d1 "+sub+" …", "tw d1 "+sub+" … --workload <workload>")
+			return appWorkloadErr(appDir, "d1 "+sub, appErr, "") // appworkload.go
 		}
 		workload = a.Name
 	}
