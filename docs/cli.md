@@ -27,7 +27,7 @@ flags:
   -service
     	run the supervisor as a service that starts at login: Linux systemd user unit (~/.config/systemd/user/tw.service), macOS LaunchAgent (~/Library/LaunchAgents/dev.tailworks.up.plist). Default: on for a new default state dir where available; an existing state dir keeps how it runs (--service=false runs it in the background without a service)
   -yes
-    	skip the confirmation before --apply-policy writes the policy (tw up asks nothing else); needed without a terminal and with --json
+    	skip the confirmation before --apply-policy writes the policy; needed without a terminal and with --json
 
 Control plane (Tailscale or Headscale):
   -api-key-file string
@@ -1386,7 +1386,7 @@ serve, list, update or remove tenants
 tw tenant: serve another tenant (its own tailnet) from this host; list, update (PATCH) or remove tenants
 
 subcommands:
-  tw tenant add <tailnet> --oauth-client-file <file> [--apply-policy [--yes]] [--owner-tag <tag> --name-prefix <p>]
+  tw tenant add <tailnet> [--oauth-client-file <file>] [--apply-policy [--yes]] [--owner-tag <tag> --name-prefix <p>]
   tw tenant ls
   tw tenant set <tenant> [--<setting> <value>]…  (tw tenant set --help; docs/limits.md)
   tw tenant rm <tenant> [--force]
@@ -1402,7 +1402,7 @@ flags:
   -api-key-file string
     	--control=headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied
   -apply-policy
-    	write the base policy snippet to the tailnet policy instead of printing it (additive, validated first, written with If-Match); shows the lines and asks first
+    	--control=headscale: write the owner tag's tagOwners entry ("tag:tw": []) when it is missing instead of printing it (additive, validated first, written with If-Match); shows the line and asks first. A Tailscale tenant's policy is never written
   -control string
     	control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; the tailnet argument is its dns.base_domain) (default "tailscale")
   -control-url string
@@ -1410,11 +1410,9 @@ flags:
   -name-prefix string
     	with --owner-tag: goes in front of every tailnet name tw makes for this tenant (up to 11 of a-z, 0-9, -)
   -oauth-client-file string
-    	this tailnet's OAuth client (mint mode "oauth"): 0600 file with TS_OAUTH_CLIENT_ID=… and TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:tw); read at use, never copied
+    	this tailnet's OAuth client (mint mode "oauth"): 0600 file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:tw); read at use, never copied. Omitted on a terminal: asked for and saved to ~/.config/tailworks/<tenant>-oauth.env
   -owner-tag string
     	another team's tenant on a tailnet that already has one (docs/teams.md): the tag that owns its tags, e.g. tag:tw-t-payments; its --oauth-client-file must be scoped to it
-  -registrations-per-minute int
-    	this tenant's node registration throttle (default 200/min)
   -yes
     	skip the confirmation before --apply-policy writes the policy; needed without a terminal and with --json
 

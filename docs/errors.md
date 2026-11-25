@@ -335,7 +335,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 503 · mgmt. **When:** mgmt cannot read the tenant policy: the OAuth client has no `policy_file:read`, so spawn checks and deploy preflight cannot run. **Fix:** give the client Policy File › Read; until then `tw deploy` says `preflight skipped`.
 
 ### policy_write_denied
-403 · mgmt, cli. **When:** `tw policy --apply` / `tw deploy --apply-policy`: the tenant's OAuth client may not write the tailnet policy (it has Policy File › Read, or no Policy File scope). Nothing was written. **Fix:** generate a client with the Policy File write scope and `tw tenant set <tenant> --oauth-client-file <file>`, or add the snippet `tw policy` prints in the admin console.
+403 · mgmt, cli. **When:** `tw policy --apply`: the tenant's OAuth client may not write the tailnet policy (it has Policy File › Read, or no Policy File scope). Nothing was written. (`tw deploy --apply-policy` says so in one line and fails with `acl_denied` and the snippet instead.) **Fix:** generate a client with the Policy File write scope and `tw tenant set <tenant> --oauth-client-file <file>`, or add the snippet `tw policy` prints in the admin console.
 
 ### precondition_failed
 412 · mgmt. **When:** `If-Match` did not match the record's current `ETag`. **Fix:** re-read, then retry with the new ETag.
