@@ -43,11 +43,11 @@ flags:
   -db-file string
     	read mgmt's store DSN from this 0600 file at every start (keeps a Postgres password out of tw.json and argv)
   -device-delete-delay duration
-    	delete a killed object's device this long after the kill (< --kill-tombstone) (default 8s)
+    	deprecated, ignored: a killed object's device is deleted 8s after the kill
   -ephemeral
     	join object nodes as ephemeral; 'tw down' then deletes every device (tests, demos)
   -heartbeat duration
-    	host heartbeat period (default 1s)
+    	deprecated, ignored: the host heartbeats every 1s
   -host-id string
     	this host's ID (default "h-<hostname>")
   -hostname-prefix string
@@ -57,7 +57,7 @@ flags:
   -json
     	machine-readable output
   -kill-tombstone duration
-    	keep a killed node answering object_killed this long (default 12s)
+    	deprecated, ignored: a killed node answers object_killed for 12s
   -local-dev
     	DEVELOPMENT ONLY: hostd and the CLI use mgmt's unix socket with the per-host token instead of the tailnet (hermetic tests). Normal operation is tsnet only
   -mgmt-authkey-file string
@@ -71,7 +71,7 @@ flags:
   -port-mapping
     	use UPnP/NAT-PMP/PCP for this host's nodes (off by default: it adds ~250 ms to every new node's join and has every node ask the router for a mapping; turn on behind hard NATs that need router-assisted direct paths)
   -push-port int
-    	port on this host's own tailnet node where mgmt pushes kills (--separate-host) (default 7474)
+    	deprecated, ignored: mgmt pushes kills to port 7474 (the port the tailnet policy grants)
   -request-log-max-age duration
     	also drop request records (tw logs --source requests) older than this, e.g. 168h (0 = only the size rotation, the default)
   -separate-host

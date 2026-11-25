@@ -523,5 +523,8 @@ Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<bi
 ### version_skew
 409 · mgmt, cli. **When:** two tailworks components are outside the supported version window: a host newer than tw-mgmt, or more than one release line behind it; a CLI more than one line behind mgmt (in `--json` mode); mgmt replicas more than one line apart; or a tw-mgmt older than the store's minimum (a newer tw-mgmt ran a contract migration). **Fix:** upgrade in order, mgmt first, then hosts ([upgrading.md](upgrading.md)); a store contracted by a newer tw-mgmt needs that version or newer, or the pre-upgrade backup restored.
 
+### workerd_broken
+1 · cli. **When:** `tw up` found workerd, but `workerd --version` does not run (a missing glibc on Linux; an unsigned or quarantined binary on macOS). `tw up` checks this before it mints mgmt's node key, since the host agent could not start any workload. **Fix:** the fix line names the cause; `tw doctor` runs the full check. Reinstall tailworks (`install.sh`), or point `--workerd <path>` / `$TW_WORKERD` at a workerd that runs.
+
 ### wrangler_required
 1 · cli. **When:** `tw deploy --wrangler` / `tw dev --wrangler` found no wrangler CLI (`$TW_WRANGLER`, the project's `node_modules/.bin/wrangler`, or `wrangler` on PATH). **Fix:** `npm install --save-dev wrangler`, or drop `--wrangler` to bundle with tailworks' built-in esbuild ([wrangler.md](wrangler.md)).
