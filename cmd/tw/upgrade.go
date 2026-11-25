@@ -30,61 +30,75 @@ import (
 //     custody, stop, install (install.sh keeps the previous release as
 //     .prev), start, health-check, and roll back automatically if the
 //     health check fails and no contract migration ran.
-//   - Against a linked tw-mgmt (`tw link`), or with --fleet: ask mgmt for a
-//     plan and start an upgrade run that mgmt drives (pause, resume, abort,
-//     status as subcommands).
+//   - Against a linked tw-mgmt (`tw link`), or as `tw upgrade fleet`: ask
+//     mgmt for a plan and start an upgrade run that mgmt drives (tw upgrade
+//     fleet status|pause|resume|abort; upgrade_fleet.go).
+//   - tw upgrade import|releases (upgrade_import.go) feed mgmt's release
+//     catalog; tw upgrade rollback (upgrade_rollback.go) puts the previous
+//     release back by hand.
 
-const upgradeUsage = "upgrade [<version>] [flags] | upgrade status|pause|resume|abort [<run-id>]"
+const upgradeUsage = "upgrade [<version>] [--from <tarball|dir>] [--plan] [--yes] [--allow-unsigned] | " +
+	"upgrade fleet [<version>] [--plan] [--yes] [--hosts <host>,…] [--canary <host>] [--soak <d>] [--settle <d>] [--no-wait] | " +
+	"upgrade fleet status|pause|resume|abort [<run-id>] | " +
+	"upgrade import <tarball>…|<version> [--platform <os>-<arch>,…] | " +
+	"upgrade releases | " +
+	"upgrade rollback [<backup-dir>] [--restore] [--prefix <dir>] [--yes]"
 
 func cmdUpgrade(args []string) error {
-	for i, a := range args {
-		if strings.HasPrefix(a, "-") {
-			continue
-		}
-		switch a {
-		case "status", "pause", "resume", "abort":
-			return cmdUpgradeRun(a, append(append([]string{}, args[:i]...), args[i+1:]...))
-		}
-		break
+	sub, rest := upgradeSubcommand(args, append([]string{"fleet", "import", "releases", "rollback"}, upgradeRunActions...)...) // upgrade_fleet.go
+	switch sub {
+	case "fleet":
+		return cmdUpgradeFleet(rest)
+	case "import":
+		return cmdUpgradeImport(rest) // upgrade_import.go
+	case "releases":
+		return cmdUpgradeReleases(rest)
+	case "rollback":
+		return cmdUpgradeRollback(rest) // upgrade_rollback.go
+	case "":
+	default: // status, pause, resume, abort: the old spelling
+		upgradeDeprecated(rest, "tw upgrade "+sub, "tw upgrade fleet "+sub)
+		return cmdUpgradeRun(sub, rest)
 	}
 	f := newFlags("upgrade")
 	from := f.String("from", "", "install this release tarball (tw-<v>-<os>-<arch>.tar.gz, with SHA256SUMS next to it) or extracted release directory instead of downloading")
 	planOnly := f.Bool("plan", false, "print the plan and change nothing")
 	yes := yesFlagBefore(f, "upgrading")
-	fleet := f.Bool("fleet", false, "upgrade the fleet through tw-mgmt (an upgrade run) even on a tw up machine")
-	hosts := f.String("hosts", "", "fleet: only these hosts (comma-separated)")
-	canary := f.String("canary", "", "fleet: the canary host (default: the first)")
-	soak := f.Duration("soak", mgmt.DefaultUpgradeSoak, "fleet: watch the canary this long before the other hosts")
-	settle := f.Duration("settle", mgmt.DefaultUpgradeSettle, "fleet: how long a host may take to come back and settle")
-	noWait := f.Bool("no-wait", false, "fleet: start the run and return (tw upgrade status follows it)")
-	health := f.Duration("health-timeout", 3*time.Minute, "homelab: how long the upgraded tw may take to report healthy before it is rolled back")
-	noRollback := f.Bool("no-rollback", false, "homelab: keep the new release even if the health check fails")
-	prefixFlag := f.String("prefix", "", "homelab: the install.sh prefix to upgrade (default: the one that owns --state-dir)")
-	allowUnsigned := f.Bool("allow-unsigned", false, "homelab: install a release that isn't signed by a pinned key (a build you made; TW_ALLOW_UNSIGNED=1)")
+	allowUnsigned := f.Bool("allow-unsigned", false, "install a release that isn't signed by a pinned key (a build you made; TW_ALLOW_UNSIGNED=1)")
+	health := f.Duration("health-timeout", 3*time.Minute, "how long the upgraded tw may take to report healthy before it is rolled back")
+	noRollback := f.Bool("no-rollback", false, "keep the new release even if the health check fails")
+	prefixFlag := f.String("prefix", "", "the install.sh prefix to upgrade (default: the one that owns --state-dir)")
+	f.group(advancedFlags, "health-timeout", "no-rollback", "prefix")
+	fleet := f.Bool("fleet", false, "upgrade the fleet through tw-mgmt (now tw upgrade fleet)")
+	fo := upgradeFleetFlags(f, planOnly, yes)
+	f.hidden("for one release (now tw upgrade fleet)", append([]string{"fleet"}, fo.names...)...)
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
 	}
-	if len(pos) > 1 {
-		return fail("bad_request", "tw upgrade takes at most one version", "usage: tw "+upgradeUsage)
-	}
-	want := ""
-	if len(pos) == 1 {
-		v, err := twversion.Parse(pos[0])
-		if err != nil {
-			return fail("bad_request", err.Error())
-		}
-		want = v.String()
+	want, err := upgradeWantVersion(pos, "tw upgrade")
+	if err != nil {
+		return err
 	}
 	s, err := openState(*f.stateDir)
 	if err != nil {
 		return err
 	}
+	localOnly := setFlags(f, []string{"allow-unsigned", "from", "health-timeout", "no-rollback", "prefix"})
+	fleetOnly := setFlags(f, fo.names)
 	if *fleet || s.remote() {
-		req := mgmt.UpgradeRequest{To: want, Hosts: splitComma(*hosts), Canary: *canary}
-		so, se := int(soak.Seconds()), int(settle.Seconds())
-		req.SoakSeconds, req.SettleSeconds = &so, &se
-		return fleetUpgrade(f, s, req, *planOnly, *yes, *noWait)
+		if len(localOnly) > 0 {
+			return fail("bad_request", strings.Join(localOnly, ", ")+": only for upgrading the tw up machine itself; this upgrades the fleet through tw-mgmt").
+				withFix("tw upgrade fleet [<version>] [--plan]   (the fleet's flags: tw upgrade fleet --help)")
+		}
+		if *fleet {
+			upgradeDeprecated(args, "tw upgrade --fleet", "tw upgrade fleet")
+		}
+		return fleetUpgrade(f, s, fo.request(want), *planOnly, *yes, *fo.noWait)
+	}
+	if len(fleetOnly) > 0 {
+		return fail("bad_request", strings.Join(fleetOnly, ", ")+": only for a fleet upgrade run").
+			withFix("tw upgrade fleet [<version>] " + strings.Join(fleetOnly, " ") + " …")
 	}
 	return homelabUpgrade(f, s, want, *from, *prefixFlag, *planOnly, *yes, *health, *noRollback,
 		*allowUnsigned || allowUnsignedEnv())
@@ -100,13 +114,13 @@ func splitComma(s string) []string {
 	return out
 }
 
-func askYes(f *flags, question string, yes bool, what string) error {
+func askYes(f *flags, question string, yes bool, what, planCmd string) error {
 	if yes {
 		return nil
 	}
 	if *f.json || !isTerminal() {
 		return fail("confirmation_required", what+"; it asks first").
-			withFix("tw upgrade --plan   (shows what it would do)", "then run it in a terminal, or add --yes")
+			withFix(planCmd+"   (shows what it would do)", "then run it in a terminal, or add --yes")
 	}
 	fmt.Printf("%s [y/N] ", question)
 	ln, _ := bufio.NewReader(os.Stdin).ReadString('\n')
@@ -132,7 +146,7 @@ func fleetUpgrade(f *flags, s *state, req mgmt.UpgradeRequest, planOnly, yes, no
 			return err
 		}
 		if len(cat.Items) == 0 {
-			return fail("bad_request", "tw-mgmt's release catalog is empty").withFix("tw release import tailworks-<version>-<os>-<arch>.tar.gz")
+			return fail("bad_request", "tw-mgmt's release catalog is empty").withFix("tw upgrade import <version>   (or the release tarballs: tw upgrade import tailworks-<version>-<os>-<arch>.tar.gz …)")
 		}
 		req.To = cat.Items[len(cat.Items)-1].Version
 	}
@@ -149,12 +163,12 @@ func fleetUpgrade(f *flags, s *state, req mgmt.UpgradeRequest, planOnly, yes, no
 		if !*f.json {
 			printFleetPlan(plan)
 		}
-		return fail("upgrade_blocked", "the upgrade can't start: "+strings.Join(plan.Blockers, "; ")).withFix("tw upgrade --plan " + req.To)
+		return fail("upgrade_blocked", "the upgrade can't start: "+strings.Join(plan.Blockers, "; ")).withFix("tw upgrade fleet --plan " + req.To)
 	}
 	if !yes && !*f.json && isTerminal() {
 		printFleetPlan(plan)
 	}
-	if err := askYes(f, "Start the upgrade run to "+req.To+"?", yes, "tw upgrade would start a fleet upgrade run to "+req.To); err != nil {
+	if err := askYes(f, "Start the upgrade run to "+req.To+"?", yes, "tw upgrade fleet would start a fleet upgrade run to "+req.To, "tw upgrade fleet --plan "+req.To); err != nil {
 		return err
 	}
 	req.DryRun = false
@@ -164,7 +178,7 @@ func fleetUpgrade(f *flags, s *state, req mgmt.UpgradeRequest, planOnly, yes, no
 	}
 	if noWait {
 		emit(f, run, func() {
-			fmt.Printf("✓ upgrade run %s started (to %s); follow it: tw upgrade status %s\n", run.ID, run.To, run.ID)
+			fmt.Printf("✓ upgrade run %s started (to %s); follow it: tw upgrade fleet status %s\n", run.ID, run.To, run.ID)
 		})
 		return nil
 	}
@@ -341,7 +355,7 @@ func followRun(f *flags, s *state, id string) error {
 				printRun(run)
 			}
 			return fail("upgrade_"+run.State, fmt.Sprintf("upgrade run %s is %s: %s", run.ID, run.State, run.Reason)).
-				withFix("fix the cause, then: tw upgrade resume "+run.ID, "or: tw upgrade abort "+run.ID)
+				withFix("fix the cause, then: tw upgrade fleet resume "+run.ID, "or: tw upgrade fleet abort "+run.ID)
 		}
 	}
 }
@@ -453,7 +467,7 @@ func homelabUpgrade(f *flags, s *state, want, from, prefixFlag string, planOnly,
 	if !*f.json && !yes && isTerminal() {
 		printLocalPlan(plan)
 	}
-	if err := askYes(f, "Upgrade tailworks "+cur+" → "+meta.Version+"?", yes, "tw upgrade would replace tw "+cur+" with "+meta.Version); err != nil {
+	if err := askYes(f, "Upgrade tailworks "+cur+" → "+meta.Version+"?", yes, "tw upgrade would replace tw "+cur+" with "+meta.Version, "tw upgrade --plan"); err != nil {
 		return err
 	}
 
@@ -529,12 +543,13 @@ func homelabUpgrade(f *flags, s *state, want, from, prefixFlag string, planOnly,
 		}
 		return fail("upgrade_failed", fmt.Sprintf("tw %s did not become healthy (%v); not rolled back: %s", meta.Version, err, why)).
 			withFix("tw logs --component mgmt   and   tw doctor",
-				"to go back: tw down; restore "+backup+" into "+filepath.Join(s.Dir, "mgmt")+"; "+filepath.Join(prefix, "install.sh")+" --rollback; tw-mgmt restore-fence -state-dir "+filepath.Join(s.Dir, "mgmt")+"; tw up")
+				"to go back: tw upgrade rollback "+backup+" --yes   (puts tw "+cur+" and the store from before the upgrade back)")
 	}
 	say("! tw %s did not become healthy (%v): rolling back to %s", meta.Version, err, cur)
 	if rerr := rollback(ctx, s, prefix, backup, wasService, wasRunning); rerr != nil {
 		return fail("upgrade_failed", fmt.Sprintf("health check failed (%v) and the rollback failed too: %v", err, rerr)).
-			withFix("restore by hand: tw down; restore " + backup + "; " + filepath.Join(prefix, "install.sh") + " --rollback; tw-mgmt restore-fence; tw up")
+			withFix("if "+filepath.Join(prefix, "VERSION")+" still says "+meta.Version+": tw upgrade rollback "+backup+" --yes",
+				"if it says "+cur+" (the release went back, the store didn't): tw down; tw restore "+backup+" --yes; tw up")
 	}
 	res.RolledBack = true
 	if *f.json {

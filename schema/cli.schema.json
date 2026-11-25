@@ -3553,7 +3553,7 @@
         "refused"
       ]
     },
-    "release ls": {
+    "upgrade releases": {
       "type": "object",
       "properties": {
         "current": {
@@ -3582,7 +3582,7 @@
         "items"
       ]
     },
-    "release import": {
+    "upgrade import": {
       "type": "object",
       "properties": {
         "versions": {
@@ -3660,7 +3660,7 @@
     },
     "upgrade": {
       "type": "object",
-      "description": "tw upgrade: on a tw up machine {plan, upgraded, backup?, rolledBack?, health?, notActiveBefore?, agentSkills?}; with --fleet or a linked mgmt, the plan (--plan: {from, to, steps, breaking, blockers, warnings}) or the upgrade run {id, to, state, steps}; tw upgrade status|pause|resume|abort print the run ({runs: []} when there is none).",
+      "description": "tw upgrade: on a tw up machine {plan, upgraded, backup?, rolledBack?, health?, notActiveBefore?, agentSkills?}; tw upgrade fleet (or tw upgrade on a linked machine): the plan (--plan: {from, to, steps, breaking, blockers, warnings}) or the upgrade run {id, to, state, steps}; tw upgrade fleet status|pause|resume|abort print the run ({runs: []} when there is none).",
       "properties": {
         "plan": {
           "type": "object"
@@ -3707,6 +3707,23 @@
           "type": "array"
         }
       }
+    },
+    "upgrade rollback": {
+      "type": "object",
+      "description": "tw upgrade rollback: the release it went back from and to, whether the store went back too (mode restore: the backup restored, the restore generation after the fence on SQLite), the state kept before the rollback, and what is left to do by hand (a Postgres store)",
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "prefix": { "type": "string" },
+        "mode": { "enum": ["binary", "restore"] },
+        "restored": { "type": "string" },
+        "store": { "enum": ["sqlite", "postgres"] },
+        "safetyBackup": { "type": "string" },
+        "restoreGeneration": { "type": "integer" },
+        "health": { "type": "string" },
+        "next": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["from", "to", "prefix", "mode"]
     },
     "host setup": {
       "type": "object",

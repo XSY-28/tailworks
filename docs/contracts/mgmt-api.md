@@ -2636,7 +2636,7 @@ notes, contract migrations, protocols and workerd pin. `current` is this replica
 `ImportReleases` · role **admin** · audited: yes
 
 Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
-`tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
+`tw upgrade import <tarball>…|<version>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 `release_import`.
 
