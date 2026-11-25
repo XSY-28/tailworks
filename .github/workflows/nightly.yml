@@ -3,8 +3,8 @@
 #
 #   suite    one matrix job per Makefile target, so they run in parallel and
 #            report separately. Each needs only `make deps` (npm ci, workerd,
-#            the JS builds), Go and Node; e2e-headscale also uses the
-#            runner's Docker. (e2e-local, templates-typecheck and
+#            the JS builds), Go and Node; e2e-headscale and
+#            e2e-multimgmt also use the runner's Docker. (e2e-local, templates-typecheck and
 #            test-vitest moved to ci.yml, so every PR runs them: #163.)
 #   test-pg  `make test-pg` against a Postgres 17 service container
 #            (scripts/test-pg.sh uses TW_TEST_POSTGRES_DSN instead of
@@ -80,6 +80,10 @@ jobs:
           - target: e2e-locks
             timeout: 30
             allow_failure: ""
+          # 3 tw-mgmt replicas on one Postgres under faults (e2e/multimgmt/LOOP.md).
+          - target: e2e-multimgmt
+            timeout: 60
+            allow_failure: ""
           - target: e2e-observability
             timeout: 30
             allow_failure: ""
@@ -120,6 +124,11 @@ jobs:
         run: |
           echo "::warning::$TARGET is a known failure (continue-on-error): $ISSUE"
       - name: make ${{ matrix.target }}
+        env:
+          # e2e-multimgmt: the runner's Docker, and a new fault schedule
+          # each night (the log prints the seed to rerun it with).
+          PG_CTX: default
+          TW_MM_SEED: ${{ github.run_number }}
         run: make ${{ matrix.target }}
       # The upstream-examples tables of docs/COMPAT.md (issue #325), as
       # tonight's run renders them: the dated evidence for those tables.
@@ -135,6 +144,14 @@ jobs:
         with:
           name: compat-dev-results
           path: e2e/real/results/compat-dev-*.json
+          if-no-files-found: ignore
+      # Op histories, replica logs and invariant reports of a failed run.
+      - name: upload multimgmt results
+        if: failure() && matrix.target == 'e2e-multimgmt'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: multimgmt-results
+          path: e2e/multimgmt/results/
           if-no-files-found: ignore
 
   test-pg:

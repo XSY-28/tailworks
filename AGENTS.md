@@ -107,6 +107,7 @@ goes red, fixing it comes before landing anything else.
    | You changed | Also run |
    | --- | --- |
    | `mgmt` store or `mgmt/migrations/` | `make test-pg` |
+   | anything in `mgmt` every replica runs (leases, mints, reaper, throttles, kills, audit) | `make e2e-multimgmt` (needs Docker) |
    | placement, leases, D1 across moves | `make e2e-placement` |
    | locks / leader election | `make e2e-locks` |
    | Queues | `make e2e-queues` |

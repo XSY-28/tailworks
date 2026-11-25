@@ -137,6 +137,18 @@ test-pg:
 e2e-pg-socket: deps
 	sh scripts/e2e-pg-socket.sh "$(PG_CTX)"
 
+## e2e-multimgmt: the multi-replica tw-mgmt chaos suite (e2e/multimgmt/LOOP.md), hermetic: 3 real
+## tw-mgmt processes on one Postgres 17 container (docker context PG_CTX), a fake Tailscale API and
+## setec; S1-S12 scenarios plus the H-regressions, checked against invariants I1-I11. TW_MM_SEED
+## picks the fault schedule (default 1; nightly uses the run number), TW_MM_DURATION the length
+## of each scenario (default 60s). Artifacts go to e2e/multimgmt/results/.
+TW_MM_SEED ?= 1
+.PHONY: e2e-multimgmt
+e2e-multimgmt:
+	@echo "e2e-multimgmt: TW_MM_SEED=$(TW_MM_SEED); rerun one scenario with make e2e-multimgmt TW_MM_SEED=$(TW_MM_SEED) MM_RUN=TestMM_<id>"
+	PG_CTX="$(PG_CTX)" TW_MM_SEED="$(TW_MM_SEED)" \
+		$(GO) test -tags e2emultimgmt -count=1 -v -timeout 45m $(if $(MM_RUN),-run '$(MM_RUN)') ./e2e/multimgmt/
+
 ## e2e-upgrade: the upgrade release gate (ADR-041 §9), hermetic: the previous
 ## release's tw-mgmt + tw-hostd (TW_UPGRADE_FROM: a git ref, default the newest published
 ## GitHub release (scripts/upgrade-from.sh), built in a temporary worktree; "self", the default
