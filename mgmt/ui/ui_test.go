@@ -247,7 +247,7 @@ func TestPagesRenderPopulated(t *testing.T) {
 	}
 	// Object page: lineage, caps, cert, and the kill form (confirm, then POST to the UI).
 	ob := get(t, h, "/ui/objects/obj_kid").Body.String()
-	for _, want := range []string{`href="/ui/objects/obj_root"`, "(this object)", `data-confirm="Kill kid-def (obj_kid)?`, `action="/ui/objects/obj_kid/kill"`, `name="cascade"`, `name="reason"`} {
+	for _, want := range []string{`href="/ui/objects/obj_root"`, "(this object)", `data-confirm="Kill kid-def (obj_kid)?`, `action="/ui/objects/obj_kid/kill"`, `name="cascade" value="true" checked`, `name="reason"`} {
 		if !strings.Contains(ob, want) {
 			t.Errorf("object page lacks %q", want)
 		}
