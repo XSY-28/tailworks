@@ -28,4 +28,16 @@ Last update: 2026-11-24 PT. MCP logs/audit filter parity with the CLI (#472); MC
 
 ## Tests
 
-See the PR's Tests section for the final run.
+- `go test ./mgmt/...`: ok. Removing `caller` from the forward list makes
+  `TestMCPLogsFilterParity` fail (checked, then restored).
+- `make lint`: ok.
+- `make test`: test-go passed except two load flakes on a heavily loaded
+  machine, in code this branch doesn't touch:
+  `mgmt TestRT_Hr2group_ReplicaNameReserved` ("no eligible host … not live")
+  and `hostd TestContainerPolyfill` (host scratch capacity exhausted). Each
+  passes on its own with `go test -race -count=1 -run …`. test-js didn't run
+  after the test-go failure (no JS touched); CI's `make test` is the
+  authority.
+- `make e2e-observability`: ok.
+- Skipped: `make e2e-multimgmt` (needs Docker; MCP tools only build `/v1`
+  queries, no replica-shared state). No store change, so no `make test-pg`.
