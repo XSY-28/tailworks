@@ -182,7 +182,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 409 · mgmt. **When:** an object ID collided across identities (two workloads derived the same ID). **Fix:** rename one object or class; report it (IDs are HMAC-derived and this should not happen).
 
 ### identity_pending
-503 · netd, mgmt, cli. **When:** the object's node is minted but not ready yet (`Retry-After: 1`); `tw dev` waited 60 s for a deploy. **Fix:** retry; if it persists, `tw logs <workload>` and check the control plane.
+503 · netd, mgmt, cli. **When:** the object's node is minted but not ready yet (`Retry-After: 1`); an outbound call from a new object waited 20 s for mgmt to accept its ready report (its node certificate), or that report failed; `tw dev` waited 60 s for a deploy. **Fix:** retry (a failed ready report is re-sent on a later call); if it persists, `tw logs <workload>` and check the control plane and mgmt.
 
 ### image_build_failed
 1 · cli. **When:** `tw deploy` could not build or push an app's Dockerfile container image with `docker buildx`. **Fix:** the build output is in the detail; check `docker buildx version` works on the deploying machine.
@@ -290,7 +290,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 409 · cli. **When:** tailworks is set up in this state dir but its supervisor is not running. **Fix:** `tw up` (or `systemctl --user start tw`).
 
 ### not_supported
-501 · cli, hostd, SDK. **When:** a command or call tailworks doesn't build yet: `tw r2 object get|put` (object bytes live in the hosts' R2 backend, which mgmt can't reach), container preview URLs, or `tw dev`/`tw deploy` of a Python Worker (`main: *.py` or the `python_workers` flag); `ctx.tailnet.connect()` in a plain-DO object (`"egress": "workload"`: it has no node of its own to connect from) or with `secureTransport` other than `"off"`. **Fix:** go through the workload (its `env.BUCKET` binding); run Python in a [container](containers.md); for sockets, use facet mode or stock `connect()` (which leaves as the workload node), and `{ tls: "netd" }` for TLS; see [COMPAT.md](COMPAT.md#connect).
+501 · cli, hostd, SDK. **When:** a command or call tailworks doesn't build yet: `tw r2 object get|put` (object bytes live in the hosts' R2 backend, which mgmt can't reach), container preview URLs, or `tw dev`/`tw deploy` of an app whose own code imports `cloudflare:email` ("cloudflare:email is not supported on tailworks yet (imported by <file>)": the built-in bundler refuses it; a dependency's import under `node_modules`, such as the Agents SDK's, gets a stub that throws on `new EmailMessage()`); `ctx.tailnet.connect()` in a plain-DO object (`"egress": "workload"`: it has no node of its own to connect from) or with `secureTransport` other than `"off"`. **Fix:** go through the workload (its `env.BUCKET` binding); for sockets, use facet mode or stock `connect()` (which leaves as the workload node), and `{ tls: "netd" }` for TLS; see [COMPAT.md](COMPAT.md#connect); email isn't supported yet: remove the `cloudflare:email` import, or keep it out of the tailworks build (behind a module only your Cloudflare build imports), see [COMPAT.md](COMPAT.md#email).
 
 ### not_up
 409 · cli. **When:** this state dir has no tailworks config or tenant yet. **Fix:** `tw up …` on the host, or `tw link <mgmt>` on a developer machine.
@@ -354,6 +354,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### push_unauthorized
 403 · hostd. **When:** something other than mgmt's node pushed to hostd's push listener (port 7474). **Fix:** only `tag:tw-mgmt` may push; check the grant and who is on that tag.
+
+### python_unavailable
+503 · hostd. **When:** a Python Worker's deployment, when the host can't provide the pinned Pyodide bundles: fetching one failed (an offline host, or no route to `pyodide-capnp-bin.edgeworker.net`), or a fetched bundle's SHA-256 didn't match its pin. **Fix:** give the host internet access for the first Python deployment, or copy the bundles into its `-pyodide-dir` (default `<data-dir>/pyodide`), see [python.md](python.md#offline-hosts); a digest mismatch means the download was corrupted or the file changed upstream: retry, and report it if it persists.
 
 ### r2_backend_unavailable
 503 · hostd. **When:** the host's R2 backend (its `-r2-backend` directory or S3-compatible service) failed a read, write or delete of an R2 object's bytes. In app code it surfaces as an R2 error (code 10001) whose message starts `tw r2: r2_backend_unavailable:`. **Fix:** the host's operator checks the backend (`tw logs --component hostd`): disk space, the S3 endpoint, its credentials. Retry the call.
@@ -446,7 +449,7 @@ Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<bi
 400 · mgmt, hostd. **When:** a platform store write is too big: an entry over 2 MiB, an append over 4 MiB or 128 entries, a compaction key over 1 KiB, or a store over 1 GiB. **Fix:** write less at once, or delete data you no longer need.
 
 ### store_unavailable
-503 · hostd, mgmt. **When:** a platform store couldn't reach mgmt's journal (through hostd). Writes fail; reads still answer from the host's copy if the store has caught up with the journal on this host before, and fail if it never has (a new host). From the mgmt API it also means its database is unreachable. **Fix:** retry; check `tw status` for mgmt and the host.
+503 · hostd, mgmt. **When:** a platform store couldn't reach mgmt's journal (through hostd). Writes fail; reads answer from the host's copy (after waiting at most 2 s for mgmt) if the store has caught up with the journal on this host before, and fail if it never has (a new host) or if they need the journal (a D1 `first-primary` session or a bookmark ahead of the host's copy). hostd also returns it when mgmt doesn't answer a journal read within 10 s. From the mgmt API it also means its database is unreachable. **Fix:** retry; check `tw status` for mgmt and the host.
 
 ### superseded
 409 · mgmt. **When:** undeploy of a deployment that is not the latest for its workload. **Fix:** `tw undeploy <workload>` acts on the latest.

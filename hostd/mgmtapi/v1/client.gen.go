@@ -2522,6 +2522,15 @@ type Host struct {
 	// Arch A Go GOARCH. Container images must match their host's.
 	Arch *Arch `json:"arch,omitempty"`
 
+	// AuditHead Only in the answer to `PUT /v1/hosts/{id}`: the hash of the last
+	// record mgmt stores on the host's audit chain (`host:<hostID>`);
+	// absent when the chain is empty. A restarted host continues its
+	// chain from this head only when it matches the last record the
+	// host itself chained and flushed before a clean shutdown;
+	// otherwise it starts a new segment (`prevHash: ""`), which
+	// verification reports as a break.
+	AuditHead *string `json:"auditHead,omitempty"`
+
 	// AuditPubKey base64 ed25519; verifies `hostSig`.
 	AuditPubKey *string `json:"auditPubKey,omitempty"`
 

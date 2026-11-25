@@ -41,7 +41,7 @@ warnings, workarounds). The run's log ends with the matrix as a table.
 | `c3-scheduled` | workers-sdk C3 `scheduled/ts` | cron `* * * * *` + internet fetch | cron, fetch | pass |
 | `c3-queues` | workers-sdk C3 `queues/ts` | queue producer + consumer | queues, queue-consumers | pass |
 | `c3-workflows` | workers-sdk C3 `hello-world-workflows/ts` | Workflow: step.do, waitForEvent | workflows | pass |
-| `c3-python` | workers-sdk C3 `hello-world/py` | Python Worker | python | refused |
+| `c3-python` | workers-sdk C3 `hello-world/py` | Python Worker (Pyodide) | python | pass |
 | `hello-world-do` | templates `hello-world-do-template` | Durable Object + SQLite | do-storage, do-rpc | pass |
 | `nodejs-http-server` | templates `nodejs-http-server-template` | `node:http` server via `httpServerHandler` | nodejs-compat | pass |
 | `d1-template` | templates `d1-template` | D1 + migrations | d1, d1-migrations | pass |
@@ -65,6 +65,8 @@ warnings, workarounds). The run's log ends with the matrix as a table.
 | `mcp-server`, `mcp-agent`, `ag-*` | agents `examples/` | [the upstream SDK examples](#the-upstream-sdk-examples-issue-325) | agents-sdk, mcp, … | see COMPAT.md |
 | `mcph-*` | vercel/mcp-handler `examples/` | the same | mcp | see COMPAT.md |
 | `ai-*` | vercel/ai `examples/` | the same | vercel-ai | see COMPAT.md |
+| `py-query-d1` | python-workers-examples `query-d1` | Python Worker on D1, seeded with `tw d1 execute --file db_init.sql` (deployed run only) | python, d1 | pass |
+| `py-*` | cloudflare/python-workers-examples | [the Python examples](#the-python-workers-examples-issue-292) | python, … | see COMPAT.md |
 
 "refused": `tw deploy` must refuse it with an error that names the
 surface. "fails": it deploys, and its probe must fail (a binding tailworks
@@ -240,3 +242,17 @@ builds, and `TW_COMPAT_ONLY=<id> make e2e-compat` runs it. A gap is an
 entry with an `Expect` (`ExpectRefused` or `ExpectProbeFail`) and the
 COMPAT.md row it belongs to. The suite promises at least 20 projects that
 are expected to pass, and `Validate` enforces that.
+
+## The Python Workers examples (issue #292)
+
+`python.go` adds every example in
+[cloudflare/python-workers-examples](https://github.com/cloudflare/python-workers-examples)
+in the same way (`Section` `python-workers`, published in
+[COMPAT.md](../../docs/COMPAT.md#upstream-examples-python-workers)). The ones
+that need no vendored package run unmodified; the ones tailworks refuses
+(crons, Workflows, assets, an un-vendored `workers` SDK) must be refused with
+the message COMPAT.md names; the rest are in `pythonNotRun()` with the reason.
+`py-query-d1` needs its database seeded after the deploy, so only the deployed
+run (`make e2e-compat`) runs it. The first Python project of a run fetches the
+pinned Pyodide bundles once into the per-user cache (`internal/pyodide`).
+

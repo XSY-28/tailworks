@@ -160,6 +160,9 @@ func (s *Server) deleteStore(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) readJournal(w http.ResponseWriter, r *http.Request) {
+	if !s.holdStoreRead(w, r) {
+		return
+	}
 	if s.journalDown(w) {
 		return
 	}

@@ -692,8 +692,8 @@ type NotRun struct {
 	Why  string
 }
 
-// UpstreamNotRun lists every example of the three upstream projects that
-// has no Project, so the published tables account for all of them.
+// UpstreamNotRun lists every example of the upstream projects that has no
+// Project, so the published tables account for all of them.
 func UpstreamNotRun() []NotRun {
 	ag := func(why string, dirs ...string) NotRun {
 		return NotRun{Section: SectionAgents, Repo: "cloudflare/agents", Commit: agentsCommit, Base: "examples/", Dirs: dirs, Why: why}
@@ -701,7 +701,7 @@ func UpstreamNotRun() []NotRun {
 	ai := func(why string, dirs ...string) NotRun {
 		return NotRun{Section: SectionVercel, Repo: "vercel/ai", Commit: vercelAICommit, Base: "examples/", Dirs: dirs, Why: why}
 	}
-	return []NotRun{
+	return append(pythonNotRun(), []NotRun{ // python.go
 		ag("needs Workers AI (`env.AI`, an `ai` binding in its wrangler config), which tailworks doesn't provide",
 			"a2a", "agents-as-tools", "auth-agent", "chat-sdk-messenger", "codemode-browser", "context-overflow-recovery", "deploy-churn",
 			"dynamic-tools", "mcp-rpc-transport", "multi-ai-chat", "resumable-stream-chat", "structured-input", "think-chat-sdk",
@@ -737,5 +737,5 @@ func UpstreamNotRun() []NotRun {
 			"ai-functions", "harness-e2e-tui"),
 		ai("Node MCP servers and clients run as script pairs (`tsx server.ts`, `tsx client.ts`), several over stdio; not tried",
 			"mcp"),
-	}
+	}...)
 }

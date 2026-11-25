@@ -140,7 +140,9 @@ func cmdDev(args []string) error {
 		// Workers reach the internet as on a host (tailnet.egress.internet).
 		WorkerInternet: hostd.DirectInternet(),
 		// --inspector-port: each workerd gets an inspector (hostd/inspector.go).
-		WorkerdInspector: *inspectorPort > 0})
+		WorkerdInspector: *inspectorPort > 0,
+		// Python Workers: the per-user Pyodide cache, fetched once (python.go).
+		PyodideDir: devPyodideDir()})
 	if err != nil {
 		return err
 	}
