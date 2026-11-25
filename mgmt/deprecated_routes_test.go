@@ -1,9 +1,6 @@
 package mgmt
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
 // GET /v1/objects/{id}/certificate is deprecated: it still serves the same
 // certificate as GET /v1/certificates/{stableNodeID}, and says so in the
