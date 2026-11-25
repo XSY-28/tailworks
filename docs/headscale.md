@@ -24,6 +24,7 @@ an older server with `profile_unsupported`. Tested against v0.29.7 with
 | HTTPS on mgmt's node | when the tailnet has HTTPS certificates | plain HTTP on `:80` (WireGuard-encrypted, WhoIs-authenticated) |
 | `tailnet.https` (a workload on `https://`) | when the tailnet has HTTPS certificates | not available: Headscale issues no ts.net certificates, so the deploy fails with `tailnet_https_unavailable` |
 | Policy owners | `autogroup:admin`, `tag:tw` | `tag:tw` only. Headscale rejects `autogroup:admin` |
+| Caller grant (`--apply-policy` on a new app) | `autogroup:member` → the app's tag | the same: Headscale accepts `autogroup:member` as a grant source. `autogroup:admin` and other autogroups are left out |
 
 Everything else works the same way: Durable Objects with their own nodes,
 WhoIs callers (`getCaller`), on-behalf-of assertions, spawn narrowing, the
@@ -134,8 +135,9 @@ deploy refuses them with `profile_unsupported`.
 another with `HEADSCALE_IMAGE=headscale/headscale:<tag>`) and runs:
 
 - the policy conformance check: the profile's policy is accepted, and what
-  it leaves out (`autogroup:admin`, `funnel`, `svc:`, postures, `app` in
-  `nodeAttrs`) really is rejected by that release;
+  it leaves out (`autogroup:admin` as an owner or a source, `funnel`,
+  `svc:`, postures, `app` in `nodeAttrs`) really is rejected by that
+  release, and the caller grant from `autogroup:member` is accepted;
 - the node lifecycle: mint, join, single-use, node-side rename (the node
   pool), delete;
 - the version gate: v0.28.0 is refused before anything is minted;
