@@ -1,18 +1,6 @@
-Last update: 2026-11-25 11:00 PT. Three test flakes fixed at their cause (#429, #417, #541); test-only.
+Last update: 2026-11-25 13:00 PT. Two mgmt test flakes fixed at their cause (#417, #541); test-only.
 
-# fix-netd-mgmt-flakes
-
-## #429 netd TestKeepEarlyAnswerNoAnswer (first POST took 12 s)
-
-No timer in the proxy path. A scratch test with an upstream that sleeps
-before closing (0 s, 2 s) showed the 503 follows the upstream's close by
-under 2 ms every time (2.017 s for a 2 s sleep): `UnixUpstream` +
-`KeepEarlyAnswer` wait on nothing but the close. 1,800 runs of the test
-(`-race -count=300 -cpu 1,2`, 6 at once) and 6 full `./netd` runs under
-12 `yes` hogs never had a POST over 500 ms. The 12 s was the upstream
-goroutine not running (a loaded `make test` on macOS), and the test timed
-from the POST. It now times from the upstream's close, so a proxy that
-waits on a timer after the close still fails, and a late upstream doesn't.
+# fix-mgmt-flakes
 
 ## #417 mgmt TestWarmKeysRevokedOnCloseInParallel
 
@@ -34,5 +22,14 @@ an 11 s sleep before `UndeployStopsReplicas` gives the exact CI error
 without the fix and passes with it.
 
 ## Tests
+
+`make lint` and `make test` passed locally (macOS, after merging
+origin/master). `go test -race -count=5 -run TestWarmKeysRevokedOnCloseInParallel ./mgmt/`
+and `-count=3 -run TestWorkloadReplicas` passed.
+
+#429 (netd) was dropped from this branch: its cause is not settled. See
+the issue.
+
+## Tests (detail)
 
 See the PR body.
