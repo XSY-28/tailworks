@@ -23,8 +23,18 @@ Part of the interface simplification audit (#434).
 
 ## Tests
 
-See the PR's Tests section for the final run.
-
-- `go test ./cmd/tw -run 'TestImagePublicArchOnlyOnAdd|TestHelpGroups|TestCompletion'`: ok
+- `go test ./cmd/tw -run 'TestImagePublicArchOnlyOnAdd|TestHelpGroups|TestCompletion|TestCLIReferenceUpToDate'`: ok
+  (before and after merging `origin/master`)
 - `make changes-check`: ok (no upgrade-relevant paths changed; no fragment needed)
-- `make lint test`: see below
+- `make lint`: ok (before and after merging `origin/master`)
+- `make test`: `cmd/tw` ok and every other package ok, except four
+  timeouts in `mgmt` and `hostd` (code this branch does not touch) while the
+  machine's load average was about 180 from parallel agents:
+  `TestTenantAdminScope` (host heartbeat not seen within 10 s),
+  `TestLockTemplate/ClientWithLockRenewsAndFences`, `TestWorkersKV/DeleteAndLimits`,
+  `TestR2Streaming` (1 GiB client timeout). Rerun alone:
+  `TestTenantAdminScope` ok; `TestR2Streaming` timed out again under the same
+  load (it is load-sensitive; see `status/fix-linux-ci-tests-issue-75.md`).
+  CI is the check for these.
+- No extra suite from the AGENTS.md table applies (CLI help grouping and one
+  flag registration only).
