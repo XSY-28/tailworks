@@ -278,3 +278,48 @@ TW_DP_REPLAY=<results dir> go test -tags e2edataplane -run TestRoutingReplay ./e
 **Done** (issue #415): every scenario passes 3 consecutive seeds, plus 2
 clean 10-minute `mixed` soaks; every confirmed finding has a deterministic
 regression test and a ledger entry.
+
+## Containers, pooled nodes and snapshot restore (#423)
+
+The same cluster with a microVM backend on every host, so it needs a Mac's
+virtualization (vz, no sudo) or Linux + KVM (Firecracker + jailer, as
+root). Not in the nightly. Ledger: `ledger/containers.md`.
+
+```sh
+make e2e-dataplane-vm CTR_IMAGES=<dir with images.json> TW_DPK_SCENARIO=containers TW_DPK_SEED=7
+```
+
+Files: `containers_test.go` (workload, observers, faults) and
+`check_containers_test.go`, build tags `e2edataplane e2edataplanevm`.
+The workload (`testdata/containers/ctr`) has one class, `Box`: each object
+owns a container and its own node (taken from the pre-joined pool). The
+client creates objects in bursts of `TW_DPK_BURST` (3), touches a random one
+every second (`up`: start the container unless it runs, read its `boot_id`
+and 16 bytes of urandom, report them to the recorder from the object's
+own node), and retires the oldest past `TW_DPK_MAX_OBJECTS` (6) with
+`destroy()` and a kill. `testdata/containers/vm` is a microVM-tier workload
+deployed `TW_DPK_VMS` (3) times at once, so its VMs come from the warm pool
+and the base snapshot together (Firecracker; vz cold-boots). The test
+polls every host's status socket each second and mgmt's object list every
+3 s.
+
+Faults, besides the shared `kill-host`, `move`, `pause-takeover`,
+`cut-takeover`, `cut-short` and `restart-mgmt`:
+
+| Fault | What it does |
+|---|---|
+| `api-stall` | the fake Tailscale API answers 503 or 4 s late for 5–20 s, during a burst |
+| `burst-crash` | a burst of new objects, then SIGKILL the whole host 0–1.5 s in |
+| `crash-hostd-vmm` | SIGKILL hostd alone; 15 s after the restart, none of its old VMMs may run |
+| `kill-vmm` | SIGKILL one VMM (`tw-vz`, `firecracker`) under the holder's hostd |
+| `redeploy` | a blue/green redeploy on the same host (containers must not roll) |
+| `vm-burst` | deploy `TW_DPK_VMS` microVM workloads at once, read their first random draws, undeploy |
+
+Scenarios: `containers`, `pool`, `restore`, `mixed` (`kscenarios`).
+
+| ID | Invariant |
+|---|---|
+| K1 | One container per Durable Object: no host but the lease holder runs an object's container more than 45 s (FenceAfter + a heartbeat + slack) after the lease or the last fault left it. A copy at an older epoch never answers after a newer one did. A container changes only across a fault, a move or the client's own `destroy()`, never across a redeploy. `destroy()` returns within the SIGTERM grace cap (3 s) + 5 s, unless the host was under a fault (stopped, or the container still booting after a restart). An `up` that answers 200 without the object's report is an error, and K1 notes it |
+| K2 | Single adoption: no two live objects share a stable node ID or a MagicDNS name; a pool node goes to at most one object; every report reaches the recorder from the object's own node under the name it read back; nothing is `pending`, `minted` or `assigned` at quiescence |
+| K3 | Uniqueness: no two containers share a `boot_id`, no urandom draw repeats, no two microVM copies share workerd's first `randomUUID`, `getRandomValues` or `Math.random`, and each copy's egress leaves from its own node |
+| K4 | No leftovers at quiescence: no VMM outlives a hostd crash or runs outside every hostd, no host runs more VMMs than its containers, microVMs and pool account for, no host runs a node for an object mgmt has ended, every ready pool node runs on a host, and the strict keyscan of each running container finds no parent key |

@@ -3,6 +3,7 @@
 Issue #415. Process: `LOOP.md`. Findings are filed as GitHub issues
 labelled `dataplane-chaos`.
 
+- Containers, pooled nodes and snapshot restore (#423, `make e2e-dataplane-vm`): [ledger/containers.md](ledger/containers.md)
 - Cron triggers and DO alarms (#419, scenarios `cron`, `alarms`): [ledger/cron-alarms.md](ledger/cron-alarms.md)
 - Deploys, rollback and secrets (#421, scenarios `deploys-hosts`, `deploys-mgmt`, `deploys-mixed`): [ledger/deploys.md](ledger/deploys.md)
 - R2 buckets (#420, `TestR2`): [ledger/r2.md](ledger/r2.md)
