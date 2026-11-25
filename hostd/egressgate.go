@@ -65,6 +65,9 @@ func (h *Host) holdEgress(ctx context.Context, tenantID, netdID, node string) er
 	timer := time.NewTimer(reportWait)
 	defer timer.Stop()
 	for {
+		if err := h.stallFencedEgress(netdID); err != nil { // stallfence.go (#501)
+			return err
+		}
 		h.mu.Lock()
 		o := h.byNetd[netdID]
 		if o == nil || o.TenantID != tenantID {

@@ -81,8 +81,7 @@ func testTwUp(t *testing.T, extra []string) {
 	}
 	d := e.MustJSON(&up, append([]string{"up", "--yes", "--control=headscale", "--control-url", hs.URL, "--tailnet", hs.Domain,
 		"--api-key-file", hs.KeyFile, "--apply-policy", "--ephemeral", "--hostname-prefix", "tw-e2e-",
-		"--mgmt-hostname", "tw-e2e-mgmt", "--host-id", "e2e", "--allow-sibling-egress",
-		"--device-delete-delay", "1s", "--kill-tombstone", "3s"}, extra...)...)
+		"--mgmt-hostname", "tw-e2e-mgmt", "--host-id", "e2e", "--allow-sibling-egress"}, extra...)...)
 	if !up.PolicyOK || !up.Applied || up.MintMode != "headscale" {
 		t.Fatalf("tw up: %+v", up)
 	}

@@ -169,9 +169,9 @@ func typesSecrets(a *app) ([]string, error) {
 		if err != nil {
 			continue
 		}
-		vars, err := parseDotenv(string(b))
+		vars, err := parseDotenv(fn, string(b))
 		if err != nil {
-			return nil, fail("bad_request", strings.Replace(err.Error(), DevVarsFile, fn, 1))
+			return nil, fail("bad_request", err.Error())
 		}
 		for k := range vars {
 			out = append(out, k)
