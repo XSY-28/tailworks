@@ -15,22 +15,19 @@ e2e-dataplane-cron`). Findings are filed as GitHub issues labelled
 Done when (#419): 3 clean seeds per scenario: met. Nightly runs both
 (`e2e-dataplane-cron`).
 
-Not covered yet: stepping a host's wall clock back and forward (C1's
-clock cases). It waits for the host clock-skew hook, PR #564 (green, not
-merged on 2026-11-25), and the `skew` fault on `dataplane-415-finish`. Once
-#564 is on master, add `clock-back` and `clock-forward` faults to the
-`cron` scenario. hostd decides when cron is due through `wallclock.Now()`,
-so this works on macOS too. Then build with `-tags twtestclock`. Expected:
-a step back reruns nothing (`cronLast`) and a step forward backfills
-nothing. Across hosts with different clocks, a move can rerun a minute the
-old host already ran. C1 should catch that, and it needs a decision: it is
-not a one-host clock step.
+Clock steps: `clock-back` and `clock-forward` (on the #564 hook) are in
+the `cron` scenario since 2026-11-25. Every host follows one offset file
+(the harness gives every process the same environment), and only hostd's
+clock moves, which decides when cron is due. Not covered: hosts whose
+clocks *differ*.
 
 ## Findings
 
 | ID | Verdict | Invariant | Issue | Summary |
 |---|---|---|---|---|
 | C-F1 | CONFIRMED, needs a decision | C2 (no overlap) | #566 | A **stateless** workload's cron run in flight on a host that is cut off from mgmt (or stalled) past the lease goes on after the takeover, beside the new host's next run of that trigger. `cronLeaseFresh` (`hostd/cron.go`) only stops a stale host *starting* runs, and nothing fences a stateless workload. Seen 4 times in each of 2 runs of cron seed 2, 1 in cron 4, 3 in alarms 5 (macOS), 3 in alarms 12 (Linux). The stateful workload had no overlap once #556 was in. The fix trades long jobs surviving a mgmt outage against no-overlap across hosts, so it needs a design decision. C2 records these as notes until then |
+| C-F3 | CONFIRMED, fix in PR (branch `fix-594-cron-last`) | C1 (once per minute) | #594 | A hostd restart while the clock is stepped back (or after it ran future minutes while fast) reruns minutes that already ran: `cronLast` lived in memory only. cron 31: 4 pairs, cron 32: 4 pairs, all on one host with hostd restarted inside a `clock-back`. The fix keeps it in `<DataDir>/cron-last.json`, with deterministic test `hostd:TestCronLastSurvivesRestart`. C1 notes these until the fix is on master |
+| C-F4 | CONFIRMED, needs a decision | C1 (once per minute) | #600 | After a move, a host whose clock is behind (here, a step back 11 s after a `move`) reruns a minute the old host ran: `cronLast` is per host. cron 32: 4 pairs (h1, then h3). Fixing it needs mgmt to carry the last minute, or documenting it. C1 notes it |
 | C-F2 | CONFIRMED, FIXED by #556 | A1, C2 (stale side effects) | #501 | Before #556, a host stalled past the lease and resumed after the takeover made alarm and cron egress calls after the new copy's first: 24 stale alarm fires (cron 2) and 18 (alarms 3, all after `pause-hostd-takeover`), and one stateful cron run still reporting 6 s after the new host's run began. That's F3 (#501), seen here on macOS, where the dp loop never saw it. With #556 merged, the same seeds give 0 stale fires and 0 stateful overlaps |
 
 ## Harness notes (not product bugs)

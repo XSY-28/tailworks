@@ -99,6 +99,12 @@ new host's next run of that trigger can overlap it. A stateful workload's
 run stops with the fence. For a job that must never overlap, use a stateful
 workload or a [lock](locks.md).
 
+**Known gaps (#594, #600).** hostd remembers the last minute it ran in
+memory and per host. If the clock steps back and hostd restarts (#594), or
+the workload moves to a host whose clock is behind the old one's (#600), a
+minute that already ran can run again. Keep host clocks in sync (NTP), and
+make a job idempotent per `controller.scheduledTime` if a rerun would hurt.
+
 These rules are tested at two levels. `hostd:TestCronDueOncePerMinute`,
 `TestCronDueNoBackfill`, `TestCronDueSkipsOverlap`,
 `TestCronDueNeedsFreshHeartbeat`, `TestCronDueFollowsDeployment` and
@@ -110,8 +116,8 @@ cut-offs from mgmt, takeovers, moves and schedule changes. It checks that
 every (trigger, minute) runs at most once across hosts (C1), that runs of a
 trigger don't overlap (C2), that no host runs a trigger past its fence or
 after the workload moved off it (C3), and that a new schedule takes effect
-at the next minute and the old one stops (C4). Stepping a host's wall
-clock isn't in the loop yet.
+at the next minute and the old one stops (C4). It also steps every
+host's wall clock back and forward, with and without a hostd restart (C1).
 
 ## Identity and security
 

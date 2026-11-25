@@ -120,16 +120,18 @@ the recorder. `*/1 * * * *` holds every run 75 s, and `0-59 * * * *` holds
 70 s in `ctx.waitUntil()` on minutes divisible by 3, so the next minute
 comes due while a run is in flight. A move or takeover moves both
 workloads. The stateless one goes without `--replace` on a takeover, so
-mgmt waits out the old host's lease. Two extra faults:
+mgmt waits out the old host's lease. Four extra faults:
 
 | Fault | What it does |
 |---|---|
+| `clock-back` | step every host's wall clock back 70–150 s, hold it 70–100 s (half the time restarting hostd half way), then step it forward again. The binaries are a `twtestclock` test build, and hostd follows `TW_TEST_WALL_CLOCK_FILE` (#564). workerd keeps the true clock: cron is due by hostd's |
+| `clock-forward` | the same, stepped forward 70–150 s |
 | `pause-boundary` | SIGSTOP the host 2–8 s before a minute boundary, for 10–20 s (under `FenceAfter`) or 32–40 s (past it, under the lease) |
 | `reschedule` | redeploy both workloads in place with `* * * * *` swapped for `*/2 * * * *`, or back |
 
 | ID | Invariant |
 |---|---|
-| C1 | At most one run per (workload, trigger, scheduled minute), across all hosts |
+| C1 | At most one run per (workload, trigger, scheduled minute), across all hosts. Notes, not failures: a rerun after hostd restarted under a clock step (#594), and a rerun on the host a workload moved to, with a clock step between (#600) |
 | C2 | No two runs of one trigger overlap: no run reports anything more than 1 s after a later run of the trigger started |
 | C3 | No run starts on a host cut off from mgmt for more than `FenceAfter` (by `scheduledTime`), or on a host after the workload was seen active elsewhere (5 s for a live move). Every due minute runs, unless the trigger's previous run is in flight or the minute is in a fault window (+30 s) |
 | C4 | After a schedule change is active, a trigger only the old schedule has never fires, and a new one fires at its first matching minute |
@@ -140,8 +142,9 @@ mgmt waits out the old host's lease. Two extra faults:
 `TW_DP_REPLAY=<dir> go test -tags e2edataplane -run TestReplayCron
 ./e2e/dataplane/` re-checks a recorded run.
 
-Not yet: stepping a host's wall clock (C1's clock-back and clock-forward
-cases). It waits for the host clock-skew hook (#415).
+Not yet: hosts whose clocks *differ* (each host its own offset). The
+harness gives every process the same environment, so the clock faults step
+every host together. #600 already shows the cross-host rerun.
 
 ## Each iteration
 
