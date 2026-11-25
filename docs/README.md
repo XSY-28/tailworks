@@ -41,11 +41,14 @@ in the CLI: `tw docs ls`, `tw docs search <words>`,
 - [Concepts](concepts.md): the words tailworks uses (tenant, workload, object,
   tiers, facet mode, pool nodes, warm keys).
 - [Try it without a tailnet](INSTALL.md#try-it-without-a-tailnet): `tw dev`.
-- Templates: `tw init <dir> --template <name>`. `hello`, `agent`, `mcp`,
-  `ai-agent` (a mock model; `src/model.ts` shows how to point it at an LLM
-  gateway on your tailnet; its tools need the `mcp` template deployed as
-  workload `mcp`), `lock`, `static-site` (wrangler `assets`: a
-  folder of files next to a Worker), `refund-approval` (a Workflow that waits for a person), `node-workflow`.
+- Templates: `tw init <dir> --template <name>`. Four starting points:
+  `hello` (the default), `agent`, `mcp`, `static-site` (wrangler `assets`: a
+  folder of files next to a Worker). `tw init --list` shows them all; the
+  demos and patterns go with their guides: `refund-approval`
+  ([approvals](approvals.md)), `lock` ([locks](locks.md)), `node-workflow`
+  ([the Node.js tier](node-tier.md)), `python` ([Python Workers](python.md)),
+  and `ai-agent` (an AI SDK agent whose tools need the `mcp` template deployed
+  as workload `mcp`; [its README](../js/packages/create-tailworks/templates/ai-agent/README.md)).
   Each has a README.md: what it shows, how to run it, what to change.
 - [The launch demo](demo.md): `scripts/demo.sh` deploys an MCP server and an
   agent, shows a tool call allowed, then denied by one grant, then the agent

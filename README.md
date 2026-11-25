@@ -171,10 +171,11 @@ same way: [docs/wrangler.md#pages](docs/wrangler.md#pages).
 
 - Try it locally first, with no tailnet: `tw dev` serves an app on
   `127.0.0.1:8787`.
-- Other templates: `tw init <dir> --template agent` (also `mcp`, `ai-agent`,
-  `lock`, `static-site`, `refund-approval`, `node-workflow`). Each Durable
-  Object instance gets its own tailnet node. `ai-agent` needs a deployed
-  `mcp` for its tools; its README walks through both.
+- Other starting points: `tw init <dir> --template agent` (also `mcp` and
+  `static-site`). Each Durable Object instance gets its own tailnet node.
+  `tw init --list` shows every template, with the demos and patterns:
+  [approvals](docs/approvals.md), [locks](docs/locks.md), the
+  [Node.js tier](docs/node-tier.md), [Python Workers](docs/python.md).
 - An existing Workers project: [docs/wrangler.md](docs/wrangler.md).
 - More machines: `tw host add`. A separate laptop: `tw link`.
 
