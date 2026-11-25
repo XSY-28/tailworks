@@ -80,7 +80,9 @@ runs the state dir (`--state-dir`, `~/.tailworks` by default): the binary the
 `tw up --service` unit or the running supervisor was started from, or else
 the state dir itself, which is where `install.sh` installs by default. If
 the `tw` you run lives somewhere else, `tw upgrade` refuses and names both
-places. Pass `--prefix <dir>` to say which install to replace.
+places. Pass `--prefix <dir>` to say which install to replace. The prefix
+and the state dir, and what is in each:
+[What is in ~/.tailworks](INSTALL.md#what-is-in-tailworks).
 
 ### The first upgrade from a release without `tw upgrade`
 
