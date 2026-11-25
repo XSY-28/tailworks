@@ -72,8 +72,8 @@ schema. `tw init` writes this line for you:
 | `https` | boolean | also serve the workload on `https://<name>.<tailnet>.ts.net` with its ts.net certificate, so `request.url` is `https://` for requests that arrive that way; [below](#tailnethttps) |
 | `egress.internet` | `true`, `false` or `[host, "*.suffix", IP, CIDR]`, each with an optional `:port` | internet egress for Worker code and containers; [below](#tailnetegressinternet) |
 | `egress.via` | `"exit-node"` | require a host whose internet egress leaves through a tailnet exit node; [below](#tailnetegressvia) |
-| `spawn.maxLive` | integer | the most live sub-agents (`ctx.tailnet.spawn`) |
-| `spawn.maxDepth` | integer | the deepest spawn chain |
+| `spawn.maxLive` | integer | the most live sub-agents (`ctx.tailnet.spawn`) under one root object. Default and ceiling 64: a deployment may only lower it; a larger value is lowered to 64, and 0 or absent means 64 ([limits.md](limits.md#durable-objects)) |
+| `spawn.maxDepth` | integer | the deepest spawn chain. Default and ceiling 3: a deployment may only lower it; a larger value is lowered to 3, and 0 or absent means 3 |
 | `objects` | map of class → [object](#tailnetobjectsclass) | the Durable Object classes that get a tailnet node per instance |
 
 ### `tailnet.egress.internet`
@@ -268,9 +268,9 @@ tailnet-only.
 `support-agent`). Two apps made from the same template then don't share
 tags, so they don't share grants either. Templates whose workload needs
 nothing else (`hello`, `static-site`, `python`) leave `tailnet.tags` out:
-it defaults to `tag:tw-wl-<workload>`. `--keep-tags` keeps the template's
-class tag names; the workload tag follows the app either way. `--tags`
-sets the workload's tags, adding `tailnet.tags` when the template has none.
+it defaults to `tag:tw-wl-<workload>`. To use tags you already own
+instead, `--tags` sets the workload's tags (adding `tailnet.tags` when the
+template has none) and `--object-tags` sets the classes' ([below](#reusing-existing-tags)).
 
 Each new tag needs a `tagOwners` entry in your tailnet policy. `tw deploy`
 checks this first and prints the lines to add:
@@ -371,8 +371,7 @@ tw policy    # nothing to add when the policy already owns and grants these tags
   and wins over the form without a class. Repeat the flag for more classes.
 - `--tags` adds `tailnet.tags` when the template leaves it out (`hello`,
   `static-site`, `python`).
-- Tags you don't set are still named after the app (class tags are kept
-  with `--keep-tags`).
+- Tags you don't set are still named after the app.
 
 `tw init` checks the tags before it writes anything: they must be valid
 tags, can't be one of tailworks' own tags

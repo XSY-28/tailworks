@@ -109,8 +109,8 @@ func cmdUp(args []string) error {
 	tailnet := f.String("tailnet", "", "the tailnet to serve (oauth: read from the client's devices or mgmt's node; headscale: required, the dns.base_domain). Overrides discovery")
 	oauthFile := f.String("oauth-client-file", "", "mint mode \"oauth\" (Tailscale): file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (an OAuth client with Auth Keys write, tag tag:tw; tightened to 0600). Default on the default state dir: ~/.config/tailworks/oauth.env, asked for and saved on the first tw up")
 	keyFile := f.String("api-key-file", "", "--control=headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied). Tailscale API keys are not a mint mode: use --oauth-client-file")
-	yes := yesFlagBefore(f, "--apply-policy writes the policy (tw up asks nothing else)")
-	apply := f.Bool("apply-policy", false, "write the tagOwners and grants tailworks needs to the tailnet policy instead of printing them (additive, validated first, written with If-Match); tw up shows the lines and asks first (--yes to skip). Tailscale: the OAuth client needs Policy File write. Headscale: needs policy.mode database")
+	yes := yesFlagBefore(f, "--apply-policy writes the policy")
+	apply := f.Bool("apply-policy", false, "write the tagOwners and grants tailworks needs to the tailnet policy instead of printing them (additive, validated first, written with If-Match); tw up shows the lines and asks first (--yes to skip). Without the flag tw up asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes. Tailscale: the OAuth client needs Policy File write. Headscale: needs policy.mode database")
 	control := f.String("control-url", prodControl, "coordination server for the tailnet's nodes")
 	profileF := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server, tw up --control=headscale --control-url <url> --tailnet <base_domain> --api-key-file <file>; the file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain; docs/headscale.md)")
 	tsapiURL := f.String("tsapi-url", "", "Tailscale API base URL (testing)")
@@ -142,6 +142,7 @@ func cmdUp(args []string) error {
 		return fail("bad_request", "tw up takes no arguments", "usage: tw "+usageOf("up"))
 	}
 	warnRemovedUpFlags(f.FlagSet, os.Stderr)
+	pmode := policyModeOf(f, *apply, *yes) // policy_ask.go: ask on a terminal (#481)
 	if _, err := storeF.validate(); err != nil {
 		return err
 	}
@@ -218,7 +219,7 @@ func cmdUp(args []string) error {
 		if p := defaultOAuthFile(); p != "" {
 			asked := false
 			if !fileExists(p) && !*f.json {
-				if asked, err = promptOAuthSecret(p, os.Stdout); err != nil {
+				if asked, err = promptOAuthSecret(p, os.Stdout, "tw up", ""); err != nil {
 					return err
 				}
 			}
@@ -307,7 +308,7 @@ func cmdUp(args []string) error {
 		timings["api_check"] = ms(time.Since(ps))
 		// Headscale refuses to register a node whose tags its policy
 		// doesn't define, so the snippet goes in before mgmt's key is used.
-		if pol, hsApplied, err = headscaleUpPolicy(ctx, hc, f, pol, *apply, *yes, out); err != nil {
+		if pol, hsApplied, err = headscaleUpPolicy(ctx, hc, f, pol, pmode, *yes, out); err != nil {
 			return err
 		}
 	}
@@ -331,7 +332,7 @@ func cmdUp(args []string) error {
 			needed = policy.Snippet{TagOwners: map[string][]string{mgmt.MgmtTag: {"tag:tw"}}}
 		}
 		pre := needed
-		if *apply {
+		if pmode != policyPrintOnly {
 			pre = policy.Snippet{} // upApplyPolicy writes what is missing, then checks needed
 		}
 		found, p, readable, err := oauthPreflight(ctx, api, src, oauthCreds.ClientID, absOAuth, out, pre)
@@ -339,8 +340,8 @@ func cmdUp(args []string) error {
 			return err
 		}
 		pol, policyReadable = p, readable
-		if *apply {
-			if pol, upApplied, err = upApplyPolicy(ctx, api, f, pol, readable, needed, *yes, out); err != nil {
+		if pmode != policyPrintOnly {
+			if pol, upApplied, err = upApplyPolicy(ctx, api, f, pol, readable, needed, pmode, *yes, out); err != nil {
 				return err
 			}
 		}
@@ -472,6 +473,7 @@ func cmdUp(args []string) error {
 		return err
 	}
 	s.Cfg.LocalDev, s.Cfg.Mode = *localDev, layout
+	s.Cfg.InstallPrefix = upInstallPrefix() // upgrade_prefix.go
 	if err := storeF.apply(s); err != nil {
 		return err
 	}
@@ -654,10 +656,11 @@ func cmdUp(args []string) error {
 		res.PolicyOK = miss.Empty()
 		if !res.PolicyOK {
 			res.PolicyDiff = miss.HuJSON()
-			if *apply {
-				if err := confirmBootstrapWrite(f, *yes, "tw up --apply-policy", profile, miss, out); err != nil { // up_policyapply.go
-					return err
-				}
+			write, err := bootstrapPolicyGate(ctx, capi, f, pmode, *yes, "tw up", profile, pol, snip, popts, miss, out) // policy_ask.go
+			if err != nil {
+				return err
+			}
+			if write {
 				ar, err := policy.ApplyWith(ctx, capi, snip, popts)
 				if err != nil {
 					return fail("policy_apply_failed", "could not apply the policy snippet", err.Error()).withFix("add it in "+policyHome(profile)+":", res.PolicyDiff)
@@ -1216,59 +1219,91 @@ func cmdDown(args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	if (*purge || s.Cfg.Ephemeral) && s.Cfg.TenantID != "" && s.mgmtHealthy(ctx) {
-		// No new objects from here on (no pool refill, no create from a
-		// request arriving meanwhile) and none in flight, so the list below
-		// is complete (hostd/teardown.go). An older hostd without the route
-		// answers 404: carry on as before.
-		s.hostd().Do(ctx, "POST", "/v1/teardown", nil, nil)
-		// Every tenant this host serves (each kill goes to its own tailnet).
-		var objs []mgmt.Object
-		for _, tn := range s.tenants() {
-			o, err := s.objectsOf(ctx, tn.TenantID)
-			if err == nil {
-				objs = append(objs, o...)
-			}
-		}
-		{
-			live := map[string]bool{}
-			for _, o := range objs {
-				if o.Status != "killed" && o.Status != "failed" && o.Status != "transferred" {
-					live[o.ID] = true
-				}
-			}
-			for _, o := range objs {
-				if !live[o.ID] || live[o.ParentID] {
-					continue // dead, or killed with its root (cascade)
-				}
-				var kr struct {
-					Killed []string `json:"killed"`
-				}
-				if err := s.mgmt().DoHeaders(ctx, "DELETE", "/v1/objects/"+o.ID+"?cascade=true&reason="+url.QueryEscape("tw down --purge"), nil,
-					&kr, map[string]string{"Tw-Actor": actor()}); err == nil {
-					res.Killed = append(res.Killed, kr.Killed...)
-				}
-			}
-		}
-		var fr struct {
-			Deleted []string `json:"deleted"`
-		}
-		s.mgmt().Do(ctx, "POST", "/v1/device-delete-runs", nil, &fr)
-		res.Flushed = len(fr.Deleted)
-		// Forget the killed objects (mgmt rows, hostd tombstones) so the
-		// same workload deploys again on this state dir.
-		for _, tn := range s.tenants() {
-			var pr mgmt.PurgeResult
-			if err := s.mgmt().Do(ctx, "DELETE", "/v1/tenants/"+tn.TenantID+"/objects", nil, &pr); err == nil {
-				res.Purged += len(pr.Purged)
-			}
-		}
-		s.hostd().Do(ctx, "POST", "/v1/purge", nil, nil)
+		downPurge(ctx, s, &res)
 		res.Timings["purge"] = ms(time.Since(t0))
 	}
+	if err := downStop(s, *service, &res, t0); err != nil {
+		return err
+	}
+	res.Timings["total"] = ms(time.Since(t0))
+	emit(f, res, func() {
+		if len(res.Killed) > 0 || res.Purged > 0 {
+			fmt.Printf("✓ purged   %d objects killed · %d devices deleted · %d killed objects forgotten\n", len(res.Killed), res.Flushed, res.Purged)
+		}
+		what := "tw-hostd, tw-mgmt"
+		if s.Cfg.single() {
+			what = "tw-mgmt with the embedded host"
+		}
+		fmt.Printf("✓ stopped  %s (%.1fs) · state kept in %s\n", what, res.Timings["total"]/1000, s.Dir)
+		if res.ServiceRemoved {
+			fmt.Println("✓ removed  " + serviceUnitPath() + " (disabled)")
+		} else if res.ServiceStopped {
+			fmt.Println("› service  " + serviceUnit + " stopped but still installed (starts at next login/boot); `tw down --service` removes it")
+		}
+	})
+	return nil
+}
+
+// downPurge is tw down --purge's first half (also tw uninstall's): kill
+// every live object of every tenant this host serves, delete their devices
+// and forget them. mgmt must be healthy.
+func downPurge(ctx context.Context, s *state, res *downResult) {
+	// No new objects from here on (no pool refill, no create from a
+	// request arriving meanwhile) and none in flight, so the list below
+	// is complete (hostd/teardown.go). An older hostd without the route
+	// answers 404: carry on as before.
+	s.hostd().Do(ctx, "POST", "/v1/teardown", nil, nil)
+	// Every tenant this host serves (each kill goes to its own tailnet).
+	var objs []mgmt.Object
+	for _, tn := range s.tenants() {
+		o, err := s.objectsOf(ctx, tn.TenantID)
+		if err == nil {
+			objs = append(objs, o...)
+		}
+	}
+	{
+		live := map[string]bool{}
+		for _, o := range objs {
+			if o.Status != "killed" && o.Status != "failed" && o.Status != "transferred" {
+				live[o.ID] = true
+			}
+		}
+		for _, o := range objs {
+			if !live[o.ID] || live[o.ParentID] {
+				continue // dead, or killed with its root (cascade)
+			}
+			var kr struct {
+				Killed []string `json:"killed"`
+			}
+			if err := s.mgmt().DoHeaders(ctx, "DELETE", "/v1/objects/"+o.ID+"?cascade=true&reason="+url.QueryEscape("tw down --purge"), nil,
+				&kr, map[string]string{"Tw-Actor": actor()}); err == nil {
+				res.Killed = append(res.Killed, kr.Killed...)
+			}
+		}
+	}
+	var fr struct {
+		Deleted []string `json:"deleted"`
+	}
+	s.mgmt().Do(ctx, "POST", "/v1/device-delete-runs", nil, &fr)
+	res.Flushed = len(fr.Deleted)
+	// Forget the killed objects (mgmt rows, hostd tombstones) so the
+	// same workload deploys again on this state dir.
+	for _, tn := range s.tenants() {
+		var pr mgmt.PurgeResult
+		if err := s.mgmt().Do(ctx, "DELETE", "/v1/tenants/"+tn.TenantID+"/objects", nil, &pr); err == nil {
+			res.Purged += len(pr.Purged)
+		}
+	}
+	s.hostd().Do(ctx, "POST", "/v1/purge", nil, nil)
+}
+
+// downStop stops the supervisor (through the service manager when one runs
+// it; service: also remove the service) and waits for it to exit.
+func downStop(s *state, service bool, res *downResult, t0 time.Time) error {
 	pid := s.supervisorPID()
 	inst, act := serviceOf(s) // never another state dir's service (e.g. the real ~/.tailworks while tests run)
 	switch {
-	case *service && inst:
+	case service && inst:
 		// disable --now stops it (the supervisor's own SIGTERM path) and
 		// keeps it from starting again at login/boot.
 		removed, err := removeService()
@@ -1294,22 +1329,6 @@ func cmdDown(args []string) error {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	res.Timings["total"] = ms(time.Since(t0))
-	emit(f, res, func() {
-		if len(res.Killed) > 0 || res.Purged > 0 {
-			fmt.Printf("✓ purged   %d objects killed · %d devices deleted · %d killed objects forgotten\n", len(res.Killed), res.Flushed, res.Purged)
-		}
-		what := "tw-hostd, tw-mgmt"
-		if s.Cfg.single() {
-			what = "tw-mgmt with the embedded host"
-		}
-		fmt.Printf("✓ stopped  %s (%.1fs) · state kept in %s\n", what, res.Timings["total"]/1000, s.Dir)
-		if res.ServiceRemoved {
-			fmt.Println("✓ removed  " + serviceUnitPath() + " (disabled)")
-		} else if res.ServiceStopped {
-			fmt.Println("› service  " + serviceUnit + " stopped but still installed (starts at next login/boot); `tw down --service` removes it")
-		}
-	})
 	return nil
 }
 

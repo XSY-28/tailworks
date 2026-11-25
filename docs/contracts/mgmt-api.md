@@ -4426,6 +4426,7 @@ Why a deployment is on its host (smart placement, ADR-033).
 |---|---|---|---|
 | `added` | string | no | The additions as a HuJSON snippet (with `dryRun`, what would be added). Empty when nothing is missing that tailworks writes. |
 | `callerGrant` | string | no | The grant in `added` that lets every user of the tailnet call the app (`autogroup:member` to the workload's own tags, `tcp:80`), as JSON. Absent when `added` has none. |
+| `canWrite` | boolean | no | With `dryRun`, when `added` is not empty — the control plane accepted the policy with `added` merged in, so the write would go through (Tailscale refuses a client without Policy File write). `tw deploy` on a terminal offers to write the lines only when it is true. Absent otherwise. |
 | `changed` | boolean | yes | The policy was written. |
 | `dryRun` | boolean | yes |  |
 | `manual` | array of string | no | What the bundle still needs that tailworks doesn't write; add it in the admin console. |

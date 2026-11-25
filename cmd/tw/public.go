@@ -1,7 +1,8 @@
 package main
 
-// Public ingress (ADR-029), CLI side: `tw expose on|off`, the deploy's
-// public URL and --wait-public, and the doctor's public probe.
+// Public ingress (ADR-029), CLI side: `tw expose on|off` (names and release:
+// exposenames.go), the deploy's public URL and --wait-public, and the
+// doctor's public probe.
 
 import (
 	"context"
@@ -40,6 +41,9 @@ func cmdExpose(args []string) error {
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
+	}
+	if len(pos) > 0 && (pos[0] == "names" || pos[0] == "release") {
+		return cmdExposeNames(f, *tenantF, pos) // exposenames.go
 	}
 	if len(pos) != 2 || (pos[0] != "on" && pos[0] != "off") {
 		return fail("bad_request", "tw expose needs on|off and a workload", "usage: tw "+usageOf("expose"))
@@ -121,7 +125,8 @@ func preflightFailure(pf mgmt.PreflightResult) *cliErr {
 	if pf.ServiceUnapproved {
 		e.Fix = append(e.Fix, "let the workload node host "+pf.Service+" (control won't route it otherwise):", "  "+pf.ServiceSnippet)
 	}
-	e.Fix = append(e.Fix, "then re-run, or deploy anyway with --allow-missing-grants")
+	e.Fix = append(e.Fix, "then re-run, or deploy anyway with --allow-missing-grants",
+		"or let tw add them (shows the lines and asks first): tw deploy --apply-policy")
 	return e
 }
 

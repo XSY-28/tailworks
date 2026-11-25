@@ -96,9 +96,10 @@ agent.
 6. **The tailnet policy belongs to the user.** When tailworks prints a policy
    snippet (`tagOwners`, `grants`), show it to the user and ask them to add
    it in the Tailscale admin console. Tailworks writes the policy only
-   when the user passes `--apply-policy` or runs `tw policy --apply`, and
-   confirms. Don't pass those flags, or `--yes` with them, on the user's
-   behalf, and don't edit the policy yourself.
+   after the user answers y to the lines it shows (on a terminal), or with
+   `--apply-policy --yes`. With `--json` nothing asks and nothing is
+   written. Pass `--apply-policy --yes` only after the user agreed to the
+   lines you showed them, and don't edit the policy yourself.
 
 ## More
 

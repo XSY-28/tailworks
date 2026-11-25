@@ -77,37 +77,36 @@ to see contract migrations before you start.
 
 **Which install it upgrades.** `tw upgrade` replaces the install that
 runs the state dir (`--state-dir`, `~/.tailworks` by default): the binary the
-`tw up --service` unit or the running supervisor was started from, or else
-the state dir itself, which is where `install.sh` installs by default. If
-the `tw` you run lives somewhere else, `tw upgrade` refuses and names both
-places. Pass `--prefix <dir>` to say which install to replace. The prefix
-and the state dir, and what is in each:
-[What is in ~/.tailworks](INSTALL.md#what-is-in-tailworks).
+`tw up --service` unit or the running supervisor was started from, else the
+install the last `tw up` ran from (recorded in `tw.json`), else the state dir
+itself, which is where `install.sh` installs by default. If the `tw` you run
+lives somewhere else, such as an extracted tarball, `tw upgrade` stops with
+[`prefix_mismatch`](errors.md#prefix_mismatch) and names both places. Pass
+`--prefix <dir>` to say which install to replace, or run that install's
+`bin/tw`. The prefix and the state dir, and what is in each:
+[What is in ~/.tailworks](INSTALL.md#what-is-in-tailworks). Upgrading from
+0.1.0, which has no `tw upgrade`, is in the
+[0.2.0 upgrade guide](https://github.com/rosskukulinski/tailworks/blob/v0.2.0/docs/upgrading.md#the-first-upgrade-from-a-release-without-tw-upgrade).
 
-### The first upgrade from a release without `tw upgrade`
+**Not `get.sh` or `install.sh`.** While tailworks runs from the prefix,
+`get.sh` and `install.sh` refuse to install another version over it, since
+they would swap the binaries under it with no backup, health check or
+rollback. They name the `tw upgrade` command to run instead. Stop
+tailworks first (`tw down`) to install by hand, or pass `--force`
+(`TW_INSTALL_FORCE=1` for `get.sh`) to swap anyway. Re-running the same
+version (a repair) is always allowed.
 
-A release that predates `tw upgrade` (0.1.0) can't upgrade itself, so run
-the new release's `tw` from the extracted tarball and point it at your
-install:
+### Roll back by hand
 
-```sh
-tar -xzf tailworks-0.2.0-darwin-arm64.tar.gz -C /tmp
-/tmp/tailworks-0.2.0-darwin-arm64/bin/tw upgrade --from tailworks-0.2.0-darwin-arm64.tar.gz --prefix ~/.tailworks --plan
-/tmp/tailworks-0.2.0-darwin-arm64/bin/tw upgrade --from tailworks-0.2.0-darwin-arm64.tar.gz --prefix ~/.tailworks
-```
-
-Without `--prefix` it stops with `prefix_mismatch` rather than treat the
-extracted directory as the install. From then on, run `tw upgrade` from
-the installed `tw`.
-
-To roll back by hand (the store part is `tw restore <backup>`,
+When `tw upgrade` could not roll back
+([`upgrade_failed`](errors.md#upgrade_failed)), put the backup it took
+back and swap the previous release in (`tw restore` also fences the store,
 [INSTALL.md](INSTALL.md#restore-tw-restore)):
 
 ```sh
 tw down
-cp -R ~/.tailworks/backups/<time>-<from>/mgmt/. ~/.tailworks/mgmt/   # after removing mgmt.db, mgmt.db-wal, mgmt.db-shm
+tw restore ~/.tailworks/backups/<time>-<from> --yes
 ~/.tailworks/install.sh --rollback
-tw-mgmt restore-fence -state-dir ~/.tailworks/mgmt
 tw up
 ```
 

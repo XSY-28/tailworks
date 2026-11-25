@@ -1242,6 +1242,77 @@
         "timingsMs"
       ]
     },
+    "uninstall": {
+      "type": "object",
+      "description": "tw uninstall: the plan (with --dry-run) or what it did",
+      "properties": {
+        "stateDir": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "keepState": {
+          "type": "boolean"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "remove": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "skills": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "kept": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "manual": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "killed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "devicesDeleted": {
+          "type": "integer"
+        },
+        "done": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "stateDir",
+        "keepState",
+        "dryRun",
+        "steps",
+        "remove",
+        "skills",
+        "kept",
+        "manual",
+        "done"
+      ]
+    },
     "link": {
       "type": "object",
       "description": "tw link (with --unlink: unlinked is true)",
@@ -2250,6 +2321,67 @@
         "workload",
         "tenantID",
         "exposed"
+      ]
+    },
+    "expose names": {
+      "type": "object",
+      "description": "the public names the tenant owns (ADR-029)",
+      "properties": {
+        "tenantID": {
+          "type": "string"
+        },
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tailnet": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "tenantID": {
+                "type": "string"
+              },
+              "claimedAt": {
+                "type": "integer"
+              },
+              "claimedBy": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "tailnet",
+              "name",
+              "tenantID",
+              "claimedAt"
+            ]
+          }
+        }
+      },
+      "required": [
+        "tenantID",
+        "names"
+      ]
+    },
+    "expose release": {
+      "type": "object",
+      "properties": {
+        "tenantID": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "released": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "tenantID",
+        "name",
+        "released"
       ]
     },
     "secret put": {

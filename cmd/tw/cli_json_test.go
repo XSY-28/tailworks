@@ -52,6 +52,8 @@ var cliSurface = []struct {
 	{"ls", []string{"ls"}},
 	{"undeploy", []string{"undeploy", "app"}},
 	{"expose", []string{"expose", "off", "app"}},
+	{"expose names", []string{"expose", "names"}},
+	{"expose release", []string{"expose", "release", "app"}},
 	{"secret put", []string{"secret", "put", "API_TOKEN", "--workload", "app"}},
 	{"secret bulk", []string{"secret", "bulk", "/nonexistent/secrets.env", "--workload", "app"}},
 	{"secret ls", []string{"secret", "ls", "--workload", "app"}},
@@ -100,6 +102,7 @@ var cliSurface = []struct {
 	{"host drain", []string{"host", "drain", "h1", "--dry-run"}},
 	{"release ls", []string{"release", "ls"}},
 	{"release import", []string{"release", "import", "/nonexistent/tailworks-0.0.0-linux-amd64.tar.gz"}},
+	{"uninstall", []string{"uninstall", "--dry-run"}},
 	{"backup", []string{"backup"}},
 	{"restore", []string{"restore", "/nonexistent/backup", "--yes"}},
 	{"custody migrate", []string{"custody", "migrate", "--setec-url", "https://secrets.example.ts.net"}},
@@ -306,7 +309,7 @@ func TestDevJSONEvents(t *testing.T) {
 	work := t.TempDir()
 	app := filepath.Join(work, "hello")
 	e := &cliflow.Env{T: t, BinDir: bin, StateDir: filepath.Join(work, "state"), WorkDir: work}
-	e.MustJSON(nil, "init", app, "--template", "hello", "--keep-tags")
+	e.MustJSON(nil, "init", app, "--template", "hello")
 	cmd := exec.Command(filepath.Join(bin, "tw"), "dev", app, "--port", "0", "--json")
 	cmd.Env = os.Environ()
 	out, _ := cmd.StdoutPipe()

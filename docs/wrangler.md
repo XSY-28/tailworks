@@ -257,7 +257,8 @@ before anything else. Nothing is ignored silently:
 | `routes`, `route`, `workers_dev`, `preview_urls`, `account_id`, `zone_id` | ignored: the workload is reached at its MagicDNS name. Public routes are `tailworks.jsonc` `public` ([public-ingress.md](public-ingress.md)) |
 | `ai`, `browser`, `vectorize`, `hyperdrive`, `analytics_engine_datasets`, `send_email`, `dispatch_namespaces`, `mtls_certificates`, `images`, `pipelines`, `ratelimits`, `secrets_store_secrets`, `version_metadata`, `worker_loaders`, `vpc_services`, `media`, `tail_consumers`, `logfwdr`, `unsafe` | no such binding on tailworks; the warning names each `env.X` that will be undefined. A section tailworks supports as a [platform store](design/adr/044-platform-stores.md) (`kv_namespaces`, [Workers KV](kv.md); `r2_buckets`, [R2](r2.md); `d1_databases`, [D1](d1.md)) or as [service bindings](#service-bindings) (`services`) is not warned about |
 | `site` | not supported (Workers Sites; use `assets`) |
-| `observability`, `logpush`, `limits`, `usage_model`, `keep_vars`, `send_metrics`, `dev`, … | ignored by tailworks |
+| `dev` other than `dev.port` (`ip`, `local_protocol`, `host`, …) | ignored by tailworks: `tw dev` serves plain HTTP on 127.0.0.1 only. `dev.port` is `tw dev`'s port, as in `wrangler dev` |
+| `observability`, `logpush`, `limits`, `usage_model`, `keep_vars`, `send_metrics`, … | ignored by tailworks |
 | `python_modules` (its `exclude` globs) | ignored: `tw deploy` ships `python_modules/` whole, less `__pycache__` and `*.pyc` ([python.md](python.md#modules-and-files)) |
 | a `durable_objects` binding with `script_name` | not supported (the deploy fails) |
 | anything else | unknown key, ignored |
@@ -574,7 +575,7 @@ config and `tailworks.jsonc`.
 | `kv_namespaces`, `r2_buckets`, `d1_databases` | `KVNamespace`, `R2Bucket`, `D1Database` |
 | `queues.producers` | `Queue` |
 | `workflows` | `Workflow` |
-| secret names: `.dev.vars`, `.dev.vars.example`, `secrets.required`, and with `--remote` the workload's secrets in mgmt (`tw secret ls`) | `string` |
+| secret names: `.dev.vars`, `.dev.vars.example`, `secrets.required` | `string` |
 
 Bindings tailworks doesn't support are left out, because on tailworks they are
 undefined. `--env <name>` types that environment. A `"runtime": "node"` app

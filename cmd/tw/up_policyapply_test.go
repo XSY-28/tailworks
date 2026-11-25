@@ -121,7 +121,7 @@ func (e *upApplyEnv) run(t *testing.T, terminal bool, input string, args ...stri
 	}
 	needed := policy.Snippet{TagOwners: map[string][]string{mgmt.MgmtTag: {"tag:tw"}}}
 	var b bytes.Buffer
-	after, applied, err := upApplyPolicy(ctx, e.c, f, before, true, needed, *yes, &b)
+	after, applied, err := upApplyPolicy(ctx, e.c, f, before, true, needed, policyApplyFlag, *yes, &b)
 	return string(after), applied, b.String(), err
 }
 
@@ -267,7 +267,7 @@ func TestUpApplyPolicyNoWriteScope(t *testing.T) {
 	// snippet is printed.
 	var b bytes.Buffer
 	f := newFlags("up")
-	pol, applied, err := upApplyPolicy(context.Background(), e.c, f, nil, false, policy.Snippet{}, true, &b)
+	pol, applied, err := upApplyPolicy(context.Background(), e.c, f, nil, false, policy.Snippet{}, policyApplyFlag, true, &b)
 	if err != nil || applied || pol != nil {
 		t.Fatalf("unreadable policy: applied=%v err=%v", applied, err)
 	}
@@ -375,7 +375,7 @@ func TestHeadscaleUpPolicyConfirm(t *testing.T) {
 		confirmIsTerminal = func() bool { return terminal }
 		confirmIn = strings.NewReader(input)
 		var b bytes.Buffer
-		after, applied, err := headscaleUpPolicy(context.Background(), e.c, newFlags("up"), []byte(pol), true, yes, &b)
+		after, applied, err := headscaleUpPolicy(context.Background(), e.c, newFlags("up"), []byte(pol), policyApplyFlag, yes, &b)
 		return string(after), applied, b.String(), err
 	}
 	for name, c := range map[string]struct {

@@ -49,9 +49,11 @@ exact policy lines to add.
 
 1. Show the user the lines from `hint` and ask them to add them in the
    Tailscale admin console (Access controls). Don't edit the policy
-   yourself (see `tw-policy`). `tw deploy --apply-policy` writes these
-   lines after the user confirms them; pass it only when the user asks,
-   and never add `--yes` to it on their behalf.
+   yourself (see `tw-policy`). Run `tw deploy` with `--json`: then it
+   never asks and never writes the policy, it fails with the snippet. (On
+   a terminal, plain `tw deploy` asks the user y/N itself.) If the user
+   wants tailworks to write the lines, run `tw deploy --apply-policy
+   --yes --json` only after they agreed to the lines you showed them.
 2. When they say it's done, run `tw policy --json` (or `tw deploy --json`) again. Tailworks re-reads
    the policy every few seconds, so if the same `acl_denied` comes back
    right after they saved it, wait about 10 seconds and retry once more
