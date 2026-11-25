@@ -23,7 +23,7 @@ the date as the seed.
 |---|---|---|---|---|
 | F1 | FIXED (#431) | D3 (attempts count deliveries) | #431 | A hand-back (`Release`) from a host that has just lost the lease is refused with `lease_lost`. The batch waits out the visibility timeout and is counted as an attempt it never ran. Poison can be dead-lettered after fewer real runs than `max_retries + 1`. Root cause: `mgmt.AckQueue` checks the current epoch before it looks at a release-only settle. Refused 1–9 times per run, every time on the host that had just lost the lease |
 | F3 | CONFIRMED (Linux) | D1 (one live copy: side effects) | #501 | A host stalled (SIGSTOP of hostd alone, or of the whole host) past the lease, then resumed after a `--force-takeover`, made DO egress calls 2.7 s and 4.8 s after the new copy's first. hostd fences only after a *failed* heartbeat (`hostd/host.go` `tick`). On resume the first heartbeat succeeds and carries the revoke, and until it's processed nothing gates stateful egress or ingress on heartbeat freshness (cron does, `hostd/cron.go`). Not seen on macOS in 26 takeovers. Nightly runs e2e-dataplane with `allow_failure: #501` until it's fixed |
-| F2 | CONFIRMED | D1 (one live copy), resources | #432 | workerd runs in its own process group, so it outlives a hostd crash (SIGKILL / OOM / panic), and no later hostd reaps it: 8 of 8 `crash-hostd` faults left the old workerd running. systemd's `KillMode=mixed` covers Linux service hosts. launchd, `tw up --separate-host`'s supervisor and `tw dev` don't. Two workerds sharing one DO's storage is a hypothesis, not yet shown. Also: `e2e/queues` step 3 believes it kills workerd and doesn't |
+| F2 | FIXED (#432) | D1 (one live copy), resources | #432 | workerd runs in its own process group, so it outlives a hostd crash (SIGKILL / OOM / panic), and no later hostd reaps it: 8 of 8 `crash-hostd` faults left the old workerd running. systemd's `KillMode=mixed` covers Linux service hosts. launchd, `tw up --separate-host`'s supervisor and `tw dev` don't. Two workerds sharing one DO's storage is a hypothesis, not yet shown. Also: `e2e/queues` step 3 believes it kills workerd and doesn't |
 
 ## Hypotheses
 
@@ -72,3 +72,4 @@ the date as the seed.
 | fix-431 branch, queues 5 | queues 5 | pass. Refused hand-backs 8 → 0 (of 11), attempt gaps 38 → 22 (the rest are crashes and pauses) |
 | make e2e-dataplane (macOS, merged tree) | mixed 20261125 | pass |
 | CI ubuntu-24.04, nightly dispatch run 45535497016 | mixed 20261125 | **D1 fail: F3** (2 stale Pulse side effects after takeovers of stalled hosts) |
+| fix-432 branch, queues 6 | queues 6, crash-hostd + move | pass. Workerds alive 10 s after a hostd crash and restart: 8 of 8 → 0 of 7 (D7 now gates it) |

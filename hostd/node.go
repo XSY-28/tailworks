@@ -277,6 +277,7 @@ func (inst *instance) spawnNode() error {
 	inst.cmd, inst.exited, inst.started = cmd, ex, time.Now()
 	inst.mu.Unlock()
 	inst.h.log.Info("node process started", "workload", inst.w.name, "pid", cmd.Process.Pid)
+	inst.h.children.add(cmd.Process.Pid, "node "+inst.w.name) // childreap.go
 	go func() {
 		err := cmd.Wait()
 		logf.Close()
@@ -290,6 +291,7 @@ func (inst *instance) spawnNode() error {
 		np.mu.Unlock()
 		// Reap anything the app left in its process group.
 		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		inst.h.children.remove(cmd.Process.Pid)
 		close(ex)
 		inst.onNodeExit()
 	}()
