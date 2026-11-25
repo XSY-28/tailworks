@@ -133,7 +133,10 @@ Builds on [ADR-044](044-platform-stores.md).
    - **CLI:** `tw kv namespace create|list|delete` and
      `tw kv key put|get|delete|list`, like `wrangler kv`. Key commands
      name the namespace with `--binding` (looked up in the app's
-     `wrangler.jsonc`) or `--namespace`. A value comes from an argument,
+     `wrangler.jsonc`) or `--namespace`. (Since #458: `--namespace` takes
+     the name or the binding, `--binding` is the same flag, and the app's
+     only `kv_namespaces` entry is the default; the verbs are spelled
+     `ls` and `rm`, with `list` and `delete` kept.) A value comes from an argument,
      `--path` or stdin, with `--ttl`, `--expiration` and `--metadata`.
    - **REST** (admin only; `api/openapi.yaml`):
      `GET …/stores/kv/{name}/keys` (prefix, cursor, limit) and

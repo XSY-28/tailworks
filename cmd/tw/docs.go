@@ -25,7 +25,7 @@ func cmdDocs(args []string) error {
 	if err != nil {
 		return err
 	}
-	switch sub {
+	switch normalizeVerb(sub) {
 	case "ls":
 		ds := repodocs.List()
 		emit(f, map[string]any{"docs": ds}, func() {

@@ -654,7 +654,16 @@ a workload's secrets (env.NAME)
 tw secret: a workload's secrets (env.NAME, like wrangler secret): put reads the value from stdin (hidden prompt on a terminal), ls shows names only; changes apply on the next deploy
 
 usage: tw secret put <NAME> | secret ls | secret rm <NAME>   [--workload <workload>] [--tenant <tailnet>]
-  (every command takes --state-dir, default ~/.tailworks, and --json)
+
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -tenant string
+    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
+  -workload string
+    	workload (default: the app in the current directory, as tw deploy names it)
 ```
 
 #### tw secret ls
@@ -708,56 +717,31 @@ a workload's D1 databases and migrations
 ```text
 tw d1: a workload's D1 databases (like wrangler d1): create, list, delete, run SQL, export, and wrangler-layout migrations; execute/export/migrations reach the running workload
 
-usage: tw d1 create <db> | d1 list | d1 delete <db> [--yes] | d1 execute <db> --command <sql> | --file <file> | d1 export <db> [--output <file>] | d1 repair <db> --skip <seq> [--yes] | d1 migrations create <db> <message> | d1 migrations list <db> | d1 migrations apply <db>   [--workload <workload>] [--tenant <tailnet>]
-  (every command takes --state-dir, default ~/.tailworks, and --json)
+usage: tw d1 create <db> | d1 ls | d1 rm <db> [--yes] | d1 execute <db> --command <sql> | --file <file> | d1 export <db> [--output <file>] | d1 repair <db> --skip <seq> [--yes] | d1 migrations create <db> <message> | d1 migrations ls <db> | d1 migrations apply <db>   [--workload <workload>] [--tenant <tailnet>]
+
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -tenant string
+    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
+  -workload string
+    	workload whose database it is (default: the app in the current directory, as tw deploy names it)
 ```
 
 #### tw d1 create
 
 ```text
 flags:
-  -command string
-    	execute: SQL to run (one or more statements, run as one batch)
-  -file string
-    	execute: a file of SQL to run as one batch
   -json
     	machine-readable output
-  -output string
-    	export: write the SQL to this file (default: stdout)
-  -skip int
-    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
   -workload string
     	workload whose database it is (default: the app in the current directory, as tw deploy names it)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
-```
-
-#### tw d1 delete
-
-```text
-flags:
-  -command string
-    	execute: SQL to run (one or more statements, run as one batch)
-  -file string
-    	execute: a file of SQL to run as one batch
-  -json
-    	machine-readable output
-  -output string
-    	export: write the SQL to this file (default: stdout)
-  -skip int
-    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -workload string
-    	workload whose database it is (default: the app in the current directory, as tw deploy names it)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### tw d1 execute
@@ -765,159 +749,115 @@ flags:
 ```text
 flags:
   -command string
-    	execute: SQL to run (one or more statements, run as one batch)
+    	SQL to run (one or more statements, run as one batch)
   -file string
-    	execute: a file of SQL to run as one batch
+    	a file of SQL to run as one batch
   -json
     	machine-readable output
-  -output string
-    	export: write the SQL to this file (default: stdout)
-  -skip int
-    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
   -workload string
     	workload whose database it is (default: the app in the current directory, as tw deploy names it)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### tw d1 export
 
 ```text
 flags:
-  -command string
-    	execute: SQL to run (one or more statements, run as one batch)
-  -file string
-    	execute: a file of SQL to run as one batch
   -json
     	machine-readable output
   -output string
-    	export: write the SQL to this file (default: stdout)
-  -skip int
-    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
+    	write the SQL to this file (default: stdout)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
   -workload string
     	workload whose database it is (default: the app in the current directory, as tw deploy names it)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
-#### tw d1 list
+#### tw d1 ls
 
 ```text
 flags:
-  -command string
-    	execute: SQL to run (one or more statements, run as one batch)
-  -file string
-    	execute: a file of SQL to run as one batch
   -json
     	machine-readable output
-  -output string
-    	export: write the SQL to this file (default: stdout)
-  -skip int
-    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
   -workload string
     	workload whose database it is (default: the app in the current directory, as tw deploy names it)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### tw d1 migrations apply
 
 ```text
 flags:
-  -command string
-    	execute: SQL to run (one or more statements, run as one batch)
-  -file string
-    	execute: a file of SQL to run as one batch
   -json
     	machine-readable output
-  -output string
-    	export: write the SQL to this file (default: stdout)
-  -skip int
-    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
   -workload string
     	workload whose database it is (default: the app in the current directory, as tw deploy names it)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### tw d1 migrations create
 
 ```text
 flags:
-  -command string
-    	execute: SQL to run (one or more statements, run as one batch)
-  -file string
-    	execute: a file of SQL to run as one batch
   -json
     	machine-readable output
-  -output string
-    	export: write the SQL to this file (default: stdout)
-  -skip int
-    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
   -workload string
     	workload whose database it is (default: the app in the current directory, as tw deploy names it)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
-#### tw d1 migrations list
+#### tw d1 migrations ls
 
 ```text
 flags:
-  -command string
-    	execute: SQL to run (one or more statements, run as one batch)
-  -file string
-    	execute: a file of SQL to run as one batch
   -json
     	machine-readable output
-  -output string
-    	export: write the SQL to this file (default: stdout)
-  -skip int
-    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
   -workload string
     	workload whose database it is (default: the app in the current directory, as tw deploy names it)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### tw d1 repair
 
 ```text
 flags:
-  -command string
-    	execute: SQL to run (one or more statements, run as one batch)
-  -file string
-    	execute: a file of SQL to run as one batch
   -json
     	machine-readable output
-  -output string
-    	export: write the SQL to this file (default: stdout)
   -skip int
-    	repair: the journal entry to skip (the entry tw d1 list shows the database degraded at)
+    	the journal entry to skip (the entry tw d1 ls shows the database degraded at)
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -tenant string
+    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
+  -workload string
+    	workload whose database it is (default: the app in the current directory, as tw deploy names it)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
+```
+
+#### tw d1 rm
+
+```text
+flags:
+  -json
+    	machine-readable output
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
@@ -933,95 +873,19 @@ flags:
 a workload's Workers KV namespaces and keys
 
 ```text
-tw kv: a workload's Workers KV namespaces (kv_namespaces, like wrangler kv): key commands name the namespace by --binding (from the wrangler config) or --namespace; writes reach running workloads within 60 s
+tw kv: a workload's Workers KV namespaces (kv_namespaces, like wrangler kv): key commands name the namespace with --namespace (its name or binding; default: the app's only one); writes reach running workloads within 60 s
 
-usage: tw kv namespace create <NAME> | kv namespace list | kv namespace delete <NAME> | kv key put <KEY> [VALUE] [--path FILE] [--ttl S] [--expiration T] [--metadata JSON] | kv key get <KEY> | kv key delete <KEY> | kv key list [--prefix P]   [--binding <BINDING> or --namespace <NAME>] [--workload <workload>] [--tenant <tailnet>]
+usage: tw kv namespace create <NAME> | kv namespace ls | kv namespace rm <NAME> [--yes] | kv key put <KEY> [VALUE] [--path FILE] [--ttl S] [--expiration T] [--metadata JSON] | kv key get <KEY> | kv key rm <KEY> | kv key ls [--prefix P]   [--namespace <NAME|BINDING>] [--workload <workload>] [--tenant <tailnet>]
 
 flags:
-  -binding string
-    	key commands: the namespace bound as this binding in the app's wrangler.jsonc
-  -expiration int
-    	key put: expire at this Unix time (≥ 60 s ahead)
   -json
     	machine-readable output
-  -metadata string
-    	key put: metadata (JSON, ≤ 1024 bytes)
-  -namespace string
-    	key commands: the namespace's name (its kv_namespaces id)
-  -path string
-    	key put: read the value from this file
-  -prefix string
-    	key list: only keys starting with this
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -ttl int
-    	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
-```
-
-#### tw kv key
-
-```text
-flags:
-  -binding string
-    	key commands: the namespace bound as this binding in the app's wrangler.jsonc
-  -expiration int
-    	key put: expire at this Unix time (≥ 60 s ahead)
-  -json
-    	machine-readable output
-  -metadata string
-    	key put: metadata (JSON, ≤ 1024 bytes)
-  -namespace string
-    	key commands: the namespace's name (its kv_namespaces id)
-  -path string
-    	key put: read the value from this file
-  -prefix string
-    	key list: only keys starting with this
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -ttl int
-    	key put: expire after this many seconds (≥ 60)
-  -workload string
-    	workload whose namespaces these are (default: the app in the current directory)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
-```
-
-#### tw kv key delete
-
-```text
-flags:
-  -binding string
-    	key commands: the namespace bound as this binding in the app's wrangler.jsonc
-  -expiration int
-    	key put: expire at this Unix time (≥ 60 s ahead)
-  -json
-    	machine-readable output
-  -metadata string
-    	key put: metadata (JSON, ≤ 1024 bytes)
-  -namespace string
-    	key commands: the namespace's name (its kv_namespaces id)
-  -path string
-    	key put: read the value from this file
-  -prefix string
-    	key list: only keys starting with this
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -ttl int
-    	key put: expire after this many seconds (≥ 60)
-  -workload string
-    	workload whose namespaces these are (default: the app in the current directory)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### tw kv key get
@@ -1029,59 +893,37 @@ flags:
 ```text
 flags:
   -binding string
-    	key commands: the namespace bound as this binding in the app's wrangler.jsonc
-  -expiration int
-    	key put: expire at this Unix time (≥ 60 s ahead)
+    	same as --namespace (wrangler's spelling)
   -json
     	machine-readable output
-  -metadata string
-    	key put: metadata (JSON, ≤ 1024 bytes)
   -namespace string
-    	key commands: the namespace's name (its kv_namespaces id)
-  -path string
-    	key put: read the value from this file
-  -prefix string
-    	key list: only keys starting with this
+    	the namespace: its name (a kv_namespaces id) or its binding in the app's wrangler config (default: the app's only kv_namespaces entry)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -ttl int
-    	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
-#### tw kv key list
+#### tw kv key ls
 
 ```text
 flags:
   -binding string
-    	key commands: the namespace bound as this binding in the app's wrangler.jsonc
-  -expiration int
-    	key put: expire at this Unix time (≥ 60 s ahead)
+    	same as --namespace (wrangler's spelling)
   -json
     	machine-readable output
-  -metadata string
-    	key put: metadata (JSON, ≤ 1024 bytes)
   -namespace string
-    	key commands: the namespace's name (its kv_namespaces id)
-  -path string
-    	key put: read the value from this file
+    	the namespace: its name (a kv_namespaces id) or its binding in the app's wrangler config (default: the app's only kv_namespaces entry)
   -prefix string
-    	key list: only keys starting with this
+    	only keys starting with this
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -ttl int
-    	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### tw kv key put
@@ -1089,145 +931,83 @@ flags:
 ```text
 flags:
   -binding string
-    	key commands: the namespace bound as this binding in the app's wrangler.jsonc
+    	same as --namespace (wrangler's spelling)
   -expiration int
-    	key put: expire at this Unix time (≥ 60 s ahead)
+    	expire at this Unix time (≥ 60 s ahead)
   -json
     	machine-readable output
   -metadata string
-    	key put: metadata (JSON, ≤ 1024 bytes)
+    	metadata (JSON, ≤ 1024 bytes)
   -namespace string
-    	key commands: the namespace's name (its kv_namespaces id)
+    	the namespace: its name (a kv_namespaces id) or its binding in the app's wrangler config (default: the app's only kv_namespaces entry)
   -path string
-    	key put: read the value from this file
-  -prefix string
-    	key list: only keys starting with this
+    	read the value from this file
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
   -ttl int
-    	key put: expire after this many seconds (≥ 60)
+    	expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
-#### tw kv namespace
+#### tw kv key rm
 
 ```text
 flags:
   -binding string
-    	key commands: the namespace bound as this binding in the app's wrangler.jsonc
-  -expiration int
-    	key put: expire at this Unix time (≥ 60 s ahead)
+    	same as --namespace (wrangler's spelling)
   -json
     	machine-readable output
-  -metadata string
-    	key put: metadata (JSON, ≤ 1024 bytes)
   -namespace string
-    	key commands: the namespace's name (its kv_namespaces id)
-  -path string
-    	key put: read the value from this file
-  -prefix string
-    	key list: only keys starting with this
+    	the namespace: its name (a kv_namespaces id) or its binding in the app's wrangler config (default: the app's only kv_namespaces entry)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -ttl int
-    	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### tw kv namespace create
 
 ```text
 flags:
-  -binding string
-    	key commands: the namespace bound as this binding in the app's wrangler.jsonc
-  -expiration int
-    	key put: expire at this Unix time (≥ 60 s ahead)
   -json
     	machine-readable output
-  -metadata string
-    	key put: metadata (JSON, ≤ 1024 bytes)
-  -namespace string
-    	key commands: the namespace's name (its kv_namespaces id)
-  -path string
-    	key put: read the value from this file
-  -prefix string
-    	key list: only keys starting with this
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -ttl int
-    	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
-#### tw kv namespace delete
+#### tw kv namespace ls
 
 ```text
 flags:
-  -binding string
-    	key commands: the namespace bound as this binding in the app's wrangler.jsonc
-  -expiration int
-    	key put: expire at this Unix time (≥ 60 s ahead)
   -json
     	machine-readable output
-  -metadata string
-    	key put: metadata (JSON, ≤ 1024 bytes)
-  -namespace string
-    	key commands: the namespace's name (its kv_namespaces id)
-  -path string
-    	key put: read the value from this file
-  -prefix string
-    	key list: only keys starting with this
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -ttl int
-    	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
-#### tw kv namespace list
+#### tw kv namespace rm
 
 ```text
 flags:
-  -binding string
-    	key commands: the namespace bound as this binding in the app's wrangler.jsonc
-  -expiration int
-    	key put: expire at this Unix time (≥ 60 s ahead)
   -json
     	machine-readable output
-  -metadata string
-    	key put: metadata (JSON, ≤ 1024 bytes)
-  -namespace string
-    	key commands: the namespace's name (its kv_namespaces id)
-  -path string
-    	key put: read the value from this file
-  -prefix string
-    	key list: only keys starting with this
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -ttl int
-    	key put: expire after this many seconds (≥ 60)
   -workload string
     	workload whose namespaces these are (default: the app in the current directory)
   -yes
@@ -1242,105 +1022,76 @@ the tenant's queues: create, peek, send
 tw queues: the tenant's queues (like wrangler queues): producers' first send creates a queue; messages peeks without claiming (read a dead-letter queue); send takes JSON (or --text) from the argument or stdin
 
 usage: tw queues create <queue> | queues ls | queues info <queue> | queues rm <queue> | queues purge <queue> | queues messages <queue> [--limit N] | queues send <queue> [<json>|--text <text>] [--delay S]   [--tenant <tailnet>]
-  (every command takes --state-dir, default ~/.tailworks, and --json)
+
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -tenant string
+    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
 ```
 
 #### tw queues create
 
 ```text
 flags:
-  -delay int
-    	send: delaySeconds (0-43200)
   -json
     	machine-readable output
-  -limit int
-    	messages: at most this many (1-100) (default 20)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -text
-    	send: the body is text (contentType text), not JSON
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### tw queues info
 
 ```text
 flags:
-  -delay int
-    	send: delaySeconds (0-43200)
   -json
     	machine-readable output
-  -limit int
-    	messages: at most this many (1-100) (default 20)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -text
-    	send: the body is text (contentType text), not JSON
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### tw queues ls
 
 ```text
 flags:
-  -delay int
-    	send: delaySeconds (0-43200)
   -json
     	machine-readable output
-  -limit int
-    	messages: at most this many (1-100) (default 20)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -text
-    	send: the body is text (contentType text), not JSON
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### tw queues messages
 
 ```text
 flags:
-  -delay int
-    	send: delaySeconds (0-43200)
   -json
     	machine-readable output
   -limit int
-    	messages: at most this many (1-100) (default 20)
+    	at most this many (1-100) (default 20)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -text
-    	send: the body is text (contentType text), not JSON
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### tw queues purge
 
 ```text
 flags:
-  -delay int
-    	send: delaySeconds (0-43200)
   -json
     	machine-readable output
-  -limit int
-    	messages: at most this many (1-100) (default 20)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -text
-    	send: the body is text (contentType text), not JSON
   -yes
     	delete without asking (needed without a terminal, and with --json)
 ```
@@ -1349,18 +1100,12 @@ flags:
 
 ```text
 flags:
-  -delay int
-    	send: delaySeconds (0-43200)
   -json
     	machine-readable output
-  -limit int
-    	messages: at most this many (1-100) (default 20)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-  -text
-    	send: the body is text (contentType text), not JSON
   -yes
     	delete without asking (needed without a terminal, and with --json)
 ```
@@ -1370,19 +1115,15 @@ flags:
 ```text
 flags:
   -delay int
-    	send: delaySeconds (0-43200)
+    	delaySeconds (0-43200)
   -json
     	machine-readable output
-  -limit int
-    	messages: at most this many (1-100) (default 20)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
   -text
-    	send: the body is text (contentType text), not JSON
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
+    	the body is text (contentType text), not JSON
 ```
 
 ### tw r2
@@ -1393,7 +1134,16 @@ a workload's R2 buckets and objects
 tw r2: a workload's R2 buckets (r2_buckets bindings): list, create or delete buckets, list a bucket's objects
 
 usage: tw r2 bucket ls | r2 bucket create <bucket> | r2 bucket rm <bucket> | r2 object ls <bucket> [--prefix P]   [--workload <workload>] [--tenant <tailnet>]
-  (every command takes --state-dir, default ~/.tailworks, and --json)
+
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -tenant string
+    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
+  -workload string
+    	workload (default: the app in the current directory, as tw deploy names it)
 ```
 
 #### tw r2 bucket create
@@ -1402,16 +1152,12 @@ usage: tw r2 bucket ls | r2 bucket create <bucket> | r2 bucket rm <bucket> | r2 
 flags:
   -json
     	machine-readable output
-  -prefix string
-    	object ls: only keys starting with this
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
   -workload string
     	workload (default: the app in the current directory, as tw deploy names it)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### tw r2 bucket ls
@@ -1420,16 +1166,12 @@ flags:
 flags:
   -json
     	machine-readable output
-  -prefix string
-    	object ls: only keys starting with this
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
   -workload string
     	workload (default: the app in the current directory, as tw deploy names it)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
 #### tw r2 bucket rm
@@ -1438,8 +1180,6 @@ flags:
 flags:
   -json
     	machine-readable output
-  -prefix string
-    	object ls: only keys starting with this
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
@@ -1457,15 +1197,13 @@ flags:
   -json
     	machine-readable output
   -prefix string
-    	object ls: only keys starting with this
+    	only keys starting with this
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
   -workload string
     	workload (default: the app in the current directory, as tw deploy names it)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
 ```
 
 ## Observe

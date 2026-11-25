@@ -135,14 +135,14 @@ func cmdTenant(args []string) error {
 		return fail("bad_request", "tw tenant needs a subcommand: add | ls | set | rm", "usage: tw "+usageOf("tenant"))
 	}
 	rest := append(append([]string{}, args[:sub]...), args[sub+1:]...)
-	switch args[sub] {
+	switch normalizeVerb(args[sub]) {
 	case "add":
 		return cmdTenantAdd(rest)
-	case "ls", "list":
+	case "ls":
 		return cmdTenantLs(rest)
 	case "set":
 		return cmdTenantSet(rest)
-	case "rm", "remove", "delete":
+	case "rm":
 		return cmdTenantRm(rest)
 	}
 	return fail("bad_request", fmt.Sprintf("unknown subcommand %q", args[sub]), "usage: tw "+usageOf("tenant"))

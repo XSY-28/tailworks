@@ -27,10 +27,10 @@ func cmdAgent(args []string) error {
 	if !ok {
 		return fail("bad_request", "tw agent needs a subcommand: setup, remove, ls or show", "usage: tw "+usageOf("agent"))
 	}
-	switch sub {
+	switch normalizeVerb(sub) {
 	case "setup":
 		return cmdAgentSetup(args, false)
-	case "remove":
+	case "rm": // remove
 		return cmdAgentSetup(args, true)
 	case "ls":
 		return cmdAgentLs(args)

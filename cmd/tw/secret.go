@@ -14,7 +14,6 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
@@ -38,38 +37,25 @@ type secretResult struct {
 	Created  bool                 `json:"created,omitempty"`
 }
 
+// secretFlags registers tw secret's flags, the same for every verb.
+func secretFlags(f *flags) (tenant, workload *string) {
+	return tenantFlag(f), f.String("workload", "", "workload (default: the app in the current directory, as tw deploy names it)")
+}
+
 func cmdSecret(args []string) error {
-	// Global flags (--state-dir X, --json) may precede the subcommand.
-	sub := -1
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		if !strings.HasPrefix(a, "-") {
-			sub = i
-			break
-		}
-		if (a == "--state-dir" || a == "-state-dir") && i+1 < len(args) {
-			i++
-		}
-	}
-	if sub < 0 {
-		return fail("bad_request", "tw secret needs a subcommand: put | ls | rm", "usage: tw "+usageOf("secret"))
-	}
-	return cmdSecretSub(args[sub], append(append([]string{}, args[:sub]...), args[sub+1:]...))
+	sub, args, _ := scanVerb(args, func(f *flags) { secretFlags(f) }, func(string) int { return 1 })
+	return cmdSecretSub(sub, args)
 }
 
 func cmdSecretSub(sub string, args []string) error {
 	f := newFlags("secret")
-	tenantF := tenantFlag(f)
-	workloadF := f.String("workload", "", "workload (default: the app in the current directory, as tw deploy names it)")
+	tenantF, workloadF := secretFlags(f)
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
 	}
-	switch sub {
-	case "list":
-		sub = "ls"
-	case "delete":
-		sub = "rm"
+	if sub == "" {
+		return fail("bad_request", "tw secret needs a subcommand: put | ls | rm", "usage: tw "+usageOf("secret"))
 	}
 	switch {
 	case sub == "ls" && len(pos) != 0:

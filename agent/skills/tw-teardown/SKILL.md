@@ -18,7 +18,7 @@ count.
 | `tw secret rm <NAME>` | deletes a secret (the app loses it on the next deploy) | no |
 | `tw down` | stops tailworks on this machine (`--purge` also kills every object) | no |
 | `tw tenant rm`, `tw host rm` | remove a tenant or a host (operator commands) | yes, unless `--yes` |
-| `tw d1 delete`, `tw kv namespace delete`, `tw r2 bucket rm` | delete a database, a KV namespace or an R2 bucket, with all its data | yes, unless `--yes` |
+| `tw d1 rm`, `tw kv namespace rm`, `tw r2 bucket rm` | delete a database, a KV namespace or an R2 bucket, with all its data | yes, unless `--yes` |
 | `tw queues rm`, `tw queues purge` | delete a queue with its messages, or just its messages | yes, unless `--yes` |
 | `tw up` | starts tailworks | yes, unless `--yes` |
 | `tw agent setup`, `tw agent remove` | write or delete these skill files | yes, unless `--yes` |

@@ -1876,7 +1876,7 @@ mgmt keeps, after compaction.
 
 `ListKVKeys` · role **admin\|tenant:data** · audited: no
 
-Workers KV's `list()` for operators (`tw kv key list`,
+Workers KV's `list()` for operators (`tw kv key ls`,
 ADR-037): live keys in UTF-8 byte order, with their
 expiration and metadata, `limit` at a time (default and maximum
 1000). Pass the answer's `cursor` to get the next page. mgmt reads
@@ -1959,7 +1959,7 @@ can be sensitive, and mgmt keeps them only sealed and HMACed.
 
 `DeleteKVValue` · role **admin\|tenant:data** · audited: yes
 
-`tw kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+`tw kv key rm`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -2162,7 +2162,7 @@ apply (`store_degraded`, ADR-044 §3) reports it here through its
 host, once per change: with `degraded` when it stops, without it
 when the entry applies (or was skipped with `…/repair`). mgmt
 keeps the latest report on the store (`Store.degraded`, shown by
-`tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+`tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 and the console) and audits the first report of each failing
 entry on each host (`kind: store_replay_failed`). A report for
 another incarnation is ignored. A healthy report clears the record

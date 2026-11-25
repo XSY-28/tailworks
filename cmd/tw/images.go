@@ -148,7 +148,7 @@ func cmdImage(args []string) error {
 		if len(words) < 2 {
 			return fail("bad_request", "tw image public add|ls|rm", "usage: tw "+usageOf("image"))
 		}
-		return cmdImagePublic(words[1], rest)
+		return cmdImagePublic(normalizeVerb(words[1]), rest)
 	case "push":
 		return cmdImagePush(rest)
 	}
