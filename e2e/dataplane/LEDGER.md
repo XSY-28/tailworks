@@ -69,6 +69,6 @@ the date as the seed.
 | 20261125T022948Z-fencing-7 | fencing 7, pause-hostd-takeover + pause-takeover | pass. 6 takeovers of a host whose hostd was stopped and workerd kept running |
 | 20261125T022948Z-mixed-8 | mixed 8 | pass. F2 seen again (2 of 2) |
 | 20261125T022948Z-mixed-9 | mixed 9 | pass. F2 seen again (1 of 1) |
-| fix-432 branch, crash-hostd | queues 6, crash-hostd + move | see the #432 PR (D7 now gates it) |
 | make e2e-dataplane (macOS, merged tree) | mixed 20261125 | pass |
 | CI ubuntu-24.04, nightly dispatch run 45535497016 | mixed 20261125 | **D1 fail: F3** (2 stale Pulse side effects after takeovers of stalled hosts) |
+| fix-432 branch, queues 6 | queues 6, crash-hostd + move | pass. Workerds alive 10 s after a hostd crash and restart: 8 of 8 → 0 of 7 (D7 now gates it) |
