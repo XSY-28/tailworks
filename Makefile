@@ -359,6 +359,25 @@ e2e-vz-container: deps build vz-assets
 	$(VZ_CTR_ENV) $(GO) test -count=1 -v -run 'TestContainerSmoke|TestVZContainer' ./hostd/vm
 	cd e2e/container && $(VZ_CTR_ENV) $(GO) test -tags e2econtainer -count=1 -v -timeout 20m .
 
+## e2e-dataplane-vm: the data-plane chaos loop for containers, pooled nodes and snapshot
+## restore (issue #423, e2e/dataplane/LOOP.md): needs a microVM backend, so it is not in the
+## nightly. macOS: vz (no sudo). Linux: Firecracker + jailer on KVM, the test binary as root.
+## CTR_IMAGES: an images.json dir holding TW_DPK_IMAGE (default tw.local/debian-trixie-python:1).
+## TW_DPK_SCENARIO=containers|pool|restore|mixed (default mixed), TW_DPK_SEED (default today),
+## TW_DPK_DURATION (default 4m); every TW_DPK_* variable passes through to the test.
+DPK_ENV = $(foreach v,$(filter TW_DPK_%,$(.VARIABLES)),$(v)="$($(v))") TW_CTR_IMAGES="$(CTR_IMAGES)"
+.PHONY: e2e-dataplane-vm
+e2e-dataplane-vm: deps $(if $(filter Darwin,$(shell uname -s)),build vz-assets,guest-image $(VM_KERNEL_DEP))
+	@[ -f "$(CTR_IMAGES)/images.json" ] || { echo "e2e-dataplane-vm: no $(CTR_IMAGES)/images.json (guest/images/build-sandbox-images.sh)"; exit 1; }
+	$(GO) test -c -tags 'e2edataplane e2edataplanevm' -o bin/e2edataplanevm.test ./e2e/dataplane
+	cd e2e/dataplane && if [ "$$(uname -s)" = Darwin ]; then \
+		env $(VZ_ENV) $(DPK_ENV) ../../bin/e2edataplanevm.test -test.v -test.count=1 -test.timeout 40m -test.run TestContainers; \
+	else \
+		[ "$$(cat /proc/sys/vm/nr_hugepages)" -ge $(VM_HUGEPAGES) ] || sudo sysctl -qw vm.nr_hugepages=$(VM_HUGEPAGES); \
+		sudo env $(CTR_ENV) $(DPK_ENV) GOMODCACHE="$$($(GO) env GOMODCACHE)" GOCACHE=/tmp/tw-dpk-gocache \
+			../../bin/e2edataplanevm.test -test.v -test.count=1 -test.timeout 40m -test.run TestContainers; \
+	fi
+
 ## e2e-linux-vm: L3 E2E from the installed release on a FRESH nested-virt Lima VM
 ## (twl-kvm-u24; created if missing, stopped at the end): the linux-arm64 release with the
 ## microVM assets is built in Lima tw-dev, copied in with limactl copy, then install.sh ->
@@ -671,6 +690,8 @@ lint: api-check compat-check changes-check
 	$(GO) vet -tags e2eplacement ./e2e/placement/...
 	$(GO) vet -tags e2elocks ./e2e/locks/...
 	$(GO) vet -tags e2edataplane ./e2e/dataplane/...
+	$(GO) vet -tags 'e2edataplane e2edataplanevm' ./e2e/dataplane/...
+	GOOS=linux $(GO) vet -tags 'e2edataplane e2edataplanevm' ./e2e/dataplane/...
 	$(GO) vet -tags e2equeues ./e2e/queues/...
 	$(GO) vet -tags e2eobs ./e2e/observability/...
 	$(GO) vet -tags e2emultimgmt ./e2e/multimgmt/...

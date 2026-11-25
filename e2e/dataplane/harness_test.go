@@ -150,6 +150,10 @@ type cluster struct {
 	token   string
 	stopped map[string]bool // names currently SIGSTOPped (whole group or hostd only)
 	orphans []int           // workerds that outlived a crashed hostd
+
+	// Set by the loops that share this harness (containers_test.go).
+	workloadName string   // what deploy posts ("" = "dp")
+	hostArgs     []string // extra tw-hostd flags
 }
 
 func (c *cluster) record(name string, pid int) {
@@ -167,6 +171,8 @@ func (c *cluster) start(name string, args ...string) {
 	bin := "tw-hostd"
 	if name == "mgmt" {
 		bin = "tw-mgmt"
+	} else {
+		args = append(args, c.hostArgs...)
 	}
 	cmd := exec.Command(filepath.Join(c.bin, bin), args...)
 	cmd.Stdout, cmd.Stderr = lf, lf
@@ -501,7 +507,11 @@ func (c *cluster) waitHostsLive(ids ...string) {
 // deploy posts one deployment of the dp workload; st is the HTTP status.
 func (c *cluster) deploy(bundle, host string, replace, force bool) (deployment, int, []byte, error) {
 	var d deployment
-	st, b, err := c.try("POST", "/v1/deployments", map[string]any{"tenantID": c.tenantID, "workload": "dp", "bundle": bundle,
+	wl := c.workloadName
+	if wl == "" {
+		wl = "dp"
+	}
+	st, b, err := c.try("POST", "/v1/deployments", map[string]any{"tenantID": c.tenantID, "workload": wl, "bundle": bundle,
 		"host": host, "replace": replace, "forceTakeover": force}, &d)
 	return d, st, b, err
 }
