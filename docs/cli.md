@@ -116,6 +116,30 @@ flags:
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
 ```
 
+### tw uninstall
+
+remove tailworks from this machine
+
+```text
+tw uninstall: remove tailworks from this machine in one go: kill every object and delete its device, stop tailworks and remove its service, delete mgmt's own node, remove the coding agents' skills, the install and the state dir (--keep-state keeps the state dir's data); it prints what it removes and asks first
+
+usage: tw uninstall [--keep-state] [--dry-run] [--yes] [--force]
+
+flags:
+  -dry-run
+    	print what it would do and delete, and change nothing
+  -force
+    	go on when tailworks is set up here but tw-mgmt isn't running or healthy (the objects' devices are then left: delete them in the admin console)
+  -json
+    	machine-readable output
+  -keep-state
+    	keep the state dir's data (tw.json, mgmt/, hostd/, backups/, …): remove the install, service, devices and skills only
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
+```
+
 ### tw link
 
 use a remote tw-mgmt from this machine

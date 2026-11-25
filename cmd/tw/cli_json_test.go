@@ -99,6 +99,7 @@ var cliSurface = []struct {
 	{"host drain", []string{"host", "drain", "h1", "--dry-run"}},
 	{"release ls", []string{"release", "ls"}},
 	{"release import", []string{"release", "import", "/nonexistent/tailworks-0.0.0-linux-amd64.tar.gz"}},
+	{"uninstall", []string{"uninstall", "--dry-run"}},
 	{"backup", []string{"backup"}},
 	{"restore", []string{"restore", "/nonexistent/backup", "--yes"}},
 	{"custody migrate", []string{"custody", "migrate", "--setec-url", "https://secrets.example.ts.net"}},

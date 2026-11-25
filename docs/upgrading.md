@@ -84,6 +84,14 @@ places. Pass `--prefix <dir>` to say which install to replace. The prefix
 and the state dir, and what is in each:
 [What is in ~/.tailworks](INSTALL.md#what-is-in-tailworks).
 
+**Not `get.sh` or `install.sh`.** While tailworks runs from the prefix,
+`get.sh` and `install.sh` refuse to install another version over it, since
+they would swap the binaries under it with no backup, health check or
+rollback. They name the `tw upgrade` command to run instead. Stop
+tailworks first (`tw down`) to install by hand, or pass `--force`
+(`TW_INSTALL_FORCE=1` for `get.sh`) to swap anyway. Re-running the same
+version (a repair) is always allowed.
+
 ### The first upgrade from a release without `tw upgrade`
 
 A release that predates `tw upgrade` (0.1.0) can't upgrade itself, so run
