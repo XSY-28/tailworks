@@ -31,3 +31,17 @@ Last update: 2026-11-25 PT. Issue #528: one generated Environment section in doc
   CONTRIBUTING.md point at the section instead of a second table.
 
 ## Tests
+
+- `make lint`: ok (after merging origin/master).
+- `make test-docs`: ok (includes TestCLIReferenceEnvVars, TestCLIReferenceUpToDate).
+- `make install-test`: ok.
+- `make cli-docs`: docs/cli.md regenerated.
+- `go test -race ./cmd/tw ./internal/hostdrun`: ok (includes
+  TestLatestTagReleaseAPI and the TW_TEST_LINK_NAME tests). The full
+  `make test` was not run locally: the mbp runner's slots stayed busy,
+  and the only Go package changed is cmd/tw. CI runs `make test`.
+- `make changes-check`: ok, no fragment needed.
+
+Merging origin/master brought `TW_INSTALL_FORCE` (get.sh) and install.sh's
+`--force` usage line from #560. The table lists the first, and this branch
+no longer edits install.sh.
