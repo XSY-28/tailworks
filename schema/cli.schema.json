@@ -1336,6 +1336,42 @@
         "workload"
       ]
     },
+    "init list": {
+      "type": "object",
+      "properties": {
+        "templates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              },
+              "needs": {
+                "type": "string"
+              },
+              "guide": {
+                "type": "string"
+              },
+              "starting_point": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "purpose",
+              "starting_point"
+            ]
+          }
+        }
+      },
+      "required": [
+        "templates"
+      ]
+    },
     "types": {
       "type": "object",
       "description": "tw types: the declaration file written (or with --check, compared)",

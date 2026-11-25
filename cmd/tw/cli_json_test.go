@@ -40,6 +40,7 @@ var cliSurface = []struct {
 	{"tenant set", []string{"tenant", "set", "other.example.ts.net", "--max-objects", "5"}},
 	{"tenant rm", []string{"tenant", "rm", "other.example.ts.net", "--yes"}},
 	{"init", []string{"init", "{work}/app", "--template", "hello"}},
+	{"init list", []string{"init", "--list"}},
 	{"dev", []string{"dev", "{work}/empty", "--once"}},
 	{"types", []string{"types", "{work}/app"}},
 	{"deploy", []string{"deploy", "{work}/app"}},
