@@ -120,7 +120,7 @@ Python Durable Objects are **internal objects**: they run in plain-DO mode
 and have no tailnet node of their own, like a class with `"node": false` in
 [tailworks.jsonc](tailworks-jsonc.md). They are reached through the Worker's
 `env`, not over the tailnet, and their egress leaves as the workload. So
-`tailnet.objects.<Class>` can't give a Python class tags, `agent`, `ttl` or
+`tailnet.objects.<Class>` can't give a Python class tags, `ttl` or
 `public`, and `ctx.tailnet` (spawn, kill) isn't available to Python code.
 [Egress modes](egress-modes.md) explains the difference.
 

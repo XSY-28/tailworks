@@ -120,7 +120,7 @@
       "additionalProperties": false,
       "properties": {
         "tags": { "type": "array", "items": { "type": "string", "pattern": "^tag:" }, "description": "Tags of each instance's node." },
-        "agent": { "type": "boolean", "description": "An Agents SDK Agent class." },
+        "agent": { "type": "boolean", "deprecated": true, "description": "Accepted and ignored (it used to mark Agents SDK classes)." },
         "ttl": { "type": "string", "description": "Lifetime from creation, e.g. \"10m\"; the default for spawn()." },
         "node": { "type": "boolean", "description": "false: an internal class with no tailnet node; its egress leaves as the workload node." },
         "egress": { "type": "string", "enum": ["object", "workload"], "description": "\"object\" (default, facet mode): egress leaves from each instance's own node. \"workload\": plain-DO mode, egress leaves as the workload node. \"node\": false implies \"workload\"; don't set both." },

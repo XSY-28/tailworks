@@ -1904,7 +1904,6 @@ type ChainStatus struct {
 
 // ClassConfig One DO namespace from `tailworks.jsonc` `tailnet.objects`.
 type ClassConfig struct {
-	Agent *bool  `json:"agent,omitempty"`
 	Class string `json:"class"`
 
 	// PreviewOf `_workload` only, previews: the workload this deployment is a preview of (ADR-048), deployed as the workload `<workload>--preview-<alias>`.
@@ -5875,7 +5874,7 @@ type ClientInterface interface {
 	//
 	// mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 	// the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+	// node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -5936,7 +5935,7 @@ type ClientInterface interface {
 	//
 	// mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 	// the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+	// node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -8187,7 +8186,7 @@ func (c *Client) ListDeployments(ctx context.Context, params *ListDeploymentsPar
 //
 // mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 // the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+// node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 // `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 // wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -8258,7 +8257,7 @@ func (c *Client) CreateDeploymentWithBody(ctx context.Context, params *CreateDep
 //
 // mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 // the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+// node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 // `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 // wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -17987,7 +17986,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 	// the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+	// node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -18048,7 +18047,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 	// the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+	// node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -30442,7 +30441,7 @@ func (c *ClientWithResponses) ListDeploymentsWithResponse(ctx context.Context, p
 //
 // mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 // the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+// node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 // `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 // wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -30509,7 +30508,7 @@ func (c *ClientWithResponses) CreateDeploymentWithBodyWithResponse(ctx context.C
 //
 // mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 // the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+// node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 // `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 // wrangler's `placement`). A bundle with neither `tailnet.tags` nor

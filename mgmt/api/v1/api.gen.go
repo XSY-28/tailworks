@@ -1906,7 +1906,6 @@ type ChainStatus struct {
 
 // ClassConfig One DO namespace from `tailworks.jsonc` `tailnet.objects`.
 type ClassConfig struct {
-	Agent *bool  `json:"agent,omitempty"`
 	Class string `json:"class"`
 
 	// PreviewOf `_workload` only, previews: the workload this deployment is a preview of (ADR-048), deployed as the workload `<workload>--preview-<alias>`.
