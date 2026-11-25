@@ -21,7 +21,7 @@ on, it is a major version.
 
 - **Hosts upgrade after mgmt.** A host that is out of the window keeps
   heartbeating, and its running workloads aren't disturbed, but placement
-  skips it. `tw status --json` lists it under `versions.skewed`.
+  skips it. mgmt's `GET /v1/status` lists it under `versions.skewed`.
 - **Features gate new work.** Hosts report their features when they
   register (`d1`, `kv`, `queues`, `r2`, `telemetry`, `worker-internet`, `workflows`, `self-upgrade`, `internet-exit-node`, `internet-ports`, `tailnet-https`, …). A deployment
   that uses a KV namespace is placed only on hosts that offer `kv`. When none

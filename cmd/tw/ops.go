@@ -212,6 +212,7 @@ func cmdLs(args []string) error {
 			if d.Error != "" {
 				fmt.Printf("  %-12s error: %s\n", "", tsafe(deployErrorLine(d.Workload, d.Error))) // lserror.go
 			}
+			printImagePins(d) // status_view.go
 		}
 		fmt.Println("OBJECTS")
 		fmt.Printf("  %-36s %-34s %-8s %-30s %s\n", "NODE", "CLASS/NAME", "STATUS", "TAGS", "PARENT")

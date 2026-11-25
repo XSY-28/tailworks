@@ -983,10 +983,25 @@
     },
     "status": {
       "type": "object",
-      "description": "health of mgmt, the host(s), the tenant and deployments",
+      "description": "health of mgmt, the host(s), the tenant and deployments. On the host (no linked): supervisor, mgmt, host, workloads, objectsByStatus, ...; on a linked machine (linked present): linked, whoami, hosts and tenants[].deployments",
       "properties": {
         "healthy": {
           "type": "boolean"
+        },
+        "linked": {
+          "type": "object",
+          "description": "the tw link this machine uses; present only on a linked machine, and it selects that field set"
+        },
+        "whoami": {
+          "type": "object",
+          "description": "linked machine: mgmt's GET /v1/whoami answer as is (not the tw whoami result)"
+        },
+        "hosts": {
+          "type": "array",
+          "description": "linked machine: every host mgmt knows",
+          "items": {
+            "type": "object"
+          }
         },
         "mode": {
           "type": "string"
@@ -1032,6 +1047,50 @@
         },
         "tenants": {
           "type": "array",
+          "description": "each tenant this machine serves; on a linked machine each has deployments (the latest per workload)",
+          "items": {
+            "type": "object",
+            "properties": {
+              "deployments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/deployment"
+                }
+              }
+            }
+          }
+        },
+        "unsafeFlags": {
+          "type": "array",
+          "description": "host: the unsafe tw up flags saved in tw.json and re-applied on every tw up (insecure-shared-host, allow-experimental-flags, local-dev); [] when none",
+          "items": {
+            "type": "string"
+          }
+        },
+        "containers": {
+          "type": "array",
+          "description": "host: this host's containers (Go field names)",
+          "items": {
+            "type": "object"
+          }
+        },
+        "hostCapacity": {
+          "type": "array",
+          "description": "every host's container capacity and usage",
+          "items": {
+            "type": "object"
+          }
+        },
+        "containerReservations": {
+          "type": "array",
+          "description": "mgmt's container reservations",
+          "items": {
+            "type": "object"
+          }
+        },
+        "degradedStores": {
+          "type": "array",
+          "description": "stores whose replay stopped at a journal entry they can't apply; absent when none",
           "items": {
             "type": "object"
           }
@@ -1096,6 +1155,13 @@
         },
         "mode": {
           "type": "string"
+        },
+        "unsafeFlags": {
+          "type": "array",
+          "description": "the unsafe tw up flags saved in tw.json and re-applied on every later tw up (insecure-shared-host, allow-experimental-flags, local-dev); [] when none",
+          "items": {
+            "type": "string"
+          }
         },
         "timingsMs": {
           "$ref": "#/$defs/timings"

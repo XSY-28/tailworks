@@ -94,6 +94,9 @@ type upResult struct {
 	LingerHint string             `json:"lingerHint,omitempty"`
 	SleepHint  string             `json:"sleepHint,omitempty"`
 	Timings    map[string]float64 `json:"timingsMs"`
+
+	// UnsafeFlags: the saved unsafe tw up flags (up_unsafe.go).
+	UnsafeFlags []string `json:"unsafeFlags"`
 }
 
 func ms(d time.Duration) float64 { return float64(d.Microseconds()) / 1000 }
@@ -689,6 +692,7 @@ func cmdUp(args []string) error {
 		}
 	}
 	timings["total"] = ms(time.Since(t0))
+	res.UnsafeFlags = unsafeFlags(s.Cfg) // up_unsafe.go
 	emit(f, res, func() {
 		if hsMode {
 			fmt.Printf("tw up · all-in-one on this machine (%s) · Headscale %s, base domain %s (API key, mint mode headscale)\n", layoutLabel(single), *control, *tailnet)
@@ -717,6 +721,7 @@ func cmdUp(args []string) error {
 		} else {
 			fmt.Printf("✓ host     this machine (%s) · own node %s (%s) · %s\n", *hostID, mgmt.HostNodeName(*hostID), mgmt.HostTag, tierLine(s))
 		}
+		printSavedFlags(s.Cfg, s.Dir, 9, nil) // up_unsafe.go
 		fmt.Printf("✓ tenant   %s connected (tenant %s, mint mode %s) · control %s\n", *tailnet, tid, s.Cfg.mintMode(), *control)
 		switch {
 		case res.Applied && oauthMode:
@@ -1364,6 +1369,9 @@ type statusResult struct {
 	// "off" (up_workerinternet.go): what the running host reports, else
 	// tw.json's.
 	WorkerInternet string `json:"workerInternet"`
+
+	// UnsafeFlags: the saved unsafe tw up flags (up_unsafe.go).
+	UnsafeFlags []string `json:"unsafeFlags"`
 }
 
 func cmdStatus(args []string) error {
@@ -1449,57 +1457,11 @@ func cmdStatus(args []string) error {
 		r.DegradedStores = degradedStores(ctx, s.mgmt(), "")
 	}
 	r.Healthy = r.Supervisor && r.Mgmt && r.Host
-	emit(f, r, func() {
-		mark := func(ok bool) string {
-			if ok {
-				return "✓"
-			}
-			return "✗"
-		}
-		fmt.Printf("tw status · %s · tailnet %s · mint mode %s · transport %s\n", s.Dir, s.Cfg.Tailnet, r.MintMode, r.Transport)
-		fmt.Printf("%s supervisor  pid %d\n", mark(r.Supervisor), s.supervisorPID())
-		if r.MgmtNode != "" {
-			sch := "http"
-			if s.Cfg.HTTPS {
-				sch = "https"
-			}
-			fmt.Printf("%s node        %s (%s; API over the tailnet, WhoIs auth) · console %s://%s/ui/\n", mark(r.Mgmt), r.MgmtNode, mgmt.MgmtTag, sch, r.MgmtNode)
-		}
-		fmt.Printf("%s mgmt        tenant %s · mint queue %d · %.0f registrations/min · %s · %d pending device deletes\n", mark(r.Mgmt), r.TenantID, r.MintQueue, r.Rate, warmKeysLabel(r.WarmKeys), r.Pending)
-		where := "own node " + mgmt.HostNodeName(s.Cfg.HostID)
-		switch {
-		case s.Cfg.single():
-			where = "embedded in the mgmt process"
-		case s.Cfg.LocalDev:
-			where = "local-dev"
-		}
-		fmt.Printf("%s host        %s (%s) · heartbeat %.1fs ago · objects %v\n", mark(r.Host), s.Cfg.HostID, where, float64(r.HostAgeMS)/1000, r.Objects)
-		printWorkerInternet(s.Cfg.workerInternet(), hv.WorkerInternet, hv.WorkerInternetProblem) // up_workerinternet.go
-		if len(r.Tenants) > 1 {
-			for _, t := range r.Tenants {
-				fmt.Printf("  tenant      %s (%s) · mint queue %d · %.0f registrations/min · %s · objects %v\n", t.Tailnet, t.TenantID, t.MintQueue, t.Rate, warmKeysLabel(t.WarmKeys), t.Objects)
-			}
-		}
-		for _, w := range r.Workloads {
-			e := ""
-			if w.Error != "" {
-				e = " · " + tsafe(w.Error)
-			}
-			sb := ""
-			if w.Sandbox != "" {
-				sb = ", sandbox " + w.Sandbox
-			}
-			if w.Egress != "" {
-				sb += ", egress " + w.Egress
-				if w.Egress == hostd.EgressUnenforced {
-					sb += " (Node tier: the egress proxy is cooperative here, not a boundary)"
-				}
-			}
-			fmt.Printf("%s workload    %s %s (tenant %s, %s, epoch %d, %d requests%s)%s\n", mark(w.Status == "active"), w.Workload, w.Status, w.TenantID, w.DeploymentID, w.Epoch, w.Requests, sb, e)
-		}
-		printDegradedStores(r.DegradedStores)
-		printContainers(r.Capacity, r.Reservations, r.Containers, hv.ImageCacheBytes)
-	})
+	r.UnsafeFlags = unsafeFlags(s.Cfg)
+	if r.Workloads == nil {
+		r.Workloads = []hostd.WorkloadStatus{} // [], never null (docs/cli-json.md)
+	}
+	emit(f, r, func() { printHostStatus(s, r, hv, hostOK) }) // status_view.go
 	if !r.Healthy {
 		return fail("unhealthy", "tw is not healthy in "+s.Dir).withFix("tw logs --component supervisor", "tw up")
 	}
@@ -1516,13 +1478,9 @@ func remoteStatus(f *flags, s *state) error {
 		return err
 	}
 	hosts, _ := listAll[mgmt.Host](ctx, s.mgmt(), "/v1/hosts", 0)
-	type tenantView struct {
-		TenantRef
-		Deployments []mgmt.DeploymentView `json:"deployments"`
-	}
-	var tenants []tenantView
+	tenants := []remoteTenant{}
 	for _, t := range s.tenants() {
-		tv := tenantView{TenantRef: t}
+		tv := remoteTenant{TenantRef: t}
 		tv.Deployments, _ = listAll[mgmt.DeploymentView](ctx, s.mgmt(), "/v1/deployments?latest=true&tenant="+url.QueryEscape(t.TenantID), 0)
 		tenants = append(tenants, tv)
 	}
@@ -1534,41 +1492,12 @@ func remoteStatus(f *flags, s *state) error {
 	}
 	capv, resv := containerState(ctx, s.mgmt(), "")
 	degraded := degradedStores(ctx, s.mgmt(), "")
-	res := map[string]any{"linked": s.Link, "whoami": w, "hosts": hosts, "tenants": tenants, "healthy": live > 0,
+	res := map[string]any{"linked": s.Link, "stateDir": s.Dir, "whoami": w, "hosts": hosts, "tenants": tenants, "healthy": live > 0,
 		"hostCapacity": capv, "containerReservations": resv}
 	if len(degraded) > 0 {
 		res["degradedStores"] = degraded
 	}
-	emit(f, res, func() {
-		fmt.Printf("tw status · linked to %s · tailnet %s · you are %s (admin by WhoIs)\n", s.Link.Endpoint, w.Mgmt.Tailnet, w.Actor)
-		for _, h := range hosts {
-			mark := "✗"
-			if h.Live(time.Now()) {
-				mark = "✓"
-			}
-			fmt.Printf("%s host        %s · heartbeat %.1fs ago · %d live nodes · tiers %s\n", mark, h.ID, time.Since(time.UnixMilli(h.LastSeen)).Seconds(), h.LiveNodes, strings.Join(h.Tiers, ","))
-		}
-		for _, t := range tenants {
-			fmt.Printf("✓ tenant      %s (%s, mint mode %s)\n", t.Tailnet, t.TenantID, mintModeName(t.MintMode))
-			for _, d := range t.Deployments {
-				by := ""
-				if d.DeployedBy != "" {
-					by = " · by " + d.DeployedBy
-				}
-				if d.Error != "" {
-					by += " · " + tsafe(d.Error)
-				}
-				fmt.Printf("  workload    %s %s · http://%s/%s\n", tsafe(d.Workload), tsafe(d.Status), tsafe(d.Endpoint.MagicDNS), by)
-				for _, c := range d.Containers {
-					for _, p := range c.Pins {
-						fmt.Printf("    image     %s %s linux/%s → %s@%s\n", c.Class, p.Ref, p.Arch, p.Repository, p.Digest)
-					}
-				}
-			}
-		}
-		printDegradedStores(degraded)
-		printContainers(capv, resv, nil, 0)
-	})
+	emit(f, res, func() { printRemoteStatus(s, w, hosts, tenants, live, degraded, capv, resv) }) // status_view.go
 	if live == 0 {
 		return fail("unhealthy", "no live host at "+s.Link.Endpoint).withFix("tw status on the host")
 	}

@@ -25,6 +25,11 @@ tw deploy --json | jq -r .endpoint.magicDNS
 - A few outputs pass through Go structs without JSON names and so use Go
   field names: `status`'s `workloads[]`, `image push`, and `host vmcheck
   --container`. The schema documents them as they are.
+- `status` has one `$defs/status` for both places it runs. On the host it
+  reports the supervisor, mgmt, the host and its workloads; on a machine
+  set up with `tw link` it has `linked`, `whoami`, `hosts` and each
+  tenant's `deployments` instead. `stateDir` and `healthy` are always
+  there; check for `linked` to tell which set you got.
 
 ## Errors
 
