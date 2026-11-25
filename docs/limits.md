@@ -196,6 +196,16 @@ larger of the tenant's count and the nodes those hosts report (which
 covers every tenant they serve). Only an admin can read host capacity, so
 a linked developer machine gets the `maxObjects` warning alone.
 
+## Platform store reads while mgmt is slow
+
+KV, D1 and R2 (ADR-044 §8). Details: [kv.md](kv.md), [d1.md](d1.md).
+
+| Limit | Value | Configurable? | Source |
+|---|---|---|---|
+| A read's wait for mgmt before it serves the host's copy | 2 s | no | `hostd/gen/js/store.js:READ_WAIT_MS` |
+| Background catch-up while mgmt is unreachable (reads don't wait) | at most every 5 s | no | `hostd/gen/js/store.js:STALE_RETRY_MS` |
+| One journal read from mgmt (hostd) | 10 s | no | `hostd/stores.go:storeReadTimeout` |
+
 ## KV
 
 Details: [kv.md](kv.md#limits).

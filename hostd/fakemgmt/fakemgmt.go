@@ -119,6 +119,9 @@ type Server struct {
 	// storesDown: the store journal answers 503 (storesdown.go).
 	storesDown bool
 
+	// storeReadHold: hosts' journal reads hang (storeshold.go).
+	storeReadHold storeReadHold
+
 	// readyCalls: object ID -> ready PATCHes (readycalls.go).
 	readyCalls map[string]int
 	// leaseLostReady: the next N ready PATCHes fail with lease_lost (readycalls.go).

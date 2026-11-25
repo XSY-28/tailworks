@@ -60,7 +60,8 @@
    - Reads are strongly consistent: a read catches up with the journal
      first (a cheap call when nothing changed), as R2 is
      read-after-write consistent. If mgmt can't be reached, the store
-     serves its local index (fail static, ADR-044 §8).
+     serves its local index after waiting at most 2 s (fail static,
+     ADR-044 §8).
 
 2. **The backend is per host, set by the operator.** `tw-hostd
    -r2-backend fs|s3` (default `fs`):
@@ -171,7 +172,9 @@
   encrypted by tailworks. With `s3`, durability and encryption at rest are the
   backend's.
 - Writes need mgmt (as for every store); reads keep working from the
-  local index while mgmt is down, as long as the backend is up.
+  local index while mgmt is down, as long as the backend is up and the
+  workload runs: one with a fenceable Durable Object class stops after
+  30 s without mgmt (ADR-028 §3, ADR-044 §8).
 - Cloudflare's bucket-level features are not here: public buckets and
   custom domains, presigned URLs and the S3 API to the bucket itself,
   lifecycle rules, event notifications, storage classes (`storageClass`

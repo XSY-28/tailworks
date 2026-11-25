@@ -322,8 +322,10 @@ How it differs from Cloudflare:
 - **Consistency.** A workload reads its own writes. Writes by another
   writer (a replica, `tw kv key put`) are seen within 60 s, or the read's
   `cacheTtl`. Writes are linearizable (the journal orders them).
-- **Availability.** A write needs mgmt; reads keep working from the local
-  copy when mgmt is down.
+- **Availability.** A write needs mgmt. When mgmt is down, reads work
+  from the local copy after waiting at most 2 s for it, until the host
+  stops the workload: after 30 s if it has a Durable Object class not
+  marked `"fence": "never"`, else not at all.
 - **Values** are at most 2 MiB − 4 KiB (Cloudflare: 25 MiB).
 - `cacheStatus` is always `null`.
 

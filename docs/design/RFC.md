@@ -896,7 +896,7 @@ Measured on Headscale v0.29.7 (ADR-015 has the details):
 | Mode | Host crash (disk survives) | Host lost | netd crash/upgrade | Store down | Tailscale control down | tw-mgmt down |
 |---|---|---|---|---|---|---|
 | `tw dev` (macOS process tier) | no SLO | — | — | — | n/a (embedded) | n/a |
-| MVP single-host, `local` | RTO ≈ VM boot + 500/11 s ≈ 1 min (hot objects ≈ 5 s); **RPO 0** | RTO = lease expiry (15 s) + restore + rejoin, minutes; **RPO ≤ backup lag (target 5 s)** | RTO ≈ rejoin (≤ 1 min); RPO 0 | Placement frozen; running objects unaffected | Existing flows continue; creates fail (`bootstrap_failed`); no moves | Running objects unaffected; Tier-1 kill works; no creates or spawns |
+| MVP single-host, `local` | RTO ≈ VM boot + 500/11 s ≈ 1 min (hot objects ≈ 5 s); **RPO 0** | RTO = lease expiry (15 s) + restore + rejoin, minutes; **RPO ≤ backup lag (target 5 s)** | RTO ≈ rejoin (≤ 1 min); RPO 0 | Placement frozen; the heartbeat fails, so as for tw-mgmt down | Existing flows continue; creates fail (`bootstrap_failed`); no moves | Workloads with a fenceable DO class stop after `FenceAfter` (30 s, ADR-028); the rest keep serving, platform-store reads from the host's copy and writes failing (ADR-044 §8); Tier-1 kill works; no creates or spawns |
 | v1 cluster, `sync` (≥3 hosts) | RTO ≈ workerd lease (~20 s) + rejoin; RPO 0 | same; RPO 0 | same | v1 requires degrade-to-read-only upstream | same | same |
 
 Other targets:
