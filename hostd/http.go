@@ -80,6 +80,10 @@ func (h *Host) ingressHandler(t *tenant) http.Handler {
 			writeAPIError(w, &apiError{Code: "no_identity", Detail: "missing cf blob"})
 			return
 		}
+		if why := h.stallFenced(wl); why != "" { // stallfence.go (#501)
+			writeAPIError(w, &apiError{Code: "upstream_unavailable", Detail: why})
+			return
+		}
 		if h.serveApprovals(w, r, wl, blob) { // approvals.go: /_tw/approvals
 			return
 		}
