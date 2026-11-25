@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -165,5 +167,36 @@ func TestStoreName(t *testing.T) {
 	}
 	if got := bindingList(bs[:2]); got != "OAUTH_KV -> oauth, oauth2 -> CACHE" {
 		t.Errorf("bindingList: %q", got)
+	}
+}
+
+// TestStoreByBinding: tw r2 and tw d1 take a binding of the app in the
+// current directory for the store, resolved before the delete
+// confirmation, so it names the real store.
+func TestStoreByBinding(t *testing.T) {
+	app := writePlainApp(t)
+	os.WriteFile(filepath.Join(app, "wrangler.jsonc"), []byte(`{"name": "support", "main": "src/index.js", "compatibility_date": "2026-04-01",
+		"r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "photos" }],
+		"d1_databases": [{ "binding": "DB", "database_name": "notes" }]}`), 0o644)
+	t.Chdir(app)
+	oldT := confirmIsTerminal
+	t.Cleanup(func() { confirmIsTerminal = oldT })
+	confirmIsTerminal = func() bool { return false }
+	dir := t.TempDir() + "/never-created"
+	for _, c := range []struct {
+		run  func([]string) error
+		args []string
+		want string
+	}{
+		{cmdR2, []string{"bucket", "rm", "PHOTOS"}, "tw r2 bucket rm photos --workload support --yes"},
+		{cmdR2, []string{"bucket", "delete", "photos"}, "tw r2 bucket rm photos --workload support --yes"},
+		{cmdR2, []string{"bucket", "rm", "other"}, "tw r2 bucket rm other --workload support --yes"},
+		{cmdD1, []string{"rm", "DB"}, "tw d1 rm notes --yes"},
+		{cmdD1, []string{"delete", "notes"}, "tw d1 rm notes --yes"},
+	} {
+		err := c.run(append(c.args, "--state-dir", dir))
+		if cliCode(err) != "confirmation_required" || !strings.Contains(cliText(err), c.want) {
+			t.Errorf("%v: %v %s, want %q", c.args, err, cliText(err), c.want)
+		}
 	}
 }

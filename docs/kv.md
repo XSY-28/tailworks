@@ -62,7 +62,7 @@ another entry's binding has the same name; one the app doesn't declare is
 taken as a namespace name. `--binding` is the same as `--namespace`
 (wrangler's spelling). `--workload` picks another workload than the app in
 the current directory; then `--namespace` is required. Each flag belongs to
-its command: `tw kv key get k --ttl 60` is refused (`bad_request`), as in
+its command: `--ttl` on `key get` is refused (`bad_request`), as in
 wrangler. Every command takes `--json`. The same
 operations are on mgmt's REST API (`GET …/stores/kv/{name}/keys`,
 `GET|PUT|DELETE …/stores/kv/{name}/value?key=`; see
