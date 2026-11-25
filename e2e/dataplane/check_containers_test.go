@@ -404,7 +404,10 @@ func checkK4(in kInput) result {
 	onHost := map[string]string{}
 	for h, ob := range in.final {
 		for _, o := range ob.Objs {
-			if !live(o.Status) {
+			// Only a ready object has a node up. A host that lost the
+			// lease keeps its objects' records as pending (no node), to
+			// rejoin if the lease comes back.
+			if o.Status != "ready" {
 				continue
 			}
 			onHost[o.ID] = h
@@ -446,7 +449,7 @@ func checkK4(in kInput) result {
 			}
 		}
 	}
-	r.note("%d killed objects with a node, %d with a device delete at the fake API", killed, deleted)
+	r.note("%d killed objects with a node, %d with a device delete at the fake API so far (mgmt delays device deletes)", killed, deleted)
 	scanned := 0
 	for k, v := range in.scans {
 		code, body, _ := strings.Cut(v, " ")
