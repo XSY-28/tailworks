@@ -135,14 +135,12 @@ flags:
     	print what it would do and delete, and change nothing
   -force
     	go on when tailworks is set up here but tw-mgmt isn't running or healthy (the objects' devices are then left: delete them in the admin console)
-  -json
-    	machine-readable output
   -keep-state
     	keep the state dir's data (tw.json, mgmt/, hostd/, backups/, …): remove the install, service, devices and skills only
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -yes
-    	delete without asking (needed without a terminal, and with --json)
+    	skip the confirmation before deleting; needed without a terminal and with --json
+
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 ```
 
 ### tw link
