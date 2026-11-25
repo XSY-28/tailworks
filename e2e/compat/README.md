@@ -20,7 +20,7 @@ make e2e-compat-prepare                            # fetch + install + build onl
 make e2e-compat-dev                                # the upstream SDK examples under tw dev: no tailnet, no credentials
 ```
 
-It needs `npm` 11 or later (Node 24: with npm 10 the `ag-webmcp-react`
+The Python examples that need packages need [`uv`](https://docs.astral.sh/uv/) on `PATH`: their build step is the README's `uv run pywrangler sync`, which vendors them into `python_modules/` (it downloads a Python and the packages). It needs `npm` 11 or later (Node 24: with npm 10 the `ag-webmcp-react`
 example's dependencies don't install) and the tailnet-1 key file
 (`make e2e-compat` skips without it). `TW_COMPAT_PAR` deploys that many projects at once (default 3).
 The results go to `e2e/real/results/compat-<time>-<run>.json` (one record
@@ -66,6 +66,7 @@ warnings, workarounds). The run's log ends with the matrix as a table.
 | `mcph-*` | vercel/mcp-handler `examples/` | the same | mcp | see COMPAT.md |
 | `ai-*` | vercel/ai `examples/` | the same | vercel-ai | see COMPAT.md |
 | `py-query-d1` | python-workers-examples `query-d1` | Python Worker on D1, seeded with `tw d1 execute --file db_init.sql` (deployed run only) | python, d1 | pass |
+| `py-fastapi-todo`, `py-flask-todo` | python-workers-examples `fastapi-todo`, `flask-todo` | Todo-Backend on D1 (FastAPI, Flask), packages vendored by `uv run pywrangler sync`, seeded with `tw d1 execute` (deployed run only) | python, d1 | pass |
 | `py-*` | cloudflare/python-workers-examples | [the Python examples](#the-python-workers-examples-issue-292) | python, … | see COMPAT.md |
 
 "refused": `tw deploy` must refuse it with an error that names the
@@ -281,7 +282,11 @@ in the same way (`Section` `python-workers`, published in
 that need no vendored package run unmodified; the ones tailworks refuses
 (crons, Workflows, assets, an un-vendored `workers` SDK) must be refused with
 the message COMPAT.md names; the rest are in `pythonNotRun()` with the reason.
-`py-query-d1` needs its database seeded after the deploy, so only the deployed
-run (`make e2e-compat`) runs it. The first Python project of a run fetches the
+The examples that need packages build with `uv run pywrangler sync` (their
+README's step). `py-query-d1`, `py-fastapi-todo` and `py-flask-todo` need
+their database seeded after the deploy (`d1 execute --file db_init.sql`), so
+only the deployed run (`make e2e-compat`) runs them. Examples whose only
+post-deploy step is `d1 migrations apply` run under `tw dev` too, which
+applies migrations itself. The first Python project of a run fetches the
 pinned Pyodide bundles once into the per-user cache (`internal/pyodide`).
 

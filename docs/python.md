@@ -146,7 +146,13 @@ uv run pywrangler sync     # writes python_modules/ from pyproject.toml
 tw deploy
 ```
 
-Only pure-Python packages work. `tw deploy` warns when `pyproject.toml` or
+What pywrangler vendors works, compiled packages included: it resolves
+packages for Pyodide, so a package with native code ships as Pyodide's
+WebAssembly build of it (`pydantic-core` under FastAPI, and Pillow, are
+tested; [Cloudflare's examples](COMPAT.md#upstream-examples-python-workers)
+also run Django, Flask, httpx/requests and the Python MCP SDK). Nothing is
+fetched at run time, so a package that isn't vendored isn't there.
+`tw deploy` warns when `pyproject.toml` or
 `requirements.txt` declares packages and there is no `python_modules/`.
 
 From `compatibility_date` 2026-04-21 the `workers` SDK itself is a package
@@ -197,10 +203,16 @@ change and needs a new guest image.
 Not supported for Python Workers yet; `tw deploy` and `tw dev` refuse each
 one with a message naming it:
 
-- Workflows and containers;
+- Workflows and containers ([#424](https://github.com/rosskukulinski/tailworks/issues/424));
 - `--wrangler` and `--from-wrangler-out`: they bundle JavaScript.
 
+Not supported yet, without a refusal at deploy: **RPC into a Python
+Worker** over a service binding. Another workload's `env.SVC.fetch()` to a
+Python Worker works, but calling its methods (`await env.SVC.highlight(…)`)
+fails with "not a WorkerEntrypoint class"
+([#430](https://github.com/rosskukulinski/tailworks/issues/430)).
+
 Also different from Cloudflare: no memory snapshots, so every cold start
-loads Pyodide (about a second on a laptop); Pyodide's own non-pure-Python
-packages (`numpy` and the like) aren't available, because nothing is
-downloaded at run time.
+loads Pyodide (about a second on a laptop;
+[#426](https://github.com/rosskukulinski/tailworks/issues/426)); packages
+come only from `python_modules/`, never downloaded at run time.

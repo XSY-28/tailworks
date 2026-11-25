@@ -32,14 +32,27 @@ import (
 
 // devSelected is selected(), less what `tw dev` can't run the way the
 // deployed run does: without TW_COMPAT_ONLY only the published upstream
-// examples (Section), and never a project with post-deploy tw commands.
+// examples (Section), and never a project with post-deploy tw commands
+// other than D1 migrations (devRunsSetup).
+// devRunsSetup: tw dev can run p the way the deployed run does. True with
+// no post-deploy steps, or when they are all `d1 migrations apply`, which
+// tw dev does itself on every start (docs/d1.md#tw-dev).
+func devRunsSetup(p *Project) bool {
+	for _, s := range p.Setup {
+		if len(s) < 3 || s[0] != "d1" || s[1] != "migrations" || s[2] != "apply" {
+			return false
+		}
+	}
+	return true
+}
+
 func devSelected(t *testing.T) []*Project {
 	var out []*Project
 	for _, p := range selected(t) {
 		if os.Getenv("TW_COMPAT_ONLY") == "" && p.Section == "" {
 			continue
 		}
-		if len(p.Setup) > 0 {
+		if !devRunsSetup(p) {
 			continue
 		}
 		out = append(out, p)

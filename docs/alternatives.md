@@ -148,7 +148,7 @@ Until then, the storage story is single-host
   storage.
 - **You write Python Workers that need Cloudflare-only pieces.** Python
   Workers run ([python.md](python.md)), with Durable Objects, KV, R2 and D1
-  cron triggers, Queues, static assets and pure-Python packages vendored by
+  cron triggers, Queues, static assets and packages vendored by
   pywrangler, on both isolation tiers. Python Workflows don't yet, and
   Python Durable Objects have no tailnet node of their own.
 - **You are building a public SaaS.** tailworks identifies callers by
