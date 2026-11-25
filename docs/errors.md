@@ -74,7 +74,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 403 · hostd. **When:** a request named a service binding entrypoint or RPC method (the `Tailworks-Binding` header) but did not come from a tailworks workload or object of the target's tenant (its node has no certificate from the tenant), or it reached an object's node or a public route rather than a workload's entry node. Plain requests are not affected. **Fix:** call named entrypoints and RPC methods through a wrangler `services` binding of a workload in the same tenant ([wrangler.md](wrangler.md#service-bindings)); from anywhere else, call the target's default `fetch()` over the tailnet.
 
 ### bootstrap_failed
-502 · netd, mgmt, cli. **When:** an object's node could not be created: the control plane refused the mint (tag not owned, key invalid), the token exchange failed, or the node never joined. From `tw up`, mgmt's or the host's own node failed to join. From `tw deploy`, "the workload node for <workload> is killed": the workload's entry node was killed (`tw kill`) while it was deployed. **Fix:** check the tagOwners snippet (`policy_missing_tag_owners`), the credential (`tw doctor`), then `tw logs --component mgmt`. For a killed workload node: `tw undeploy <workload>`, then deploy it again (see `killed`).
+502 · netd, mgmt, cli. **When:** an object's node could not be created: the control plane refused the mint (tag not owned, key invalid), the token exchange failed, or the node never joined. From `tw up`, mgmt's or the host's own node failed to join. From `tw deploy`, "the workload node for <workload> is killed": the workload's entry node was killed (`tw kill`) while it was deployed. **Fix:** check the tagOwners snippet (`policy_missing_tag_owners`), the credential (`tw doctor`), then `tw logs --component mgmt`. From `tw up`, "… without the tag:tw-mgmt tag" means control dropped the tag because `tag:tw` doesn't own `tag:tw-mgmt`: add the tagOwners snippet, remove the half-joined node in the admin console (Machines), then `tw up` again. For a killed workload node: `tw undeploy <workload>`, then deploy it again (see `killed`).
 
 ### build_failed
 500 · cli. **When:** esbuild (workerd apps) or `create-tailworks build-node` (Node apps) could not bundle the app. **Fix:** the compiler output is in the detail; fix the source and re-run. `Could not resolve "@tailworks/…"` means tailworks' own JS packages are missing next to its bundler: in a source checkout run `make deps` (a plain `make build` doesn't install them), otherwise reinstall tailworks; `tw doctor` checks it.
@@ -122,7 +122,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 502 · netd (SDK). **When:** no direct path to the peer and no reachable DERP relay. **Fix:** check the host's outbound connectivity (UDP 3478, TCP 443 to DERP).
 
 ### device_delete_unavailable
-403 · mgmt, cli. **When:** a kill held (node closed, tombstoned) but the device could not be deleted: the tenant's OAuth client lacks the `devices:core` scope. **Fix:** generate an OAuth client with Auth Keys (write) and Devices › Core (write), overwrite the file, `tw up`; remove leftover devices in the admin console.
+403 · mgmt, cli. **When:** a kill held (node closed, tombstoned) but the device could not be deleted: the tenant's OAuth client lacks the `devices:core` scope. **Fix:** generate an OAuth client with Auth Keys (write) and Devices › Core (write), overwrite the file, `tw up`, then revoke the old client; remove leftover devices in the admin console (Machines).
 
 ### dial_failed
 502 · netd, hostd. **When:** the tailnet dial to a visible peer failed (connection refused, timeout), or the TLS handshake of `ctx.tailnet.connect(addr, { tls: "netd" })` failed. **Fix:** is the destination up and listening on that port, with a certificate for that name? Try again; check `tw logs`.
@@ -179,7 +179,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 503 · mgmt. **When:** mgmt in local-dev mode was started without a host token; it fails closed. **Fix:** `tw down`, then `tw up` (or `tw up --local-dev`) again.
 
 ### host_unavailable
-503 · cli. **When:** tw-hostd is not answering, or did not register with tw-mgmt after `tw up`. **Fix:** `tw logs --component hostd`.
+503 · cli. **When:** tw-hostd is not answering, or did not register with tw-mgmt after `tw up`. From a linked machine (`tw logs`), mgmt could not reach the workload's host on its push port. **Fix:** `tw logs --component hostd`. From a linked machine: check the policy grant `tag:tw-mgmt` → `tag:tw-host` `tcp:7474`, and that the host is up.
 
 ### hostd_unavailable
 503 · hostd, netd (SDK). **When:** the host agent could not be reached from the platform wrapper (hostapi socket down). **Fix:** `tw status`; the host is restarting or dead.
@@ -473,7 +473,7 @@ Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<bi
 412 · hostd, netd. **When:** a deploy of an app with tailworks.jsonc `"tailnet": {"https": true}` ([tailworks-jsonc.md](tailworks-jsonc.md#tailnethttps)), and the tailnet issues no HTTPS certificates to the workload's node: HTTPS Certificates (or MagicDNS) is off for the tailnet, or the control server is Headscale, which issues none. `tw deploy` shows it as the detail of `deploy_failed`; the deployment that was active keeps serving. **Fix:** turn on MagicDNS and HTTPS Certificates in the admin console (DNS page) and deploy again, or remove `tailnet.https` and serve `http://` only.
 
 ### tailnet_required
-400 · cli. **When:** the tailnet could not be determined from the OAuth client, or the Headscale profile was used without `--tailnet` (its `dns.base_domain`). Tailworks never bootstraps from the machine's own Tailscale login. **Fix:** `tw up --tailnet <name> …`.
+400 · cli. **When:** the tailnet could not be determined from the OAuth client (it can't list devices, and mgmt's node hasn't joined yet), or the Headscale profile was used without `--tailnet` (its `dns.base_domain`). Tailworks never bootstraps from the machine's own Tailscale login. **Fix:** `tw up --tailnet <name> …`.
 
 ### tenant_forbidden
 403 · mgmt, cli. **When:** a tenant admin (`github.com/rosskukulinski/tailworks/cap/tenant-admin`) asked for a tenant or action that no single grant value names, called an admin-only route (hosts, tenant settings, releases, upgrades, status), or holds the capability but every value is invalid (missing `tenants` or `actions`, a wildcard, an unknown action or field). **Fix:** add the printed grant (`snippet`) to the tailnet policy, or ask an admin; `tw whoami` lists what your values allow and why any grant nothing ([teams.md](teams.md)).
