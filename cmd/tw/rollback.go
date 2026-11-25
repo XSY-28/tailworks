@@ -41,9 +41,17 @@ func cmdRollback(args []string) error {
 	hostF := f.String("host", "", "pin the rolled-back workload to this host (as tw deploy --host)")
 	replace := f.Bool("replace", false, "re-place the workload (as tw deploy --replace); by default it stays on its host, with its Durable Object storage")
 	forceTakeover := f.Bool("force-takeover", false, "as tw deploy --force-takeover")
-	allowMissing := f.Bool("allow-missing-grants", false, "roll back even if the current policy lacks grants the old bundle needs")
+	allowMissing := f.Bool("allow-missing-grants", false, "roll back even if the preflight finds policy lines the old bundle needs missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)")
 	noWait := f.Bool("no-wait", false, "return once mgmt accepted the rollback")
 	wait := f.Duration("wait", 3*time.Minute, "how long to wait for ready")
+	// --help lists these under Advanced (helpflags.go).
+	f.group(advancedFlags,
+		"host",
+		"replace",
+		"force-takeover",
+		"allow-missing-grants",
+		"wait",
+	)
 	pos, err := f.parse(args)
 	if err != nil {
 		return err

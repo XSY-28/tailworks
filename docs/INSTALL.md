@@ -55,11 +55,12 @@ How it differs from a tarball install:
 - **State** is where it always is: `~/.tailworks` (or `--state-dir`). Only
   the binaries live in npm's directory, so switching between npm and the
   tarball keeps your apps, keys and stores.
-- **Upgrade with npm:** `tw down && npm install -g tailworks@latest && tw up`.
-  `tw upgrade` refuses (`npm_install`), because npm owns the directory.
-  `tw version --check` prints the npm command. npm gives you no backup or
-  automatic rollback, so take a
-  [`tw backup`](#back-up-a-running-install-tw-backup) first. See
+- **Upgrade with npm:** `tw backup && tw down && npm install -g tailworks@latest && tw up`.
+  `tw upgrade` refuses (`npm_install`), because npm owns the directory;
+  `tw upgrade --plan`, `tw version --check` and `tw doctor` print the npm
+  command. npm gives you no signature check or automatic rollback, so the
+  command takes a [`tw backup`](#back-up-a-running-install-tw-backup)
+  first. See
   [upgrading.md](upgrading.md#installed-with-npm).
 - **The login service** (`tw up --service`, on by default) needs a global
   install, which has a stable path. From `npx`, `tw up` runs in the
@@ -194,7 +195,10 @@ tw completion fish > ~/.config/fish/completions/tw.fish          # fish
 ```
 
 `tw version --check` says whether a newer release is out and whether the
-running `tw up` needs a restart. An interactive tailworks also prints a one-line
+running `tw up` needs a restart. Its upgrade command matches how this `tw`
+was installed, as `tw doctor`'s install row and `tw upgrade --plan` do:
+`tw upgrade` for an `install.sh` prefix, the npm or `npx` command for npm,
+`git pull && make build` for a source checkout, and `get.sh` otherwise. An interactive tailworks also prints a one-line
 notice when a newer release is out, at most once a day (never after `tw init`
 or `tw dev`). `CI=1`, `--json` or `TW_NO_UPDATE_CHECK=1` turns it off. What
 it sends: [security-model.md](security-model.md#telemetry-and-the-update-check).
@@ -616,7 +620,7 @@ tw dev                      # ready on http://127.0.0.1:8787 · edits reload · 
 tw dev --once --json        # start, make one request, print it, exit (a smoke test)
 ```
 
-`tw dev --help` lists the flags (`--port`, `--once`, `--workerd`, `-v`).
+`tw dev --help` lists the flags (`--port`, `--once`, `--test-scheduled`, and under Advanced `--workerd`, which defaults to `$TW_WORKERD`, and `-v`).
 The `mcp` template serves on `/mcp` (its `/` answers 404); `tw dev` says
 so and its smoke test sends an MCP `initialize` there. Not in dev yet: a
 policy evaluator. Every dev node sees every other and gets the same test

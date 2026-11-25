@@ -533,7 +533,7 @@ func cmdLogs(args []string) error {
 	n := f.Int("n", 50, "lines")
 	follow := f.Bool("f", false, "follow")
 	tenantF := tenantFlag(f)
-	hostF := f.String("host", "", "linked machine: only the replica on this host")
+	hostF := f.String("host", "", "a replicated workload, from a linked machine: only its replica on this host")
 	lopts := logsFlags(f) // logs_records.go
 	pos, err := f.parse(args)
 	if err != nil {
