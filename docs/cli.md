@@ -148,107 +148,6 @@ flags:
     	forget the linked mgmt
 ```
 
-### tw tenant
-
-serve, list, update or remove tenants
-
-```text
-tw tenant: serve another tenant (its own tailnet) from this host; list, update (PATCH) or remove tenants
-
-usage: tw tenant add <tailnet> --oauth-client-file <file> [--apply-policy [--yes]] [--owner-tag <tag> --name-prefix <p>] | tenant ls | tenant set <tenant> [--owner-tag <tag>] [--name-prefix <p>] [--max-objects N] [--registrations-per-minute N] [--pool P] [--tier T] [--oauth-client-file FILE] [--max-containers N] [--max-container-mem-mib N] [--max-container-vcpu F] [--max-store-bytes SIZE] [--max-queue-bytes SIZE] [--max-stores N] [--public-ingress allow|deny] | tenant rm <tenant> [--force]
-  (every command takes --state-dir, default ~/.tailworks, and --json)
-```
-
-#### tw tenant add
-
-```text
-flags:
-  -api-key-file string
-    	--control=headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied
-  -apply-policy
-    	write the base policy snippet to the tailnet policy instead of printing it (additive, validated first, written with If-Match); shows the lines and asks first
-  -control string
-    	control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; the tailnet argument is its dns.base_domain) (default "tailscale")
-  -control-url string
-    	coordination server for this tailnet's nodes (default "https://controlplane.tailscale.com")
-  -json
-    	machine-readable output
-  -name-prefix string
-    	with --owner-tag: goes in front of every tailnet name tw makes for this tenant (up to 11 of a-z, 0-9, -)
-  -oauth-client-file string
-    	this tailnet's OAuth client (mint mode "oauth"): 0600 file with TS_OAUTH_CLIENT_ID=… and TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:tw); read at use, never copied
-  -owner-tag string
-    	another team's tenant on a tailnet that already has one (docs/teams.md): the tag that owns its tags, e.g. tag:tw-t-payments; its --oauth-client-file must be scoped to it
-  -registrations-per-minute int
-    	this tenant's node registration throttle (default 200/min)
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -yes
-    	with --apply-policy: write the policy without asking (needed without a terminal, and with --json)
-```
-
-#### tw tenant ls
-
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
-
-#### tw tenant rm
-
-```text
-flags:
-  -force
-    	kill every live object (cascade) and purge before deleting
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
-```
-
-#### tw tenant set
-
-```text
-flags:
-  -json
-    	machine-readable output
-  -max-container-mem-mib int
-    	containers: total guest memory quota (MiB)
-  -max-container-vcpu float
-    	containers: total vCPU quota (fractional, e.g. 2.5)
-  -max-containers int
-    	containers (ADR-032): running containers quota
-  -max-objects int
-    	object quota
-  -max-queue-bytes string
-    	storage quota: bytes of all the tenant's queued messages together, e.g. 2GiB ("-" or 0 = unlimited, the default)
-  -max-store-bytes string
-    	storage quota: bytes of all the tenant's KV, D1 and R2 journals together, e.g. 20GiB ("-" or 0 = unlimited, the default)
-  -max-stores string
-    	storage quota: how many KV namespaces, D1 databases and R2 buckets the tenant may have ("-" or 0 = unlimited, the default)
-  -name-prefix string
-    	name prefix for the tenant's tailnet names; only before its first deploy ("-" = none)
-  -oauth-client-file string
-    	switch the tenant to mint mode oauth with this 0600 OAuth client file (on this host; read at use, never copied)
-  -owner-tag string
-    	move the tenant to its own owner tag, e.g. tag:tw-t-ops ("-" = back to tag:tw); pair it with --oauth-client-file scoped to that tag (docs/teams.md)
-  -pool string
-    	host pool the tenant's deployments are placed on ("-" = any host)
-  -public-ingress string
-    	public (Funnel) ingress gate for tailworks.jsonc "public" routes: allow | deny (ADR-029)
-  -registrations-per-minute int
-    	node registration throttle
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tier string
-    	default isolation tier: process | microvm ("-" = unset)
-```
-
 ### tw doctor
 
 check this machine can run tw
@@ -264,125 +163,6 @@ flags:
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -v	print every check with its full detail (default: problems, then one line per group)
-```
-
-### tw host
-
-add, list, remove or set up hosts
-
-```text
-tw host: add a remote host (mgmt mints its single-use tag:tw-host join key), list or remove hosts; cordon (no new placements), uncordon, or drain one (move its workloads elsewhere); install the microVM tier's helper; check a microVM
-
-usage: tw host add <host-id> [--tenant <tailnet>] [--out <file>] | host ls | host rm <host-id> [--drain] | host cordon <host-id> | host uncordon <host-id> | host drain <host-id> [--allow-local-state-loss] [--dry-run] | host setup --microvm [--user <name>] [--hugepages N] | host setup --undo   (Linux, with sudo, once) | host vmcheck <workload> [--keyscan] [--container <Class>/<name>]
-  (every command takes --state-dir, default ~/.tailworks, and --json)
-```
-
-#### tw host add
-
-```text
-flags:
-  -json
-    	machine-readable output
-  -out string
-    	write the join key (TS_AUTHKEY=…) and the one-time registration secret (TW_REGISTRATION_SECRET=…) here (default ./<host-id>.join.env)
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -tenant string
-    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
-```
-
-#### tw host cordon
-
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
-
-#### tw host drain
-
-```text
-flags:
-  -allow-local-state-loss
-    	also move workloads with Durable Objects (their storage stays on this host; they start empty elsewhere)
-  -dry-run
-    	show what would move; change nothing
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
-
-#### tw host ls
-
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
-
-#### tw host rm
-
-```text
-flags:
-  -drain
-    	kill the host's objects and release its leases first
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -yes
-    	delete without asking (needed without a terminal, and with --json)
-```
-
-#### tw host setup
-
-```text
-flags:
-  -firecracker string
-    	firecracker binary to install (default: the release's share/tailworks/vm/firecracker)
-  -hugepages int
-    	2 MiB huge pages to reserve for guest RAM (default: enough for 4 VMs, at most a quarter of RAM; 0 = none) (default -1)
-  -jailer string
-    	jailer binary to install (default: the release's share/tailworks/vm/jailer)
-  -json
-    	machine-readable output
-  -microvm
-    	install the microVM tier's privileged helper (tw-vmhelper) for --user
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -undo
-    	remove everything 'tw host setup --microvm' installed
-  -user string
-    	the user tailworks runs as (default: $SUDO_USER)
-```
-
-#### tw host uncordon
-
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
-
-#### tw host vmcheck
-
-```text
-flags:
-  -container string
-    	scan this object's container guest (<Class>/<name>; implies --keyscan)
-  -json
-    	machine-readable output
-  -keyscan
-    	also scan the guest's disks, files and RAM for key material
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
 ```
 
 ## Develop
@@ -522,6 +302,8 @@ flags:
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
 ```
+
+## Coding agents
 
 ### tw mcp
 
@@ -913,63 +695,6 @@ flags:
     	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
   -workload string
     	workload (default: the app in the current directory, as tw deploy names it)
-```
-
-### tw image
-
-public base images and operator images
-
-```text
-tw image: container images (ADR-032): mark public base images shared across tenants (mirrored now), push operator images (the arm64 alias targets) to tailworks' registry
-
-usage: tw image public add <ref> [--arch amd64,arm64] | image public ls | image public rm <id> | image push <oci-layout|docker-save.tar> tw.local/<name>:<tag>
-  (every command takes --state-dir, default ~/.tailworks, and --json)
-```
-
-#### tw image public add
-
-```text
-flags:
-  -arch string
-    	comma-separated arches to mark (default: every linux amd64/arm64 image the ref has)
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
-
-#### tw image public ls
-
-```text
-flags:
-  -arch string
-    	comma-separated arches to mark (default: every linux amd64/arm64 image the ref has)
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
-
-#### tw image public rm
-
-```text
-flags:
-  -arch string
-    	comma-separated arches to mark (default: every linux amd64/arm64 image the ref has)
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
-
-#### tw image push
-
-```text
-flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
 ```
 
 ## Data
@@ -2114,6 +1839,59 @@ flags:
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
 ```
 
+### tw image
+
+public base images and operator images
+
+```text
+tw image: container images (ADR-032): mark public base images shared across tenants (mirrored now), push operator images (the arm64 alias targets) to tailworks' registry
+
+usage: tw image public add <ref> [--arch amd64,arm64] | image public ls | image public rm <id> | image push <oci-layout|docker-save.tar> tw.local/<name>:<tag>
+  (every command takes --state-dir, default ~/.tailworks, and --json)
+```
+
+#### tw image public add
+
+```text
+flags:
+  -arch string
+    	comma-separated arches to mark (default: every linux amd64/arm64 image the ref has)
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+```
+
+#### tw image public ls
+
+```text
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+```
+
+#### tw image public rm
+
+```text
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+```
+
+#### tw image push
+
+```text
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+```
+
 ### tw backup
 
 back up mgmt's store, custody and DO storage, online
@@ -2150,44 +1928,6 @@ flags:
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -yes
     	delete without asking (needed without a terminal, and with --json)
-```
-
-### tw custody
-
-move file custody to setec (tailworks stopped)
-
-```text
-tw custody: move this install's secrets and store keys from file custody to setec, so it can run several mgmt replicas: every entry is mapped to its name (refused if one can't be), copied, read back, and tw.json switched; run with tailworks stopped
-
-usage: tw custody migrate --to setec --setec-url <url> [--dry-run]
-
-flags:
-  -dry-run
-    	migrate: map every entry and check setec, but write nothing
-  -json
-    	machine-readable output
-  -setec-url string
-    	migrate --to setec: the setec server URL (what tw up --setec-url would take)
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -to string
-    	migrate: the custody to move to (setec)
-```
-
-#### tw custody migrate
-
-```text
-flags:
-  -dry-run
-    	migrate: map every entry and check setec, but write nothing
-  -json
-    	machine-readable output
-  -setec-url string
-    	migrate --to setec: the setec server URL (what tw up --setec-url would take)
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-  -to string
-    	migrate: the custody to move to (setec)
 ```
 
 ### tw upgrade
@@ -2272,9 +2012,289 @@ flags:
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
 ```
 
+### tw version
+
+print the version; --check for a newer release
+
+```text
+tw version: print the tw version (and the pinned workerd / built-in esbuild)
+
+usage: tw version
+
+flags:
+  -check
+    	compare with the latest release, print how to upgrade, and say whether the running tw up needs a restart
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+```
+
+## Scale out
+
+### tw tenant
+
+serve, list, update or remove tenants
+
+```text
+tw tenant: serve another tenant (its own tailnet) from this host; list, update (PATCH) or remove tenants
+
+usage: tw tenant add <tailnet> --oauth-client-file <file> [--apply-policy [--yes]] [--owner-tag <tag> --name-prefix <p>] | tenant ls | tenant set <tenant> [--owner-tag <tag>] [--name-prefix <p>] [--max-objects N] [--registrations-per-minute N] [--pool P] [--tier T] [--oauth-client-file FILE] [--max-containers N] [--max-container-mem-mib N] [--max-container-vcpu F] [--max-store-bytes SIZE] [--max-queue-bytes SIZE] [--max-stores N] [--public-ingress allow|deny] | tenant rm <tenant> [--force]
+  (every command takes --state-dir, default ~/.tailworks, and --json)
+```
+
+#### tw tenant add
+
+```text
+flags:
+  -api-key-file string
+    	--control=headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied
+  -apply-policy
+    	write the base policy snippet to the tailnet policy instead of printing it (additive, validated first, written with If-Match); shows the lines and asks first
+  -control string
+    	control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; the tailnet argument is its dns.base_domain) (default "tailscale")
+  -control-url string
+    	coordination server for this tailnet's nodes (default "https://controlplane.tailscale.com")
+  -json
+    	machine-readable output
+  -name-prefix string
+    	with --owner-tag: goes in front of every tailnet name tw makes for this tenant (up to 11 of a-z, 0-9, -)
+  -oauth-client-file string
+    	this tailnet's OAuth client (mint mode "oauth"): 0600 file with TS_OAUTH_CLIENT_ID=… and TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:tw); read at use, never copied
+  -owner-tag string
+    	another team's tenant on a tailnet that already has one (docs/teams.md): the tag that owns its tags, e.g. tag:tw-t-payments; its --oauth-client-file must be scoped to it
+  -registrations-per-minute int
+    	this tenant's node registration throttle (default 200/min)
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -yes
+    	with --apply-policy: write the policy without asking (needed without a terminal, and with --json)
+```
+
+#### tw tenant ls
+
+```text
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+```
+
+#### tw tenant rm
+
+```text
+flags:
+  -force
+    	kill every live object (cascade) and purge before deleting
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
+```
+
+#### tw tenant set
+
+```text
+flags:
+  -json
+    	machine-readable output
+  -max-container-mem-mib int
+    	containers: total guest memory quota (MiB)
+  -max-container-vcpu float
+    	containers: total vCPU quota (fractional, e.g. 2.5)
+  -max-containers int
+    	containers (ADR-032): running containers quota
+  -max-objects int
+    	object quota
+  -max-queue-bytes string
+    	storage quota: bytes of all the tenant's queued messages together, e.g. 2GiB ("-" or 0 = unlimited, the default)
+  -max-store-bytes string
+    	storage quota: bytes of all the tenant's KV, D1 and R2 journals together, e.g. 20GiB ("-" or 0 = unlimited, the default)
+  -max-stores string
+    	storage quota: how many KV namespaces, D1 databases and R2 buckets the tenant may have ("-" or 0 = unlimited, the default)
+  -name-prefix string
+    	name prefix for the tenant's tailnet names; only before its first deploy ("-" = none)
+  -oauth-client-file string
+    	switch the tenant to mint mode oauth with this 0600 OAuth client file (on this host; read at use, never copied)
+  -owner-tag string
+    	move the tenant to its own owner tag, e.g. tag:tw-t-ops ("-" = back to tag:tw); pair it with --oauth-client-file scoped to that tag (docs/teams.md)
+  -pool string
+    	host pool the tenant's deployments are placed on ("-" = any host)
+  -public-ingress string
+    	public (Funnel) ingress gate for tailworks.jsonc "public" routes: allow | deny (ADR-029)
+  -registrations-per-minute int
+    	node registration throttle
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -tier string
+    	default isolation tier: process | microvm ("-" = unset)
+```
+
+### tw host
+
+add, list, remove or set up hosts
+
+```text
+tw host: add a remote host (mgmt mints its single-use tag:tw-host join key), list or remove hosts; cordon (no new placements), uncordon, or drain one (move its workloads elsewhere); install the microVM tier's helper; check a microVM
+
+usage: tw host add <host-id> [--tenant <tailnet>] [--out <file>] | host ls | host rm <host-id> [--drain] | host cordon <host-id> | host uncordon <host-id> | host drain <host-id> [--allow-local-state-loss] [--dry-run] | host setup --microvm [--user <name>] [--hugepages N] | host setup --undo   (Linux, with sudo, once) | host vmcheck <workload> [--keyscan] [--container <Class>/<name>]
+  (every command takes --state-dir, default ~/.tailworks, and --json)
+```
+
+#### tw host add
+
+```text
+flags:
+  -json
+    	machine-readable output
+  -out string
+    	write the join key (TS_AUTHKEY=…) and the one-time registration secret (TW_REGISTRATION_SECRET=…) here (default ./<host-id>.join.env)
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -tenant string
+    	tenant: its tailnet, tenant ID or tailnet label (default: the 'tw up' tenant)
+```
+
+#### tw host cordon
+
+```text
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+```
+
+#### tw host drain
+
+```text
+flags:
+  -allow-local-state-loss
+    	also move workloads with Durable Objects (their storage stays on this host; they start empty elsewhere)
+  -dry-run
+    	show what would move; change nothing
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+```
+
+#### tw host ls
+
+```text
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+```
+
+#### tw host rm
+
+```text
+flags:
+  -drain
+    	kill the host's objects and release its leases first
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -yes
+    	delete without asking (needed without a terminal, and with --json)
+```
+
+#### tw host setup
+
+```text
+flags:
+  -firecracker string
+    	firecracker binary to install (default: the release's share/tailworks/vm/firecracker)
+  -hugepages int
+    	2 MiB huge pages to reserve for guest RAM (default: enough for 4 VMs, at most a quarter of RAM; 0 = none) (default -1)
+  -jailer string
+    	jailer binary to install (default: the release's share/tailworks/vm/jailer)
+  -json
+    	machine-readable output
+  -microvm
+    	install the microVM tier's privileged helper (tw-vmhelper) for --user
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -undo
+    	remove everything 'tw host setup --microvm' installed
+  -user string
+    	the user tailworks runs as (default: $SUDO_USER)
+```
+
+#### tw host uncordon
+
+```text
+flags:
+  -json
+    	machine-readable output
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+```
+
+#### tw host vmcheck
+
+```text
+flags:
+  -container string
+    	scan this object's container guest (<Class>/<name>; implies --keyscan)
+  -json
+    	machine-readable output
+  -keyscan
+    	also scan the guest's disks, files and RAM for key material
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+```
+
+## Advanced
+
+### tw custody
+
+move secrets to setec to run several mgmt replicas
+
+```text
+tw custody: move this install's secrets and store keys from file custody to setec, so it can run several mgmt replicas: every entry is mapped to its name (refused if one can't be), copied, read back, and tw.json switched; run with tailworks stopped
+
+usage: tw custody migrate --to setec --setec-url <url> [--dry-run]
+
+flags:
+  -dry-run
+    	migrate: map every entry and check setec, but write nothing
+  -json
+    	machine-readable output
+  -setec-url string
+    	migrate --to setec: the setec server URL (what tw up --setec-url would take)
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -to string
+    	migrate: the custody to move to (setec)
+```
+
+#### tw custody migrate
+
+```text
+flags:
+  -dry-run
+    	migrate: map every entry and check setec, but write nothing
+  -json
+    	machine-readable output
+  -setec-url string
+    	migrate --to setec: the setec server URL (what tw up --setec-url would take)
+  -state-dir string
+    	state directory (default $TW_STATE_DIR or ~/.tailworks)
+  -to string
+    	migrate: the custody to move to (setec)
+```
+
 ### tw release
 
-tw-mgmt's release catalog
+release catalog for fleet hosts that upgrade themselves
 
 ```text
 tw release: tw-mgmt's release catalog: list known releases, import a release (its notes and tarball, for hosts that upgrade themselves)
@@ -2302,24 +2322,6 @@ flags:
 
 ```text
 flags:
-  -json
-    	machine-readable output
-  -state-dir string
-    	state directory (default $TW_STATE_DIR or ~/.tailworks)
-```
-
-### tw version
-
-print the version; --check for a newer release
-
-```text
-tw version: print the tw version (and the pinned workerd / built-in esbuild)
-
-usage: tw version
-
-flags:
-  -check
-    	compare with the latest release, print how to upgrade, and say whether the running tw up needs a restart
   -json
     	machine-readable output
   -state-dir string
