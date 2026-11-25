@@ -3,10 +3,12 @@ package gen_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rosskukulinski/tailworks/hostd/bundle"
 	"github.com/rosskukulinski/tailworks/hostd/gen"
@@ -173,4 +175,81 @@ func generate(t *testing.T, app *bundle.App) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+const pyCronEntry = `from workers import WorkerEntrypoint, Response, DurableObject
+import json
+
+
+class Runs(DurableObject):
+    async def add(self, cron):
+        runs = json.loads(await self.ctx.storage.get("runs") or "[]")
+        runs.append(cron)
+        await self.ctx.storage.put("runs", json.dumps(runs))
+
+    async def runs(self):
+        return await self.ctx.storage.get("runs") or "[]"
+
+
+class Default(WorkerEntrypoint):
+    async def scheduled(self, controller, env, ctx):
+        if controller.cron == "0 0 1 1 *":
+            raise ValueError("boom")
+        if controller.cron == "0 0 2 1 *":
+            controller.noRetry()
+            raise ValueError("no retry")
+        await self.env.RUNS.getByName("r").add(controller.cron + "@" + str(int(controller.scheduledTime)))
+
+    async def fetch(self, request):
+        return Response(json.dumps({"runs": json.loads(await self.env.RUNS.getByName("r").runs())}))
+`
+
+// TestPythonCron: a cron run reaches the Python default export's
+// scheduled() through the front, with the controller's cron and
+// scheduledTime; an exception is reported, and noRetry() carries back.
+func TestPythonCron(t *testing.T) {
+	in := startFiles(t, map[string][]byte{
+		"wrangler.jsonc": []byte(`{"name": "pycron", "main": "entry.py", "compatibility_date": "2026-04-01",
+  "compatibility_flags": ["python_workers"],
+  "triggers": {"crons": ["*/5 * * * *", "0 0 1 1 *", "0 0 2 1 *"]},
+  "durable_objects": {"bindings": [{"name": "RUNS", "class_name": "Runs"}]}}`),
+		"entry.py": []byte(pyCronEntry),
+	})
+	at := time.Date(2026, 11, 13, 10, 5, 0, 0, time.UTC)
+	if code, _, r := in.get("/", sched("*/5 * * * *", at)); code != 200 || r["outcome"] != "ok" {
+		t.Fatalf("run: %d %v", code, r)
+	}
+	if code, _, r := in.get("/", wl); code != 200 || jsonOf(r["runs"]) != jsonOf([]string{fmt.Sprintf("*/5 * * * *@%d", at.UnixMilli())}) {
+		t.Fatalf("runs: %d %v", code, r)
+	}
+	if code, _, r := in.get("/", sched("0 0 1 1 *", at)); code != 200 || r["outcome"] != "exception" || r["noRetry"] != false {
+		t.Fatalf("exception: %d %v", code, r)
+	}
+	if code, _, r := in.get("/", sched("0 0 2 1 *", at)); code != 200 || r["outcome"] != "exception" || r["noRetry"] != true {
+		t.Fatalf("noRetry: %d %v", code, r)
+	}
+}
+
+// TestPythonAssets: static assets in front of a Python Worker, and the
+// Python code's env.ASSETS binding.
+func TestPythonAssets(t *testing.T) {
+	in := startFiles(t, map[string][]byte{
+		"wrangler.jsonc": []byte(`{"name": "pyassets", "main": "entry.py", "compatibility_date": "2026-04-01",
+  "compatibility_flags": ["python_workers"], "assets": {"directory": "public", "binding": "ASSETS"}}`),
+		"entry.py": []byte(`from workers import WorkerEntrypoint, Response
+
+
+class Default(WorkerEntrypoint):
+    async def fetch(self, request):
+        if "/via-binding" in request.url:
+            return await self.env.ASSETS.fetch(request.url.replace("/via-binding", ""))
+        return Response("from python")
+`),
+		bundle.AssetsPrefix + "hello.txt": []byte("static hello"),
+	})
+	for path, want := range map[string]string{"/hello.txt": "static hello", "/nope": "from python", "/via-binding/hello.txt": "static hello"} {
+		if code, _, r := in.getRaw(path, wl); code != 200 || string(r) != want {
+			t.Errorf("%s: %d %q, want %q", path, code, r, want)
+		}
+	}
 }

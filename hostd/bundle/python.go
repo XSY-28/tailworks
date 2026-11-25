@@ -68,16 +68,10 @@ func finishPython(a *App) error {
 		return fmt.Errorf("bundle: %s: not supported for Python Workers yet (docs/python.md#limits)", what)
 	}
 	switch {
-	case len(a.Crons) > 0:
-		return unsupported("triggers.crons")
-	case !a.Queues.Empty():
-		return unsupported("queues")
 	case len(a.Workflows) > 0:
 		return unsupported("workflows")
 	case len(a.Containers) > 0:
 		return unsupported("containers")
-	case a.Assets != nil:
-		return unsupported("assets")
 	}
 	// Python Durable Objects are internal: plain-DO mode, no node of their
 	// own (the per-object wrapper is JavaScript; hostd/gen/python.go).

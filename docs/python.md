@@ -66,6 +66,34 @@ class Default(WorkerEntrypoint):
 `objectId` and `traceId`. It reads `request.js_object.cf.tailscale.caller`;
 copy the file into your own project to use it there.
 
+## Cron triggers, Queues and static assets
+
+They work as for a JavaScript Worker, declared the same way in
+`wrangler.jsonc`:
+
+- **Cron triggers** (`triggers.crons`, [cron-triggers.md](cron-triggers.md))
+  run the default export's `scheduled(self, controller, env, ctx)`.
+  `controller.cron`, `controller.scheduledTime` and `controller.noRetry()`
+  work; an exception marks the run failed.
+- **Queues** ([queues.md](queues.md)): a producer binding's `send()` and
+  `sendBatch()`, and a consumer runs the default export's
+  `queue(self, batch, env, ctx)`. Per-message `ack()` and `retry()`, and
+  `ackAll()` / `retryAll()` on the batch, are applied as on Cloudflare; an
+  exception retries the messages it didn't ack.
+- **Static assets** (`assets`, [wrangler.md](wrangler.md#assets)) are served
+  in front of the Worker, with `env.ASSETS.fetch()` in Python code.
+
+```python
+class Default(WorkerEntrypoint):
+    async def scheduled(self, controller, env, ctx):
+        print("cron", controller.cron)
+
+    async def queue(self, batch, env, ctx):
+        for m in batch.messages:
+            print(m.body)
+            m.ack()
+```
+
 ## Durable Objects
 
 A Python `DurableObject` class works with its storage (`self.ctx.storage`,
@@ -158,8 +186,7 @@ size and SHA-256 to `Bundles`.
 Not supported for Python Workers yet; `tw deploy` and `tw dev` refuse each
 one with a message naming it:
 
-- cron triggers (`triggers.crons`), Queues, Workflows, static assets and
-  containers;
+- Workflows and containers;
 - the microVM tier (`"tier": "microvm"`, or a tenant whose default is
   microVM): the guest image has no Pyodide bundles yet. The deployment is
   refused (`tier_unavailable`), not run in the process tier instead;

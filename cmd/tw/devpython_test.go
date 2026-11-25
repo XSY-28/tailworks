@@ -92,8 +92,8 @@ class Default(WorkerEntrypoint):
 			"wrangler.jsonc": wrangler("nosdk", "2026-11-01", ""),
 			"src/entry.py":   "from workers import WorkerEntrypoint\n",
 		}},
-		{"cron", "triggers.crons: not supported for Python Workers", map[string]string{
-			"wrangler.jsonc": wrangler("cron", "2026-04-01", `, "triggers": {"crons": ["* * * * *"]}`),
+		{"workflow", "workflows: not supported for Python Workers", map[string]string{
+			"wrangler.jsonc": wrangler("workflow", "2026-04-01", `, "workflows": [{"name": "w", "binding": "W", "class_name": "Flow"}]`),
 			"src/entry.py":   "from workers import WorkerEntrypoint\n",
 		}},
 	} {

@@ -46,11 +46,11 @@ func TestParsePython(t *testing.T) {
 	}
 
 	for name, c := range map[string]struct{ wrangler, tw, want string }{
-		"no flag":  {strings.Replace(ok, `"python_workers"`, `"nodejs_compat"`, 1), "", `add "python_workers"`},
-		"microvm":  {ok, `{"tier": "microvm"}`, "process tier only"},
-		"crons":    {strings.Replace(ok, `"compatibility_flags"`, `"triggers": {"crons": ["* * * * *"]}, "compatibility_flags"`, 1), "", "triggers.crons: not supported for Python"},
-		"workflow": {strings.Replace(ok, `"compatibility_flags"`, `"workflows": [{"name": "w", "binding": "W", "class_name": "Flow"}], "compatibility_flags"`, 1), "", "workflows: not supported for Python"},
-		"tags":     {ok, `{"tailnet": {"objects": {"Counter": {"tags": ["tag:x"]}}}}`, "no node of their own"},
+		"no flag":    {strings.Replace(ok, `"python_workers"`, `"nodejs_compat"`, 1), "", `add "python_workers"`},
+		"microvm":    {ok, `{"tier": "microvm"}`, "process tier only"},
+		"containers": {strings.Replace(ok, `"compatibility_flags"`, `"containers": [{"class_name": "Counter", "image": "./Dockerfile"}], "compatibility_flags"`, 1), "", "containers: not supported for Python"},
+		"workflow":   {strings.Replace(ok, `"compatibility_flags"`, `"workflows": [{"name": "w", "binding": "W", "class_name": "Flow"}], "compatibility_flags"`, 1), "", "workflows: not supported for Python"},
+		"tags":       {ok, `{"tailnet": {"objects": {"Counter": {"tags": ["tag:x"]}}}}`, "no node of their own"},
 	} {
 		if _, err := Parse(files(c.wrangler, c.tw)); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: %v, want %q", name, err, c.want)

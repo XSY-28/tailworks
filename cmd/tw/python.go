@@ -79,6 +79,7 @@ func (a *app) buildPython() (files map[string][]byte, main string, types map[str
 		return nil, "", nil, 0, fail("bad_request", "main "+wm+" not found in "+a.Dir)
 	}
 	base := filepath.Dir(mainPath)
+	assetsDir := a.assetsDir() // assets.go: shipped as assets, not as modules
 	files, types = map[string][]byte{}, map[string]string{}
 	add := func(name string, p string, typ string) error {
 		b, err := os.ReadFile(p)
@@ -96,7 +97,7 @@ func (a *app) buildPython() (files map[string][]byte, main string, types map[str
 			return err
 		}
 		if d.IsDir() {
-			if p != base && (pythonSkipDir(d.Name()) || d.Name() == "python_modules") {
+			if p != base && (pythonSkipDir(d.Name()) || d.Name() == "python_modules" || p == assetsDir) {
 				return filepath.SkipDir
 			}
 			return nil
