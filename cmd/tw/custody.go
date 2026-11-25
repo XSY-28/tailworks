@@ -52,7 +52,7 @@ func cmdCustody(args []string) error {
 		return err
 	}
 	if len(pos) != 1 || pos[0] != "migrate" {
-		return fail("bad_request", "tw custody takes the migrate subcommand", "usage: tw "+custodyUsage)
+		return needsSubcommand("custody")
 	}
 	if *to != "" && *to != "setec" {
 		return fail("bad_request", "tw custody migrate moves file custody to setec only; leave --to out", "usage: tw "+custodyUsage)

@@ -25,7 +25,7 @@ import (
 func cmdAgent(args []string) error {
 	sub, args, ok := splitSubcommand(args)
 	if !ok {
-		return fail("bad_request", "tw agent needs a subcommand: setup, remove, ls or show", "usage: tw "+usageOf("agent"))
+		return needsSubcommand("agent")
 	}
 	switch sub {
 	case "setup":
