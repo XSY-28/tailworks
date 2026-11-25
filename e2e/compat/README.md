@@ -166,18 +166,17 @@ Responses API calls with a scripted stream. That is listed as a change.
 
 `upstream_more.go` adds the 9 `examples/next/*` examples that declare no
 Cloudflare-only binding and the AI SDK's `fastify`, `nest` and `mcp`
-(its `http` and `sse` servers). Under `tw dev`, 7 of the 9 `next/` examples
-pass and the `mcp` `http` server passes with the same entry the other Node
-servers get. The failures:
+(its `http` and `sse` servers). Under `tw dev` all 9 `next/` examples
+pass, and the `mcp` `http` server passes with the same entry the other Node
+servers get. Two of the `next/` examples first failed on tailworks gaps,
+fixed since:
 
-1. **Open ([#395](https://github.com/rosskukulinski/tailworks/issues/395)): a Durable Object that calls `ctx.abort()` is never recreated.**
+1. **Fixed ([#395](https://github.com/rosskukulinski/tailworks/issues/395)): a Durable Object that called `ctx.abort()` was never recreated.**
    `next/lifecycle`'s `/restart` aborts its object; every later request to
-   it fails with the abort reason. Stock `wrangler dev` gives it a new
-   instance.
-2. **Open ([#391](https://github.com/rosskukulinski/tailworks/issues/391)): `RpcPromise` can't be serialized.**
+   it failed with the abort reason.
+2. **Fixed ([#391](https://github.com/rosskukulinski/tailworks/issues/391)): `RpcPromise` couldn't be serialized.**
    `next/routing`'s hub (`RoutedAgents.get()`, then a call on the chat's
-   stub) fails like the playground's `createChild`. The same build passes
-   under stock `wrangler dev`.
+   stub) failed like the playground's `createChild`.
 3. Not tailworks: Fastify never registers its server with the node:http
    bridge (and doesn't start under stock `wrangler dev`); Nest `require()`s
    optional packages a bundler can't resolve (stock `wrangler dev` fails the

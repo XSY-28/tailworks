@@ -1,4 +1,6 @@
-Last update: 2026-11-24 PT. Issue #325, second pass: the `examples/next/*` Agents SDK examples and the AI SDK's `fastify`, `nest` and `mcp` added to the compat suite; COMPAT.md tables regenerated from the run.
+Last update: 2026-11-24 PT. #391 and #395 fixed on master (#400, #404): next/routing and next/lifecycle now pass; tables regenerated.
+
+Earlier: 2026-11-24 PT. Issue #325, second pass: the `examples/next/*` Agents SDK examples and the AI SDK's `fastify`, `nest` and `mcp` added to the compat suite; COMPAT.md tables regenerated from the run.
 
 # Upstream examples, second pass (#325)
 
@@ -68,3 +70,13 @@ New failures:
   workflow, a maintainer decision.
 - The README's "run unmodified" sentence is unchanged (maintainer's call).
 - The new rows have no deployed result until `make e2e-compat` runs.
+
+## Update: after #400 and #404
+
+Merged origin/master (with #400, #404 and the Python examples), removed
+the expected failures of `ag-next-lifecycle` and `ag-next-routing`, reran
+the full `make e2e-compat-dev`: `ok ... 82.590s`, counts `PASS:35 XFAIL:7`.
+`ag-next-lifecycle`, `ag-next-routing` and `ag-playground` pass.
+`make compat-upstream`: cloudflare/agents is now 20 pass, 0 pass with a
+change, 3 fail, 46 not run; vercel/ai and mcp-handler unchanged.
+`make compat-upstream-check compat-check`, `make lint`: ok.
