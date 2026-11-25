@@ -1621,7 +1621,7 @@ flags:
   -component string
     	mgmt | hostd | supervisor (default: hostd, or workerd for a workload)
   -console
-    	the app's raw output (workerd.log, the node tier's app.log, the microVM console) instead of request records
+    	the app's raw output (workerd.log, the Node runtime's app.log, the microVM console) instead of request records
   -errors
     	only errors (status ≥ 400, an outcome other than ok, or an exception)
   -f	follow
@@ -2140,7 +2140,7 @@ add, list, remove or set up hosts
 ```text
 tw host: add a remote host (mgmt mints its single-use tag:tw-host join key), list or remove hosts; cordon (no new placements), uncordon, or drain one (move its workloads elsewhere); install the microVM tier's helper; check a microVM
 
-usage: tw host add <host-id> [--tenant <tailnet>] [--out <file>] | host ls | host rm <host-id> [--drain] | host cordon <host-id> | host uncordon <host-id> | host drain <host-id> [--allow-local-state-loss] [--dry-run] | host setup --microvm [--user <name>] [--hugepages N] | host setup --undo   (Linux, with sudo, once) | host vmcheck <workload> [--keyscan] [--container <Class>/<name>]
+usage: tw host add <host-id> [--tenant <tailnet>] [--out <file>] | host ls | host rm <host-id> [--force] | host cordon <host-id> | host uncordon <host-id> | host drain <host-id> [--allow-local-state-loss] [--dry-run] | host setup --microvm [--user <name>] [--hugepages N] | host setup --undo   (Linux, with sudo, once) | host vmcheck <workload> [--keyscan] [--container <Class>/<name>]
   (every command takes --state-dir, default ~/.tailworks, and --json)
 ```
 
@@ -2197,7 +2197,9 @@ flags:
 ```text
 flags:
   -drain
-    	kill the host's objects and release its leases first
+    	deprecated: same as --force
+  -force
+    	kill the host's objects and release its leases first (their data on that host is lost; to move them instead, tw host drain)
   -json
     	machine-readable output
   -state-dir string

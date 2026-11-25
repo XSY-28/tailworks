@@ -1492,7 +1492,7 @@ func cmdStatus(args []string) error {
 			if w.Egress != "" {
 				sb += ", egress " + w.Egress
 				if w.Egress == hostd.EgressUnenforced {
-					sb += " (Node tier: the egress proxy is cooperative here, not a boundary)"
+					sb += " (Node runtime: the egress proxy is cooperative here, not a boundary)"
 				}
 			}
 			fmt.Printf("%s workload    %s %s (tenant %s, %s, epoch %d, %d requests%s)%s\n", mark(w.Status == "active"), w.Workload, w.Status, w.TenantID, w.DeploymentID, w.Epoch, w.Requests, sb, e)
@@ -1546,7 +1546,7 @@ func remoteStatus(f *flags, s *state) error {
 			if h.Live(time.Now()) {
 				mark = "✓"
 			}
-			fmt.Printf("%s host        %s · heartbeat %.1fs ago · %d live nodes · tiers %s\n", mark, h.ID, time.Since(time.UnixMilli(h.LastSeen)).Seconds(), h.LiveNodes, strings.Join(h.Tiers, ","))
+			fmt.Printf("%s host        %s · heartbeat %.1fs ago · %d live nodes · offers %s\n", mark, h.ID, time.Since(time.UnixMilli(h.LastSeen)).Seconds(), h.LiveNodes, strings.Join(h.Tiers, ","))
 		}
 		for _, t := range tenants {
 			fmt.Printf("✓ tenant      %s (%s, mint mode %s)\n", t.Tailnet, t.TenantID, mintModeName(t.MintMode))

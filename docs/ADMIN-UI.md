@@ -100,7 +100,7 @@ spec.
     them on the host: node (`object`), status (`404`, `5xx`), caller,
     trace and errors only.
   - **Console output** (`source=console`): the raw output (workerd's
-    stdout, the node tier's `app.log`, the microVM console), oldest first,
+    stdout, the Node runtime's `app.log`, the microVM console), oldest first,
     with terminal escapes removed. It is per workload, not per node.
 
   Both read the last 50, 100 (default), 200 or 500 records or lines; the

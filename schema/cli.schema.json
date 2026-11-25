@@ -3060,6 +3060,18 @@
           },
           "tiers": {
             "type": "array",
+            "description": "what the host offers: its isolation tiers (process, microvm) and containers",
+            "items": {
+              "type": "string"
+            }
+          },
+          "arch": {
+            "type": "string",
+            "description": "the host's GOARCH (amd64, arm64); absent for a host that never reported it"
+          },
+          "features": {
+            "type": "array",
+            "description": "host features it offers (kv, r2, d1, telemetry, ...)",
             "items": {
               "type": "string"
             }

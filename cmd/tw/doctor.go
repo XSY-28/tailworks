@@ -295,7 +295,7 @@ func cmdDoctor(args []string) error {
 			}
 		}
 		if len(unenforced) == 0 {
-			return "ok", "no Node-tier workload with unenforced egress (" + runtime.GOOS + ": workerd apps egress only via netd)", ""
+			return "ok", "no Node-runtime workload with unenforced egress (" + runtime.GOOS + ": workerd apps egress only via netd)", ""
 		}
 		d := fmt.Sprintf("Node-tier egress is UNENFORCED for %s: the HTTP(S) proxy is cooperative; a hostile app can open raw sockets to loopback, LAN, metadata and the internet (RT-08, docs/node-tier.md)", strings.Join(unenforced, ", "))
 		if len(tenants) > 1 {

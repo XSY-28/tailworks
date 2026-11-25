@@ -34,8 +34,8 @@ and the class bound as a Durable Object.
 - tailworks.jsonc can add `"containers"` too: the same array form, or
   `{"<Class>": {"image": ref, "images": {name: ref}}}` to pin refs (Sandbox SDK
   1.0 named images). A pin may only name that class's wrangler images.
-- A bundle with containers is placed only on a host that offers the
-  `containers` tier, for the image's arch, with a free VM in its capacity
+- A bundle with containers is placed only on a host that offers
+  `containers`, for the image's arch, with a free VM in its capacity
   vector (`503 no_host`; with `--host` or a sticky lease holder that lacks
   `containers`, `409 tier_unavailable`, and `tw deploy --replace` moves it
   instead). This applies even when the parent object itself is process-tier.
@@ -485,9 +485,10 @@ timestamps are recorded the same way, and the uffd helper and the
 no pool or snapshots (every VM there cold-boots). Whether containers should
 get a pool is an open decision in STATUS.md.
 
-## Host tiers
+<a id="host-tiers"></a>
+## Hosts that offer containers
 
-A host advertises the `containers` tier (and mgmt places container bundles
+A host offers `containers` (and mgmt places container bundles
 on it) only when containers can actually run there: a microVM backend whose
 helper (Firecracker) or kernel (vz) supports container guests, a guest
 kernel with erofs, and `mkfs.erofs`.

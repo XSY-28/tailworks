@@ -293,11 +293,12 @@ const isLeader = () => !!lease && Date.now() < lease.deadline;
   holders' leases are still running. Tokens still order them correctly.
   Don't force-move the lock workload while its locks are in use. (This is
   from the code, `mgmt.Deploy` with `Replace`; `e2e/locks` doesn't run it.)
-- **`tw host rm --drain` of a host that is actually still running**
+- **`tw host rm --force` of a host that is actually still running**
   releases its leases at once (by reading the code: `mgmt.DeleteHost`; not
   exercised in `e2e/locks`). If that host is only cut off, it keeps serving
   until it fences, up to 30 s, while the new host starts. The lease refusal
-  message suggests `tw host rm`. For a host that may still be running,
+  message suggests `tw host rm --force` only for a host that is gone for
+  good. For a host that may still be running,
   prefer `--force-takeover`: it waits for the lease to run out.
 - **The fence can't recall requests already sent.** A request that left the
   old host before it fenced can arrive later. Anything outside tailworks that the
