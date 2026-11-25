@@ -55,70 +55,89 @@ type r2Result struct {
 
 const r2Usage = "r2 bucket ls | r2 bucket create <bucket> | r2 bucket rm <bucket> | r2 object ls <bucket> [--prefix P]   [--workload <workload>] [--tenant <tailnet>]"
 
+// r2Opts are tw r2's flags. A verb registers only its own (r2Flags); the
+// others keep their zero value.
+type r2Opts struct {
+	tenant, workload *string
+
+	// object ls
+	prefix *string
+
+	// bucket rm
+	yes *bool
+}
+
+// r2Flags registers verb's flags ("object ls"; anyVerb: every verb's) on f.
+func r2Flags(f *flags, verb string) *r2Opts {
+	o := &r2Opts{prefix: new(string), yes: new(bool)}
+	o.tenant = tenantFlag(f)
+	o.workload = f.String("workload", "", "workload (default: the app in the current directory, as tw deploy names it)")
+	if onVerb(verb, "object ls") {
+		o.prefix = f.String("prefix", "", "only keys starting with this")
+	}
+	if onVerb(verb, "bucket rm") {
+		o.yes = yesFlag(f)
+	}
+	return o
+}
+
 func cmdR2(args []string) error {
-	// Global flags (--state-dir X, --json) may precede the subcommands.
-	var pos []int
-	for i := 0; i < len(args) && len(pos) < 2; i++ {
-		a := args[i]
-		if !strings.HasPrefix(a, "-") {
-			pos = append(pos, i)
-			continue
-		}
-		if (a == "--state-dir" || a == "-state-dir") && i+1 < len(args) {
-			i++
-		}
-	}
-	if len(pos) < 2 {
-		return needsSubcommand("r2")
-	}
-	what, sub := args[pos[0]], args[pos[1]]
-	rest := append(append(append([]string{}, args[:pos[0]]...), args[pos[0]+1:pos[1]]...), args[pos[1]+1:]...)
-	switch sub {
-	case "list":
-		sub = "ls"
-	case "delete":
-		sub = "rm"
+	verb, args, complete := scanVerb(args, func(f *flags) { r2Flags(f, anyVerb) }, func(string) int { return 2 })
+	what, sub, _ := strings.Cut(verb, " ")
+	switch {
+	case verb == "":
+	case verb == "object get" || verb == "object put":
+		return fail("not_supported", "tw r2 object "+sub+" is not built yet: object bytes live in the hosts' R2 backend, which mgmt can't reach",
+			"read or write objects through the workload's binding (env.<BUCKET>) for now")
+	case !complete || !onVerb(verb, "bucket ls", "bucket create", "bucket rm", "object ls"):
+		return fail("bad_request", fmt.Sprintf("unknown or incomplete command: tw r2 %s %s", what, sub), "usage: tw "+r2Usage)
 	}
 	f := newFlags("r2")
-	tenantF := tenantFlag(f)
-	workloadF := f.String("workload", "", "workload (default: the app in the current directory, as tw deploy names it)")
-	prefixF := f.String("prefix", "", "object ls: only keys starting with this")
-	yes := yesFlag(f)
-	p, err := f.parse(rest)
+	o := r2Flags(f, verb)
+	p, err := f.parse(args)
 	if err != nil {
 		return err
 	}
-	switch {
-	case what == "bucket" && sub == "ls" && len(p) == 0:
-	case what == "bucket" && (sub == "create" || sub == "rm") && len(p) == 1:
-	case what == "object" && sub == "ls" && len(p) == 1:
-	case what == "object" && (sub == "get" || sub == "put"):
-		return fail("not_supported", "tw r2 object "+sub+" is not built yet: object bytes live in the hosts' R2 backend, which mgmt can't reach",
-			"read or write objects through the workload's binding (env.<BUCKET>) for now")
-	default:
+	if verb == "" {
+		return needsSubcommand("r2")
+	}
+	want := 1
+	if verb == "bucket ls" {
+		want = 0
+	}
+	if len(p) != want {
 		return fail("bad_request", fmt.Sprintf("unknown or incomplete command: tw r2 %s %s", what, sub), "usage: tw "+r2Usage)
+	}
+	// The app in the current directory names the workload, and its
+	// r2_buckets can name a bucket by its binding (storeName).
+	a, appErr := loadApp(".", "")
+	if appErr != nil {
+		a = nil
 	}
 	bucket := ""
 	if len(p) == 1 {
-		bucket = p[0]
+		bs, err := appStores(a, "r2")
+		if err != nil {
+			return err
+		}
+		bucket = storeName(bs, p[0])
 		if !bundle.StoreNameRE.MatchString(bucket) {
 			return fail("bad_request", fmt.Sprintf("bucket name %q must match %s", bucket, bundle.StoreNameRE))
 		}
 	}
-	workload := *workloadF
+	workload := *o.workload
 	if workload == "" {
-		a, err := loadApp(".", "")
-		if err != nil {
+		if a == nil {
 			return fail("bad_request", "no app in the current directory to take the workload from").
-				withFix("cd <app dir> && tw r2 …", "tw r2 … --workload <workload>")
+				withFix("cd <app dir> && tw r2 "+verb+" …", "tw r2 "+verb+" … --workload <workload>")
 		}
 		workload = a.Name
 	}
 	if workloadLabel(workload) != workload {
 		return fail("bad_request", fmt.Sprintf("workload %q is not a DNS label", workload))
 	}
-	if what == "bucket" && sub == "rm" {
-		if err := confirmDestroy(f, *yes, "deleting bucket "+bucket+" of workload "+workload+" deletes every object in it", bucket,
+	if verb == "bucket rm" {
+		if err := confirmDestroy(f, *o.yes, "deleting bucket "+bucket+" of workload "+workload+" deletes every object in it", bucket,
 			"tw r2 bucket rm "+bucket+" --workload "+workload); err != nil {
 			return err
 		}
@@ -130,7 +149,7 @@ func cmdR2(args []string) error {
 	if err := s.requireUp(); err != nil {
 		return err
 	}
-	tn, err := s.tenant(*tenantF)
+	tn, err := s.tenant(*o.tenant)
 	if err != nil {
 		return err
 	}
@@ -139,7 +158,7 @@ func cmdR2(args []string) error {
 	base := "/v1/tenants/" + url.PathEscape(tn.TenantID) + "/workloads/" + url.PathEscape(workload) + "/stores"
 	res := r2Result{Workload: workload, TenantID: tn.TenantID, Bucket: bucket}
 	hdr := map[string]string{"Tw-Actor": actor()}
-	switch what + " " + sub {
+	switch verb {
 	case "bucket ls":
 		items, err := listAll[r2Bucket](ctx, s.mgmt(), base+"?kind=r2", 0)
 		if err != nil {
@@ -184,7 +203,7 @@ func cmdR2(args []string) error {
 			fmt.Printf("  its index is gone now; the workload drops its blobs the next time it uses the bucket\n")
 		})
 	case "object ls":
-		objs, err := r2ListObjects(ctx, s.mgmt(), base+"/r2/"+url.PathEscape(bucket)+"/journal", *prefixF)
+		objs, err := r2ListObjects(ctx, s.mgmt(), base+"/r2/"+url.PathEscape(bucket)+"/journal", *o.prefix)
 		if err != nil {
 			return err
 		}

@@ -88,8 +88,8 @@ upgrading tailworks to update the skills; when nothing changed it does nothing.
   [tailworks' MCP server](#tws-mcp-server).
 - **Destructive commands need your go-ahead.** `tw kill`, `tw undeploy`,
   `tw down` and `tw secret rm` act immediately and have no undo. The
-  commands that delete data or a tenant's resources (`tw d1 delete`,
-  `tw kv namespace delete`, `tw queues rm`, `tw queues purge`,
+  commands that delete data or a tenant's resources (`tw d1 rm`,
+  `tw kv namespace rm`, `tw queues rm`, `tw queues purge`,
   `tw r2 bucket rm`, `tw tenant rm`, `tw host rm`) ask first, and refuse
   with `confirmation_required` when there is no terminal. The skills tell
   agents to run any of them, or add `--yes`, only after you've agreed to that

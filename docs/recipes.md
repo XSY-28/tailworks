@@ -594,8 +594,8 @@ curl 'http://127.0.0.1:8787/__scheduled?cron=*/15+*+*+*+*'   # {"outcome":"ok","
 curl http://127.0.0.1:8787/                                  # {"last":{"cron":"*/15 * * * *","at":"…"},"runs":["run:…"]}
 ```
 
-Deployed, the host runs it every 15 minutes; `tw kv key list --binding RUNS`
-shows the keys. The namespace (named `RUNS`, after the binding) is created
-by the first write. The cron syntax, missed runs and retries are in
+Deployed, the host runs it every 15 minutes; `tw kv key ls` in the app's
+directory shows the keys (of its only namespace). The namespace (named
+`RUNS`, after the binding) is created by the first write. The cron syntax, missed runs and retries are in
 [cron-triggers.md](cron-triggers.md); KV's consistency and limits in
 [kv.md](kv.md).

@@ -27,10 +27,10 @@ func cmdAgent(args []string) error {
 	if !ok {
 		return needsSubcommand("agent")
 	}
-	switch sub {
+	switch normalizeVerb(sub) {
 	case "setup":
 		return cmdAgentSetup(args, false)
-	case "remove":
+	case "rm": // remove
 		return cmdAgentSetup(args, true)
 	case "ls":
 		return cmdAgentLs(args)

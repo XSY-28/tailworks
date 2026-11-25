@@ -7605,7 +7605,7 @@ type ClientInterface interface {
 
 	// ListKVKeys List a KV namespace's keys
 	//
-	// Workers KV's `list()` for operators (`tw kv key list`,
+	// Workers KV's `list()` for operators (`tw kv key ls`,
 	// ADR-037): live keys in UTF-8 byte order, with their
 	// expiration and metadata, `limit` at a time (default and maximum
 	// 1000). Pass the answer's `cursor` to get the next page. mgmt reads
@@ -7618,7 +7618,7 @@ type ClientInterface interface {
 
 	// DeleteKVValue Delete one KV value
 	//
-	// `tw kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+	// `tw kv key rm`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
 	//
 	// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `DeleteKVValue` operationId).
 	DeleteKVValue(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *DeleteKVValueParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7801,7 +7801,7 @@ type ClientInterface interface {
 	// host, once per change: with `degraded` when it stops, without it
 	// when the entry applies (or was skipped with `…/repair`). mgmt
 	// keeps the latest report on the store (`Store.degraded`, shown by
-	// `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+	// `tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 	// and the console) and audits the first report of each failing
 	// entry on each host (`kind: store_replay_failed`). A report for
 	// another incarnation is ignored. A healthy report clears the record
@@ -7824,7 +7824,7 @@ type ClientInterface interface {
 	// host, once per change: with `degraded` when it stops, without it
 	// when the entry applies (or was skipped with `…/repair`). mgmt
 	// keeps the latest report on the store (`Store.degraded`, shown by
-	// `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+	// `tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 	// and the console) and audits the first report of each failing
 	// entry on each host (`kind: store_replay_failed`). A report for
 	// another incarnation is ignored. A healthy report clears the record
@@ -10969,7 +10969,7 @@ func (c *Client) ListWorkloadStores(ctx context.Context, id TenantID, workload W
 
 // ListKVKeys List a KV namespace's keys
 //
-// Workers KV's `list()` for operators (`tw kv key list`,
+// Workers KV's `list()` for operators (`tw kv key ls`,
 // ADR-037): live keys in UTF-8 byte order, with their
 // expiration and metadata, `limit` at a time (default and maximum
 // 1000). Pass the answer's `cursor` to get the next page. mgmt reads
@@ -10992,7 +10992,7 @@ func (c *Client) ListKVKeys(ctx context.Context, id TenantID, workload WorkloadN
 
 // DeleteKVValue Delete one KV value
 //
-// `tw kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+// `tw kv key rm`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
 //
 // Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `DeleteKVValue` operationId).
 func (c *Client) DeleteKVValue(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *DeleteKVValueParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -11295,7 +11295,7 @@ func (c *Client) RepairStore(ctx context.Context, id TenantID, workload Workload
 // host, once per change: with `degraded` when it stops, without it
 // when the entry applies (or was skipped with `…/repair`). mgmt
 // keeps the latest report on the store (`Store.degraded`, shown by
-// `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+// `tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 // and the console) and audits the first report of each failing
 // entry on each host (`kind: store_replay_failed`). A report for
 // another incarnation is ignored. A healthy report clears the record
@@ -11328,7 +11328,7 @@ func (c *Client) ReportStoreStatusWithBody(ctx context.Context, id TenantID, wor
 // host, once per change: with `degraded` when it stops, without it
 // when the entry applies (or was skipped with `…/repair`). mgmt
 // keeps the latest report on the store (`Store.degraded`, shown by
-// `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+// `tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 // and the console) and audits the first report of each failing
 // entry on each host (`kind: store_replay_failed`). A report for
 // another incarnation is ignored. A healthy report clears the record
@@ -19823,7 +19823,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListKVKeysWithResponse List a KV namespace's keys
 	//
-	// Workers KV's `list()` for operators (`tw kv key list`,
+	// Workers KV's `list()` for operators (`tw kv key ls`,
 	// ADR-037): live keys in UTF-8 byte order, with their
 	// expiration and metadata, `limit` at a time (default and maximum
 	// 1000). Pass the answer's `cursor` to get the next page. mgmt reads
@@ -19838,7 +19838,7 @@ type ClientWithResponsesInterface interface {
 
 	// DeleteKVValueWithResponse Delete one KV value
 	//
-	// `tw kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+	// `tw kv key rm`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -20033,7 +20033,7 @@ type ClientWithResponsesInterface interface {
 	// host, once per change: with `degraded` when it stops, without it
 	// when the entry applies (or was skipped with `…/repair`). mgmt
 	// keeps the latest report on the store (`Store.degraded`, shown by
-	// `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+	// `tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 	// and the console) and audits the first report of each failing
 	// entry on each host (`kind: store_replay_failed`). A report for
 	// another incarnation is ignored. A healthy report clears the record
@@ -20056,7 +20056,7 @@ type ClientWithResponsesInterface interface {
 	// host, once per change: with `degraded` when it stops, without it
 	// when the entry applies (or was skipped with `…/repair`). mgmt
 	// keeps the latest report on the store (`Store.degraded`, shown by
-	// `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+	// `tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 	// and the console) and audits the first report of each failing
 	// entry on each host (`kind: store_replay_failed`). A report for
 	// another incarnation is ignored. A healthy report clears the record
@@ -32910,7 +32910,7 @@ func (c *ClientWithResponses) ListWorkloadStoresWithResponse(ctx context.Context
 
 // ListKVKeysWithResponse List a KV namespace's keys
 //
-// Workers KV's `list()` for operators (`tw kv key list`,
+// Workers KV's `list()` for operators (`tw kv key ls`,
 // ADR-037): live keys in UTF-8 byte order, with their
 // expiration and metadata, `limit` at a time (default and maximum
 // 1000). Pass the answer's `cursor` to get the next page. mgmt reads
@@ -32931,7 +32931,7 @@ func (c *ClientWithResponses) ListKVKeysWithResponse(ctx context.Context, id Ten
 
 // DeleteKVValueWithResponse Delete one KV value
 //
-// `tw kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+// `tw kv key rm`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -33198,7 +33198,7 @@ func (c *ClientWithResponses) RepairStoreWithResponse(ctx context.Context, id Te
 // host, once per change: with `degraded` when it stops, without it
 // when the entry applies (or was skipped with `…/repair`). mgmt
 // keeps the latest report on the store (`Store.degraded`, shown by
-// `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+// `tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 // and the console) and audits the first report of each failing
 // entry on each host (`kind: store_replay_failed`). A report for
 // another incarnation is ignored. A healthy report clears the record
@@ -33227,7 +33227,7 @@ func (c *ClientWithResponses) ReportStoreStatusWithBodyWithResponse(ctx context.
 // host, once per change: with `degraded` when it stops, without it
 // when the entry applies (or was skipped with `…/repair`). mgmt
 // keeps the latest report on the store (`Store.degraded`, shown by
-// `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+// `tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 // and the console) and audits the first report of each failing
 // entry on each host (`kind: store_replay_failed`). A report for
 // another incarnation is ignored. A healthy report clears the record

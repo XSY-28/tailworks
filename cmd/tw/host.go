@@ -34,16 +34,16 @@ func cmdHost(args []string) error {
 		return needsSubcommand("host")
 	}
 	rest := append(append([]string{}, args[:sub]...), args[sub+1:]...)
-	switch args[sub] {
+	switch normalizeVerb(args[sub]) {
 	case "setup":
 		return cmdHostSetup(rest)
 	case "vmcheck":
 		return cmdHostVMCheck(rest)
 	case "add":
 		return cmdHostAdd(rest)
-	case "ls", "list":
+	case "ls":
 		return cmdHostLs(rest)
-	case "rm", "remove", "delete":
+	case "rm":
 		return cmdHostRm(rest)
 	case "cordon":
 		return cmdHostCordon(rest, true) // host_cordon.go

@@ -37,8 +37,8 @@ func cmdRelease(args []string) error {
 	if err != nil {
 		return err
 	}
-	switch pos[0] {
-	case "ls", "list":
+	switch normalizeVerb(pos[0]) {
+	case "ls":
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		var cat struct {
