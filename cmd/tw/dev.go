@@ -63,14 +63,21 @@ func cmdDev(args []string) error {
 	f := newFlags("dev")
 	port := f.Int("port", 8787, "local port (127.0.0.1)")
 	once := f.Bool("once", false, "start, make one request (GET /; for an MCP app an initialize to its route), print it and exit (smoke test)")
-	workerdFlag := f.String("workerd", "", "workerd binary")
+	workerdFlag := f.String("workerd", "", "workerd binary (default: $TW_WORKERD, the install's, or PATH)")
 	verbose := f.Bool("v", false, "hostd logs to stderr")
 	testScheduled := f.Bool("test-scheduled", false, "serve /__scheduled?cron=<expr>[&time=<ms>] on the local port: run a cron trigger's scheduled() now")
-	inspectorPort := f.Int("inspector-port", 0, "serve workerd's V8 inspector on 127.0.0.1:<port> for Chrome DevTools or VS Code (devinspector.go)")
+	inspectorPort := f.Int("inspector-port", 0, "serve workerd's V8 inspector on 127.0.0.1:<port> for Chrome DevTools or VS Code; any local web page can attach while it runs, so pass it only while you debug (docs/dev-debugging.md)")
 	consolePort := f.Int("console-port", 0, "serve the read-only data console (KV keys, D1 rows) on 127.0.0.1:<port>; 0 picks a free port, -1 turns it off (devconsole.go)")
 	var callers callerFlags
-	f.Var(&callers, "caller", "an extra identity: its own dev node (tagged with =tag:a,tag:b) and local URL, listed in the result (repeatable)")
+	f.Var(&callers, "caller", "an extra identity: its own dev node (tagged with =tag:a,tag:b) and local URL, listed in the result (repeatable; black-box tests of who may call what: docs/testing.md)")
 	ao := addAppFlags(f) // wranglerapp.go: --env, --wrangler, --from-wrangler-out
+	// --help lists these under Advanced (helpflags.go).
+	f.group(advancedFlags,
+		"console-port",
+		"inspector-port",
+		"workerd",
+		"v",
+	)
 	pos, err := f.parse(args)
 	if err != nil {
 		return err

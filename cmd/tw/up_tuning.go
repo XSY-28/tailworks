@@ -29,8 +29,10 @@ var removedUpFlags = []string{
 	"push-port",
 }
 
-// addRemovedUpFlags registers removedUpFlags as accepted no-ops.
+// addRemovedUpFlags registers removedUpFlags as accepted no-ops, hidden
+// from --help.
 func addRemovedUpFlags(f *flags) {
+	f.hidden("deprecated and ignored", removedUpFlags...)
 	f.Duration("heartbeat", 0, "deprecated, ignored: the host heartbeats every "+upHeartbeat.String())
 	f.Duration("kill-tombstone", 0, "deprecated, ignored: a killed node answers object_killed for "+upKillTombstone.String())
 	f.Duration("device-delete-delay", 0, "deprecated, ignored: a killed object's device is deleted "+upDeviceDeleteDelay.String()+" after the kill")

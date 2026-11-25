@@ -240,9 +240,15 @@ func cmdLink(args []string) error {
 	tsDir := f.String("tsnet-dir", "", "--tsnet: node state dir (default <state>/cli); tests pass one explicitly")
 	tsHost := f.String("tsnet-hostname", "", "--tsnet: the CLI node's hostname (default tw-cli-<user>)")
 	tsCtl := f.String("control-url", prodControl, "--tsnet: control URL for the CLI node")
-	tsKey := f.String("tsnet-authkey-file", "", "--tsnet: TS_AUTHKEY=… file for an unattended first join (tests); default: interactive login")
-	tsTags := f.String("tsnet-tags", "", "--tsnet: comma-separated tags the CLI node advertises (tests)")
+	tsKey := f.String("tsnet-authkey-file", "", "--tsnet: TS_AUTHKEY=… file for an unattended first join (automation, CI); default: interactive login")
+	tsTags := f.String("tsnet-tags", "", "--tsnet: comma-separated tags the CLI node advertises (an unattended join with a tagged key)")
 	loginTO := f.Duration("login-timeout", 5*time.Minute, "--tsnet: how long to wait for the browser login")
+	// --help lists these under Advanced (helpflags.go).
+	f.group(advancedFlags,
+		"tsnet-authkey-file",
+		"tsnet-tags",
+	)
+	f.hidden("for the test harness", "tsnet-dir")
 	pos, err := f.parse(args)
 	if err != nil {
 		return err

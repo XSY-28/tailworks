@@ -105,20 +105,21 @@ const defaultMgmtHostname = "tw-mgmt"
 
 func cmdUp(args []string) error {
 	f := newFlags("up")
+	upFlagGroups(f) // up_help.go: --help's groups
 	tailnet := f.String("tailnet", "", "the tailnet to serve (oauth: read from the client's devices or mgmt's node; headscale: required, the dns.base_domain). Overrides discovery")
 	oauthFile := f.String("oauth-client-file", "", "mint mode \"oauth\" (Tailscale): file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (an OAuth client with Auth Keys write, tag tag:tw; tightened to 0600). Default on the default state dir: ~/.config/tailworks/oauth.env, asked for and saved on the first tw up")
 	keyFile := f.String("api-key-file", "", "--control=headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied). Tailscale API keys are not a mint mode: use --oauth-client-file")
-	yes := f.Bool("yes", false, "with --apply-policy: write the policy without asking (needed without a terminal, and with --json). Otherwise accepted and ignored: tw up asks nothing else")
+	yes := yesFlagBefore(f, "--apply-policy writes the policy (tw up asks nothing else)")
 	apply := f.Bool("apply-policy", false, "write the tagOwners and grants tailworks needs to the tailnet policy instead of printing them (additive, validated first, written with If-Match); tw up shows the lines and asks first (--yes to skip). Tailscale: the OAuth client needs Policy File write. Headscale: needs policy.mode database")
 	control := f.String("control-url", prodControl, "coordination server for the tailnet's nodes")
-	profileF := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; --api-key-file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain)")
+	profileF := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server, tw up --control=headscale --control-url <url> --tailnet <base_domain> --api-key-file <file>; the file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain; docs/headscale.md)")
 	tsapiURL := f.String("tsapi-url", "", "Tailscale API base URL (testing)")
 	hostID := f.String("host-id", defaultHostID(), "this host's ID")
 	prefix := f.String("hostname-prefix", "tw-", "prefix for every object node hostname")
 	ephemeral := f.Bool("ephemeral", false, "join object nodes as ephemeral; `tw down` then deletes every device (tests, demos)")
 	insecureSH := f.Bool("insecure-shared-host", false, "on a host without a process sandbox (Linux without Landlock), still serve process-tier workloads of more than one tenant; tenants are then NOT isolated from each other")
 	allowExp := f.Bool("allow-experimental-flags", false, "let deployments on this host set compatibility flags workerd marks experimental (unsafe_module, rtti_api, precise_timers, …); refused by default (docs/COMPAT.md#experimental-flags)")
-	workerdFlag := f.String("workerd", "", "workerd binary")
+	workerdFlag := f.String("workerd", "", "workerd binary (default: $TW_WORKERD, the install's, or PATH)")
 	// up_tuning.go: --heartbeat, --kill-tombstone, --device-delete-delay, --push-port
 	addRemovedUpFlags(f)
 	retention := addRetentionFlags(f) // up_retention.go

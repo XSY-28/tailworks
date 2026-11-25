@@ -93,7 +93,7 @@
   <h2>Kill this object</h2>
   <form method="post" action="/ui/objects/{{.Obj.ObjectID}}/kill"
         data-confirm="Kill {{.Obj.NodeName}} ({{.Obj.ObjectID}})? Its node is tombstoned and its flows dropped.">
-    <label><input type="checkbox" name="cascade" value="true"> Cascade: also kill the {{.Children}} descendant(s)</label>
+    <label><input type="checkbox" name="cascade" value="true" checked> Cascade: also kill the {{.Children}} descendant(s)</label>
     <input type="text" name="reason" placeholder="Reason (recorded in the audit log)" maxlength="200">
     <button type="submit" class="danger">Kill</button>
   </form>

@@ -10,9 +10,8 @@ Issues #457 and #480 from the interface simplification audit (#434).
   `--device-delete-delay` and `--push-port` are deprecated no-ops
   (`cmd/tw/up_tuning.go`): they still parse, so scripts and saved command
   lines keep working, and tw up prints a note when one is given. They are
-  not dropped outright: the repo convention for retired flags is a
-  "deprecated" help line (`tw custody --to`, `tw host rm --drain`), and
-  #550's hidden-flag mechanism had not landed. The timing values are the
+  hidden from --help with #550's mechanism (`also accepted, deprecated and
+  ignored: …`), to be removed in a later release. The timing values are the
   constants `upHeartbeat` (1s), `upKillTombstone` (12s) and
   `upDeviceDeleteDelay` (8s), written into tw.json only when its field is
   empty; values an older tw saved are still used. `pushPort` is still read
@@ -37,4 +36,14 @@ Issues #457 and #480 from the interface simplification audit (#434).
 - `go test ./cmd/tw ./docs -count=1`: ok. New: `TestIdentitySingle`,
   `TestRemovedUpFlags`, `TestUpPreflightWorkerd`; `TestUpKeepsSavedSettings`
   updated.
-- `make cli-docs`: docs/cli.md regenerated.
+- `make cli-docs`: docs/cli.md regenerated (again after merging
+  origin/master with #550: the four flags moved to the hidden footer).
+- `make lint`: ok.
+- `make test` (load average ~100): failures only in TestCLIOAuth (cmd/tw),
+  TestWorkloadReplicas and TestAPIRateLimitBehindTailnetHandler (mgmt),
+  TestR2Streaming, TestMultiTenant and TestWorkersKV (hostd). Each passes
+  when run alone (`go test ./<pkg> -run '^<Test>$'`); mgmt and hostd are
+  not touched by this branch.
+- `make e2e-tw-upgrade`: PASS (TestTwUpgradeSingleMachine, TestUpDownBudget).
+- Not run: `make e2e-headscale` (its tw up drops the two removed flags; the
+  nightly runs it).
