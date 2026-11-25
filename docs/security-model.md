@@ -41,7 +41,7 @@ vulnerability, see [SECURITY.md](../SECURITY.md).
   within 5 minutes (`KeyExpiry` in `mgmt/types.go`). Warm keys, minted
   ahead of time so new objects start faster, wait in mgmt's custody for up
   to 30 minutes ([INSTALL.md](INSTALL.md#tuning-how-fast-a-new-objects-own-node-comes-up)).
-  `tw status` shows how many each tenant has; `tw down` and `tw tenant rm`
+  `tw status` shows how many each tenant has, when any; `tw down` and `tw tenant rm`
   revoke them. Revoking the credential
   stops all future minting.
 - **mgmt's own node key is handed over in a single-use file.** On the
@@ -181,7 +181,10 @@ more means it is on, and this section should change.
 tailworks runs a second tenant's process-tier workloads on a host only when
 the host passes these checks, unless you start it with
 `tw up --insecure-shared-host` (tenants are then not isolated from each
-other):
+other). The flag is saved in tw.json and kept by every later `tw up`, so
+`tw up` and `tw status` print it on a `! unsafe` line each time
+(`unsafeFlags` in `--json`), with `--allow-experimental-flags` and
+`--local-dev`. The checks:
 
 - **No sandbox** (Linux without Landlock, or `-sandbox none`): the second
   tenant is refused (`sandbox_unavailable`), and so is a Node app on a host

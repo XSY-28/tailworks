@@ -198,6 +198,7 @@ func printLsDeployment(d mgmt.DeploymentView) {
 	if d.Error != "" {
 		fmt.Printf("  %-12s error: %s\n", "", tsafe(deployErrorLine(d.Workload, d.Error))) // lserror.go
 	}
+	printImagePins(d) // status_view.go
 }
 
 // lsMoreLine is the line under a truncated OBJECTS list. When the list is
