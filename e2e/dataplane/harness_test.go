@@ -145,6 +145,12 @@ type cluster struct {
 	pids     *os.File
 	tenantID string
 
+	// workload is the workload deploy names ("dp" if empty).
+	workload string
+
+	// hostArgs adds flags to a host's tw-hostd (the R2 backend: r2_test.go).
+	hostArgs func(id string) []string
+
 	mu      sync.Mutex
 	procs   map[string]*proc
 	token   string
@@ -390,10 +396,14 @@ func (c *cluster) startMgmt(first bool) {
 
 func (c *cluster) startHost(id string) {
 	hd := filepath.Join(c.work, id)
-	c.start(id, "-local-dev", "-mgmt", "unix://"+filepath.Join(c.work, id+"-mgmt.sock"), "-mgmt-token-file", filepath.Join(c.work, "token"),
+	args := []string{"-local-dev", "-mgmt", "unix://" + filepath.Join(c.work, id+"-mgmt.sock"), "-mgmt-token-file", filepath.Join(c.work, "token"),
 		"-host-id", id, "-data-dir", filepath.Join(hd, "data"), "-run-dir", filepath.Join(hd, "run"),
 		"-control-url", c.ctl.URL, "-ephemeral", "-queue-visibility", "5s",
-		"-sandbox", "none", "-workerd", c.workerd, "-hostname-prefix", id+"-", "-log-level", "debug")
+		"-sandbox", "none", "-workerd", c.workerd, "-hostname-prefix", id + "-", "-log-level", "debug"}
+	if c.hostArgs != nil {
+		args = append(args, c.hostArgs(id)...)
+	}
+	c.start(id, args...)
 }
 
 // try is one mgmt API call; err is a transport failure.
@@ -501,7 +511,11 @@ func (c *cluster) waitHostsLive(ids ...string) {
 // deploy posts one deployment of the dp workload; st is the HTTP status.
 func (c *cluster) deploy(bundle, host string, replace, force bool) (deployment, int, []byte, error) {
 	var d deployment
-	st, b, err := c.try("POST", "/v1/deployments", map[string]any{"tenantID": c.tenantID, "workload": "dp", "bundle": bundle,
+	wl := c.workload
+	if wl == "" {
+		wl = "dp"
+	}
+	st, b, err := c.try("POST", "/v1/deployments", map[string]any{"tenantID": c.tenantID, "workload": wl, "bundle": bundle,
 		"host": host, "replace": replace, "forceTakeover": force}, &d)
 	return d, st, b, err
 }

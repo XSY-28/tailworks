@@ -106,6 +106,13 @@ e2e-placement: deps
 e2e-dataplane: deps
 	$(GO) test -tags e2edataplane -count=1 -v -timeout 25m -run TestDataplane ./e2e/dataplane/...
 
+## e2e-dataplane-r2: the data-plane chaos loop for R2 buckets (issue #420, e2e/dataplane/ledger/r2.md): the same
+## cluster running testdata/r2 under the r2-fs, r2-s3 and r2-replicas scenarios (3 min each; s3 is a Garage
+## container, so it needs Docker), checked for R1-R6. TW_DP_SCENARIO=r2-fs|r2-s3|r2-replicas runs one.
+.PHONY: e2e-dataplane-r2
+e2e-dataplane-r2: deps
+	$(GO) test -tags e2edataplane -count=1 -v -timeout 40m -run 'TestR2' ./e2e/dataplane/...
+
 ## e2e-locks: locks and leader election on DO leases (docs/locks.md), hermetic: real tw-mgmt + two
 ## tw-hostd processes, default timings; one host cut off from mgmt while still on the tailnet.
 .PHONY: e2e-locks

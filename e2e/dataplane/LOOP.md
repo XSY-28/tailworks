@@ -103,6 +103,16 @@ each grant and renew.
 | D6 | Availability: reported. Gated only outside fault windows (+60 s): ≥ 90% of ops succeed |
 | D7 | No workerd outlives its hostd: 10 s after a `crash-hostd` restart, none of the crashed hostd's workerds is still running (#432) |
 
+## R2 (`TestR2`, issue #420)
+
+The same cluster runs `testdata/r2` with the `fs` or an `s3` backend (a
+Garage container, so Docker is needed), in the scenarios `r2-fs`, `r2-s3`
+and `r2-replicas`, with three more faults (`cut-s3`, `slow-s3`,
+`kill-mid-put`) and invariants R1–R6. `make e2e-dataplane-r2` runs all
+three (nightly too); `TW_DP_SCENARIO=r2-s3` and the other `TW_DP_*`
+variables pick one, as above, with `-run TestR2`. The rig, the invariants
+and the results are in [ledger/r2.md](ledger/r2.md).
+
 ## Each iteration
 
 1. Read `LEDGER.md` and pick one item: a harness fix, an open finding to
