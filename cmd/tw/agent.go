@@ -70,6 +70,10 @@ func cmdAgentSetup(args []string, remove bool) error {
 	if remove {
 		verb = "remove"
 	}
+	refresh := false
+	if !remove {
+		args, refresh = cutRefreshFlag(args) // agent_refresh.go: tw upgrade's hidden flag
+	}
 	f := newFlags("agent")
 	scope := f.String("scope", "user", "user: your home directory (every project) | project: this project's files (--dir)")
 	dir := f.String("dir", ".", "the project directory (--scope project)")
@@ -88,6 +92,7 @@ func cmdAgentSetup(args []string, remove bool) error {
 		return err
 	}
 	opts := twagent.Options{Version: version, Remove: remove}
+	opts.Refresh = refresh
 	switch *scope {
 	case "user":
 		opts.Scope = twagent.ScopeUser
@@ -114,7 +119,7 @@ func cmdAgentSetup(args []string, remove bool) error {
 			}
 			opts.Agents = append(opts.Agents, a)
 		}
-	case remove:
+	case remove || refresh:
 		opts.Agents = twagent.Agents
 	default:
 		for _, d := range det {

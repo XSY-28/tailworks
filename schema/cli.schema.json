@@ -3417,7 +3417,7 @@
     },
     "upgrade": {
       "type": "object",
-      "description": "tw upgrade: on a tw up machine {plan, upgraded, backup?, rolledBack?, health?, notActiveBefore?}; with --fleet or a linked mgmt, the plan (--plan: {from, to, steps, breaking, blockers, warnings}) or the upgrade run {id, to, state, steps}; tw upgrade status|pause|resume|abort print the run ({runs: []} when there is none).",
+      "description": "tw upgrade: on a tw up machine {plan, upgraded, backup?, rolledBack?, health?, notActiveBefore?, agentSkills?}; with --fleet or a linked mgmt, the plan (--plan: {from, to, steps, breaking, blockers, warnings}) or the upgrade run {id, to, state, steps}; tw upgrade status|pause|resume|abort print the run ({runs: []} when there is none).",
       "properties": {
         "plan": {
           "type": "object"
@@ -3440,6 +3440,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "agentSkills": {
+          "type": "string",
+          "description": "what the new tw's agent setup --refresh did to the user-scope agent skills tw wrote"
         },
         "id": {
           "type": "string"
