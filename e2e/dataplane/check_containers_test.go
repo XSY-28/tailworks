@@ -125,6 +125,11 @@ func checkK1(in kInput) result {
 	for _, o := range in.ops {
 		byObj[o.Obj] = append(byObj[o.Obj], o)
 	}
+	for _, o := range in.ops {
+		if strings.HasPrefix(o.Err, "200 without a report") {
+			r.note("%s: %s (sent %s, fault: %s)", o.Obj, o.Err, o.Sent.Format("15:04:05.000"), faultAt(in.faults, o.Sent))
+		}
+	}
 	var stale, rolled, changes, downs int
 	var maxDown int64
 	for obj, ops := range byObj {

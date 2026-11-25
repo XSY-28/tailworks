@@ -285,6 +285,11 @@ func (l *ctrLoad) call(obj, op string) ctrOp {
 	json.Unmarshal(b, &r)
 	o.OK = resp.StatusCode == 200
 	o.Boot, o.Rnd, o.Started, o.Epoch, o.MagicDNS, o.ObjectID, o.MS = r.Boot, r.Rnd, r.Started, r.Epoch, r.MagicDNS, r.ObjectID, r.MS
+	if o.OK && op == "up" && (o.Boot == "" || o.Epoch == 0) {
+		// Not the object's answer (seen once right after a hostd restart).
+		o.OK = false
+		b = append([]byte("200 without a report: "), b...)
+	}
 	if !o.OK {
 		o.Err = strings.TrimSpace(string(b))
 		if len(o.Err) > 300 {
