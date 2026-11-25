@@ -13,6 +13,7 @@ the recipe says what you'll see instead.
 - [A Durable Object per user, authorized by `getCaller`](#a-durable-object-per-user-authorized-by-getcaller)
 - [Choose which classes get their own node](#choose-which-classes-get-their-own-node)
 - [A public webhook with signature verification](#a-public-webhook-with-signature-verification)
+- [Use your MCP server from claude.ai or ChatGPT](mcp-public.md): one public `/mcp` with OAuth from tsidp (its own page)
 - [A cron job that writes to KV](#a-cron-job-that-writes-to-kv)
 
 The templates (`tw init <dir> --template <name>`) are longer examples;
