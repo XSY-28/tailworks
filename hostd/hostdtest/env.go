@@ -97,6 +97,10 @@ type Options struct {
 	// MgmtClock is the real mgmt's clock and its store's (BackendReal
 	// only; nil: the real time). Tests that age leases move it forward.
 	MgmtClock mgmt.Clock
+
+	// Workerd is the workerd binary hostd runs ("": nettest.WorkerdBinary).
+	// A test can wrap the real one (kvclock_test.go skews its clock).
+	Workerd string
 }
 
 // Env is fakemgmt (on a unix socket) plus one running tw-hostd.
@@ -123,6 +127,9 @@ func Start(t testing.TB, o Options) *Env {
 	wd, err := nettest.WorkerdBinary()
 	if err != nil {
 		t.Skip(err)
+	}
+	if o.Workerd != "" {
+		wd = o.Workerd
 	}
 	if !HasNode() {
 		t.Skip("node not available (needed to bundle apps)")
