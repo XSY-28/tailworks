@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -170,4 +171,24 @@ func skewHost(n *nemesis, h string) string {
 		return fmt.Sprintf("%v → %v; workerd: %v", prev, to, err)
 	}
 	return fmt.Sprintf("%v → %v; the Worker reads %+.1fs, a Durable Object %+.1fs", prev, to, got.Seconds(), obj.Seconds())
+}
+
+// forwardStepBefore reports whether a skew fault stepped a host's clock
+// forward in the 15 s before t (#569: the lock template measures a lease on
+// its host's wall clock, so a forward step ends it early).
+func forwardStepBefore(faults []faultEv, t time.Time) bool {
+	for _, f := range faults {
+		if f.Kind != "skew" || t.Before(f.Start) || t.After(f.End.Add(15*time.Second)) {
+			continue
+		}
+		from, rest, ok := strings.Cut(f.Detail, " → ")
+		to, _, _ := strings.Cut(rest, ";")
+		to, _, _ = strings.Cut(to, " ")
+		a, err1 := time.ParseDuration(from)
+		b, err2 := time.ParseDuration(to)
+		if ok && err1 == nil && err2 == nil && b > a {
+			return true
+		}
+	}
+	return false
 }
