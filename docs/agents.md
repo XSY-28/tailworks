@@ -138,9 +138,9 @@ identity check. The design is in
 | Tool | What it does | Who gets it |
 |---|---|---|
 | `whoami` | who tailworks thinks you are, your tools, the grant for the rest | everyone admitted |
-| `status`, `ls`, `logs`, `audit` | like the CLI commands (`logs` gives request records, `console: true` the raw output) | tailworks admins and any `github.com/rosskukulinski/tailworks/cap/mcp` holder |
+| `status`, `ls`, `logs`, `audit` | like the CLI commands (`logs` gives request records with `tw logs`' filters, `console: true` the raw output; `audit` takes `human`) | tailworks admins and any `github.com/rosskukulinski/tailworks/cap/mcp` holder |
 | `deploy` | deploy a bundle, or redeploy (`replace: true`: re-place) the current one | a `github.com/rosskukulinski/tailworks/cap/mcp` grant naming it |
-| `kill`, `undeploy` | no undo; a `reason` is required and audited | a `github.com/rosskukulinski/tailworks/cap/mcp` grant naming it |
+| `kill`, `undeploy` | no undo; a `reason` is required and audited; `kill` takes the object's sub-agents too, like `tw kill` (`cascade: false`: only the object) | a `github.com/rosskukulinski/tailworks/cap/mcp` grant naming it |
 
 Register it with your agent through the CLI's stdio bridge. It works on
 the tailworks host and on any `tw link`ed machine, and needs no credentials:
