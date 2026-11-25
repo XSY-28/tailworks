@@ -17,3 +17,7 @@ Not done: appending `from` to `tw ls`/`tw status`'s image sub-line (optional in
 the issue; D4 alignment).
 
 ## Tests
+- `go test ./cmd/tw -run 'TestDeployImagesLines|TestCLIJSONContract|TestCLIReferenceUpToDate'`: ok.
+- `make changes-check`: ok (cli-json fragment). `make lint`: ok. `make test` (local, after merging origin/master): ok.
+- Trial merges with PR #617 and with branch placement-flags (#525): clean.
+- Skipped: `make demo-test` (demo apps have no containers, so their deploy output and JSON are unchanged); `make e2e-container` (Linux/KVM only).
