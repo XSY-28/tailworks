@@ -29,7 +29,7 @@ as a note naming the issue (`known_deploys_test.go`), not a failure.
 | F3 | FIXED (#584) | V1 | #584 | A deploy of epoch 145 held up 8 s (its bundle fetch went through a replica whose Postgres link was blackholed) finished after the epoch-147 assignment and set the workload's epoch back to 145: one copy answered at 147, then 145. Fencing tokens are built on that epoch. `deploy` now only raises it. `TestDeployNeverLowersEpoch` |
 | F4 | CONFIRMED, needs a decision (#577) | V6 (and V3 before the workload reported Durable Object errors) | #577 | A preview deployed again on a host where promote had undeployed it: the workload node answers, the deployment is `active`, but its Durable Object answers `410 killed` until the preview lands on another host. A kill writes `__tw_killed` into the object's storage, and DO storage outlives `tw undeploy`. Same for any workload undeployed and deployed again on the same host. Also: such a preview reuses the old storage, though ADR-048 says it starts empty |
 
-| F5 | CONFIRMED (Linux, SQLite mgmt) | V6 | #604 | A ready report lost to a mgmt restart is never sent again: the node joined at 00:13:27.73, mgmt had been SIGKILLed 70 ms earlier, the PATCH failed with `connection reset by peer`, and the deployment's endpoint stayed `minted` past the end of the run. hostd retries a ready report only after `lease_lost` (#210) |
+| F5 | FIXED in PR #607 (Linux, SQLite mgmt) | V6 | #604 | A ready report lost to a mgmt restart is never sent again: the node joined at 00:13:27.73, mgmt had been SIGKILLed 70 ms earlier, the PATCH failed with `connection reset by peer`, and the deployment's endpoint stayed `minted` past the end of the run. hostd retries a ready report only after `lease_lost` (#210) |
 
 ## Hypotheses
 

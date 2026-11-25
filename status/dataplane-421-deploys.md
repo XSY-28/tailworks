@@ -40,7 +40,7 @@ secrets, with mgmt as replicas on Postgres.
 | F2 V4: concurrent secret writes through two replicas lost one (a deleted secret came back) | #578 | PR #597 (multimgmt H24) |
 | F3 V1: a held-up deploy lowered the workload's epoch 147 → 145 | #584 | PR #601 |
 | F4 V6: a preview redeployed where promote undeployed it keeps a killed Durable Object (any undeploy + redeploy on the same host) | #577 | needs a decision (what undeploy does to DO storage); reported as a known note |
-| F5 V6 (Linux, SQLite mgmt): a ready report lost to a mgmt restart is never retried; the endpoint stays `minted` | #604 | fix is clear (retry on transport errors and 5xx); not done in this branch |
+| F5 V6 (Linux, SQLite mgmt): a ready report lost to a mgmt restart is never retried; the endpoint stays `minted` | #604 | PR #607 (retry on transport errors and 5xx) |
 
 This branch carries the three fixes (cherry-picked) so the loop runs
 past them; they merge cleanly when their PRs land.
