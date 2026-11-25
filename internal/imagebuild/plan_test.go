@@ -25,7 +25,7 @@ func TestPlanBuildContext(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "afile"), nil, 0o644)
 	classes := []container.Class{{Class: "S", Source: "./docker/Dockerfile", Images: map[string]string{"py": "", "same": ""},
 		ImageSources: map[string]string{"py": "./py/Dockerfile", "same": "./py"},
-		Build: &container.Build{Context: ".", Vars: map[string]string{"A": "1"}, ImageContexts: map[string]string{"py": "./shared"}}}}
+		Build:        &container.Build{Context: ".", Vars: map[string]string{"A": "1"}, ImageContexts: map[string]string{"py": "./shared"}}}}
 	jobs, err := Plan(dir, classes)
 	if err != nil {
 		t.Fatal(err)
