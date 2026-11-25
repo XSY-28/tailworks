@@ -20,3 +20,11 @@ Delete the path, `GetObjectCertificate`, `mgmt/deprecated_routes.go`, the
 `hostd/fakemgmt/drift_test.go` allowlist entry and `not_ready` (its only
 emitter) from the spec enum and docs/errors.md; `make api`; a Breaking
 release note. Keep #520 open for that.
+
+## Tests
+
+- `go test ./mgmt/ -run 'TestObjectCertificateDeprecated|TestNodeCertificates'`: ok
+- `go test ./mgmt/ui/ ./hostd/fakemgmt/`: ok
+- `make lint`: ok (after merging origin/master)
+- `make test` (mbp): ok except `mgmt TestRedeployAfterUndeploy` (heartbeat
+  timing under load, 503 no_host); passes locally `-count=2`.
