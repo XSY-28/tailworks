@@ -371,6 +371,10 @@ type Error struct {
 	TraceID string         `json:"trace_id"`
 	// RetryAfter (seconds), when set, is sent as the Retry-After header.
 	RetryAfter int `json:"-"`
+
+	// hostNames (misdirected_request only) are mgmt's own names, for the
+	// browser error page's fix (errors_html.go). Never serialized.
+	hostNames []string
 }
 
 func (e *Error) Error() string { return e.Code + ": " + e.Message }
