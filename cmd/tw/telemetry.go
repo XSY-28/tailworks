@@ -56,10 +56,10 @@ func cmdTelemetry(args []string) error {
 		return fail("bad_request", "--otlp, --header and --signals are for tw telemetry set")
 	}
 	var put mgmtapi.OTLPExport
-	switch sub {
+	switch normalizeVerb(sub) {
 	case "show", "ls":
 		sub = "show"
-	case "rm", "delete", "off":
+	case "rm", "off":
 		sub = "rm"
 	case "set":
 		put.Endpoint = *endpoint

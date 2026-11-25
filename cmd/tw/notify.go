@@ -62,10 +62,10 @@ func cmdNotify(args []string) error {
 		return fail("bad_request", "--webhook, --header and --events are for tw notify set")
 	}
 	put := map[string]any{}
-	switch sub {
+	switch normalizeVerb(sub) {
 	case "show", "ls":
 		sub = "show"
-	case "rm", "delete", "off":
+	case "rm", "off":
 		sub = "rm"
 	case "test":
 	case "set":
