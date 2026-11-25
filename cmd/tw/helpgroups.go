@@ -27,14 +27,27 @@ const (
 	groupOperate helpGroup = "Operate"
 )
 
+// Groups added after the first six; separate so gofmt keeps those aligned.
+const (
+	// groupCodingAgents is the plumbing for coding agents (tw mcp, tw agent).
+	groupCodingAgents helpGroup = "Coding agents"
+	// groupScaleOut is more tenants and hosts than tw up sets up.
+	groupScaleOut helpGroup = "Scale out"
+	// groupAdvanced is one-time admin tasks for larger installs.
+	groupAdvanced helpGroup = "Advanced"
+)
+
 // helpGroupOrder is the order of the groups in `tw help`.
 var helpGroupOrder = []helpGroup{
 	groupSetUp,
 	groupDevelop,
+	groupCodingAgents,
 	groupDeploy,
 	groupData,
 	groupObserve,
 	groupOperate,
+	groupScaleOut,
+	groupAdvanced,
 }
 
 // helpLine is c's line in `tw help`: c.short, else the help text up to

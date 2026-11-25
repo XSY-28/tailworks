@@ -158,7 +158,11 @@ func cmdImage(args []string) error {
 
 func cmdImagePublic(sub string, args []string) error {
 	f := newFlags("image public " + sub)
-	arch := f.String("arch", "", "comma-separated arches to mark (default: every linux amd64/arm64 image the ref has)")
+	// --arch only means something to add; ls and rm reject it as unknown.
+	arch := new(string)
+	if sub == "add" {
+		arch = f.String("arch", "", "comma-separated arches to mark (default: every linux amd64/arm64 image the ref has)")
+	}
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
