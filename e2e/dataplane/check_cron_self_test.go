@@ -45,6 +45,18 @@ func TestCronCheckers(t *testing.T) {
 		{"duplicate run", "C1", func(ch *cronHist) {
 			ch.runs = append(ch.runs, cronEv{WL: cronSL, Cron: "* * * * *", Run: "dup", Phase: "start", St: min(4).UnixMilli(), Node: "h1-cron", At: min(4).Add(time.Second)})
 		}},
+		{"rerun under a clock step, no restart", "C1", func(ch *cronHist) {
+			ch.h.faults = []faultEv{{Kind: "clock-back", Host: "h1", Start: min(4).Add(10 * time.Second), End: min(6), Detail: "clock -2m0s for 1m30s"}}
+			ch.runs = append(ch.runs, cronEv{WL: cronSL, Cron: "* * * * *", Run: "again", Phase: "start", St: min(4).UnixMilli(), Node: "h1-cron", At: min(5).Add(30 * time.Second)})
+		}},
+		{"rerun after a restart under a clock step (#594)", "", func(ch *cronHist) {
+			ch.h.faults = []faultEv{{Kind: "clock-back", Host: "h1", Start: min(4).Add(10 * time.Second), End: min(6), Detail: "clock -2m0s for 1m30s, hostd on h1 restarted half way"}}
+			ch.runs = append(ch.runs, cronEv{WL: cronSL, Cron: "* * * * *", Run: "again", Phase: "start", St: min(4).UnixMilli(), Node: "h1-cron", At: min(5).Add(30 * time.Second)})
+		}},
+		{"rerun after a restart, no clock step", "C1", func(ch *cronHist) {
+			ch.h.faults = []faultEv{{Kind: "kill-host", Host: "h1", Start: min(4).Add(10 * time.Second), End: min(4).Add(15 * time.Second)}}
+			ch.runs = append(ch.runs, cronEv{WL: cronSL, Cron: "* * * * *", Run: "again", Phase: "start", St: min(4).UnixMilli(), Node: "h1-cron", At: min(4).Add(20 * time.Second)})
+		}},
 		{"overlap", "C2", func(ch *cronHist) {
 			for i := range ch.runs {
 				if ch.runs[i].Run == "r1003" && ch.runs[i].Phase == "end" {

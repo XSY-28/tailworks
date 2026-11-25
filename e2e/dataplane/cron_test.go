@@ -456,14 +456,13 @@ func runCron(t *testing.T, wd, scenario string, names []string, seed int64, dur 
 	}
 	t.Cleanup(ctl.Close)
 	// A test build of the binaries, so the clock faults can step every
-	// host's wall clock (internal/wallclock). Production builds can't.
+	// host's wall clock (internal/wallclock; production builds can't). One
+	// offset file for all hosts: the harness gives every process the same
+	// environment. It's hostd's clock that decides when cron is due, so
+	// workerd keeps the true one (no TW_TEST_CLOCK_PRELOAD: with it, every
+	// hostd would mirror the shared offset to the same .secs file).
 	clock := filepath.Join(work, "clock")
 	t.Setenv("TW_TEST_WALL_CLOCK_FILE", clock)
-	if lib, why := cliflow.BuildClockPreload(t); lib != "" {
-		t.Setenv("TW_TEST_CLOCK_PRELOAD", lib)
-	} else {
-		t.Logf("clock faults step hostd's clock only (workerd keeps the true one): %s", why)
-	}
 	c := &cluster{t: t, bin: cliflow.BuildBinariesTags(t, "twtestclock"), dir: rdir, work: work, ctl: ctl, tsURL: fakeTS(t).URL,
 		sock: filepath.Join(work, "mgmt.sock"), workerd: wd, hosts: []string{"h1", "h2", "h3"},
 		proxies: map[string]*sockProxy{}, pids: pids, procs: map[string]*proc{}, stopped: map[string]bool{}}

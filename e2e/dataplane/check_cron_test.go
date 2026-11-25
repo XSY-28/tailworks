@@ -202,28 +202,29 @@ func checkC1(ch *cronHist, runs []*cronRunInfo) result {
 			d = append(d, x.String())
 		}
 		msg := fmt.Sprintf("%s ran %d times: %s", k, len(xs), strings.Join(d, "; "))
-		if restartedUnderClockStep(ch.h.faults, xs) {
+		if issue := knownRerun(ch.h.faults, xs); issue != "" {
 			known++
-			r.note("known (#594): %s", msg)
+			r.note("known (%s): %s", issue, msg)
 			continue
 		}
 		dups++
 		r.fail("%s", msg)
 	}
-	r.Summary = fmt.Sprintf("%d runs of %d (trigger, minute) pairs, %d run more than once, %d known (#594: hostd restarted while the clock was stepped)",
+	r.Summary = fmt.Sprintf("%d runs of %d (trigger, minute) pairs, %d run more than once, %d known (#594, #600: a clock step with a restart or a move)",
 		len(runs), len(by), dups, known)
 	return r
 }
 
-// restartedUnderClockStep: every run of xs is on one host, whose hostd
-// restarted between the first and the last of them, with a clock step in
-// between too (#594: cronLast doesn't survive a restart).
-func restartedUnderClockStep(faults []faultEv, xs []*cronRunInfo) bool {
+// knownRerun names the open issue a rerun of one minute falls under, or "":
+// a clock step between the runs, and either one host whose hostd
+// restarted in between (#594: cronLast didn't survive a restart) or two
+// hosts (#600: cronLast is per host, so the host a workload moved to
+// doesn't know what the old one ran).
+func knownRerun(faults []faultEv, xs []*cronRunInfo) string {
 	first, last := xs[0].First, xs[0].First
+	oneHost := true
 	for _, x := range xs {
-		if x.Host != xs[0].Host {
-			return false
-		}
+		oneHost = oneHost && x.Host == xs[0].Host
 		if x.First.Before(first) {
 			first = x.First
 		}
@@ -233,7 +234,7 @@ func restartedUnderClockStep(faults []faultEv, xs []*cronRunInfo) bool {
 	}
 	restarted, stepped := false, false
 	for _, f := range faults {
-		if f.Start.Before(first) || f.Start.After(last) {
+		if f.End.Before(first) || f.Start.After(last) {
 			continue
 		}
 		if strings.HasPrefix(f.Kind, "clock-") {
@@ -243,7 +244,15 @@ func restartedUnderClockStep(faults []faultEv, xs []*cronRunInfo) bool {
 			restarted = true
 		}
 	}
-	return restarted && stepped
+	switch {
+	case !stepped:
+		return ""
+	case !oneHost:
+		return "#600"
+	case restarted:
+		return "#594"
+	}
+	return ""
 }
 
 // checkC2 — no two runs of one trigger overlap: no run reports anything
