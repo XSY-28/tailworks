@@ -79,8 +79,7 @@ How it differs from a tarball install:
 
 `npm create tailworks` runs `tw init` when `tw` is on your PATH. Without
 it, it copies the template and names the app's workload and tags after the
-directory the same way; only `--tags`, `--object-tags` and `--keep-tags`
-need `tw`.
+directory the same way; only `--tags` and `--object-tags` need `tw`.
 
 To remove it: `tw uninstall`, then `npm uninstall -g tailworks` (which
 `tw uninstall` prints last). `tw uninstall` also deletes your state in

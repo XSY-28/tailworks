@@ -27,8 +27,9 @@ an older server with `profile_unsupported`. Tested against v0.29.7 with
 | Caller grant (`--apply-policy` on a new app) | `autogroup:member` → the app's tag | the same: Headscale accepts `autogroup:member` as a grant source. `autogroup:admin` and other autogroups are left out |
 
 Everything else works the same way: Durable Objects with their own nodes,
-WhoIs callers (`getCaller`), on-behalf-of assertions, spawn narrowing, the
-pre-joined node pool, audit and deploy preflight.
+WhoIs callers (`getCaller`), spawn narrowing, the pre-joined node pool,
+audit and deploy preflight. (On-behalf-of assertions aren't built on either
+profile: RFC §4.6.)
 
 ## Set up Headscale
 

@@ -95,7 +95,10 @@ function who2(who: Caller) {
  * Semantics (DX.md journey 3):
  *  - union: the tool is allowed if ANY grant lists it in `tools` (or "*");
  *    a grant without `tools` allows nothing;
- *  - groups[tool] (if present) requires actingFor.groups ∩ groups ≠ ∅;
+ *  - groups[tool] (if present) would require the human the caller acts for
+ *    to be in one of the groups. On-behalf-of assertions (RFC §4.6) are not
+ *    built, so no caller can show a group: such a grant denies the tool
+ *    (fail closed);
  *  - numeric limits: fact `usd` is checked against `limits[tool].maxUsd`,
  *    taking the MAX across matching grants; a matching grant without that
  *    limit makes it unbounded.
@@ -105,14 +108,9 @@ export function authorizeTool(who: Caller, cap: string, facts: { tool: string; [
   const tool = facts?.tool;
   if (!tool) throw mcpError("bad_request", "authorizeTool: facts.tool is required");
   const grants = who.caps<Grant>(cap).filter((g) => g && typeof g === "object");
-  const chain = who.chain.map((h) => h.nodeId);
   const toolOK = (g: Grant) => Array.isArray(g.tools) && (g.tools.includes(tool) || g.tools.includes("*"));
-  const groupOK = (g: Grant) => {
-    const need = g.groups?.[tool];
-    if (!need || need.length === 0) return true;
-    const have = who.actingFor?.groups ?? [];
-    return need.some((x) => have.includes(x));
-  };
+  // A grant that names groups for the tool never matches (see above).
+  const groupOK = (g: Grant) => !g.groups?.[tool]?.length;
   const matching = grants.filter((g) => toolOK(g) && groupOK(g));
   if (matching.length === 0) {
     const have = [...new Set(grants.flatMap((g) => (Array.isArray(g.tools) ? g.tools : [])))];
@@ -126,7 +124,6 @@ export function authorizeTool(who: Caller, cap: string, facts: { tool: string; [
       {
         missing: { cap, tool },
         have: { cap, tools: have },
-        chain,
         snippet: JSON.stringify({ src, dst: ["<this server's tag or svc>"], ip: ["tcp:80"], app: { [cap]: [{ tools: [tool] }] } }),
       },
     );
@@ -151,7 +148,6 @@ export function authorizeTool(who: Caller, cap: string, facts: { tool: string; [
       throw mcpError("cap_limit_exceeded", `${tool} ${f}=${v} exceeds ${key}=${lim} for ${who2(who)} (max across ${matching.length} matching grant(s))`, {
         missing: { cap, tool },
         limit: { [key]: lim },
-        chain,
       });
     }
   }
@@ -164,7 +160,7 @@ export function authorizeTool(who: Caller, cap: string, facts: { tool: string; [
 export interface BudgetOptions {
   /** Daily limit; default: the first perDay* limit from authorizeTool for this tool. */
   limit?: number;
-  /** Override the principal key (default: actingFor/user login, else nodeId). */
+  /** Override the principal key (default: the user's login, else the nodeId). */
   key?: string;
 }
 

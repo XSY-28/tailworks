@@ -1203,6 +1203,11 @@ function createTailnetContext(tw, env, bindings, self, ticket) {
   };
   const tn = {
     fetch: tfetch,
+    // forward is no longer part of TailnetContext: signed on-behalf-of
+    // assertions (RFC §4.6) are not built, so it was only fetch with the
+    // request's headers copied. Kept, unlisted, for one minor release so
+    // deployed apps that call it keep working; use
+    // ctx.tailnet.fetch(new Request(url, request)) instead.
     forward(request, to, init) {
       const hasBody = request.method !== "GET" && request.method !== "HEAD";
       return tfetch(new Request(String(to), { method: request.method, headers: request.headers, body: hasBody ? request.body : void 0, ...init }));

@@ -50,8 +50,6 @@ export function renameApp(dir, wl) {
     if (!existsSync(p)) continue;
     // The first "name" (package.json's top-level one; the workload's in the others).
     let b = readFileSync(p, "utf8").replace(/("name"\s*:\s*)"[^"]*"/, `$1"${wl}"`);
-    // A template var that names the app, when the template has one.
-    if (fn === "wrangler.jsonc") b = b.replace(/("APP_NAME"\s*:\s*)"[^"]*"/g, `$1"${wl}"`);
     if (fn === "tailworks.jsonc") {
       b = appTags(b, wl);
       const m = b.match(/"tags"\s*:\s*\[\s*"(tag:tw-wl-[A-Za-z0-9._-]+)"/);

@@ -15,8 +15,8 @@ not one per object.
   "runtime": "node",
   "main": "src/server.ts",          // bundled to dist/server.mjs by create-tailworks build-node
   "node": {
-    "health": "/healthz",           // any HTTP answer = up (default "/")
-    "listen": "tcp",                // tcp: PORT on 127.0.0.1 (default) | unix: TW_SOCKET
+    "health": "/healthz",           // optional: any HTTP answer on "/" (the default) already counts as up
+    "listen": "tcp",                // tcp: PORT on 127.0.0.1 (default) | unix: TW_SOCKET, keeps AF_UNIX (see "Linux sandbox limits")
     "env": { "LOG_LEVEL": "info" }, // TW_* is reserved
     "args": ["--enable-source-maps"]
   },

@@ -115,10 +115,6 @@ func cmdInit(args []string) error {
 			done = true
 			return re.ReplaceAll(m, []byte(`${1}"`+wl+`"`))
 		})
-		if fn == "wrangler.jsonc" {
-			// A template var that names the app (refund-approval's approve hint).
-			b = regexp.MustCompile(`("APP_NAME"\s*:\s*)"[^"]*"`).ReplaceAll(b, []byte(`${1}"`+wl+`"`))
-		}
 		if fn == "tailworks.jsonc" {
 			if nb, _, err := appTags(b, wl); err == nil {
 				b = nb
