@@ -57,3 +57,5 @@ only before the first response byte). I left that as a possible follow-up.
 | `go test -race -count=1 -run Queue ./mgmt` | ok |
 | `go test -race -count=1 -run 'TestQueues\|TestRealMgmtStores/Queues\|TestInvokeErr' ./hostd ./hostd/fakemgmt` | ok |
 | `make e2e-queues` | ok |
+| `make lint`, `make changes-check` | ok (fragment `changes/fix-412-queue-claim-cancel.md`, kind fix) |
+| `make test` on mbp (`sh ~/.claude/scratch/mbp-test.sh test`), at origin/master 6a157ea4 | ok (exit 0; hostd 262 s, mgmt 141 s, cmd/tw 128 s) |
