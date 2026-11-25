@@ -9,6 +9,9 @@
 //   GET /reg/get            → Reg DO: 200 {v, epoch}
 //   GET /d1/add?id=<id>     → INSERT INTO ops (id); 200 {id}
 //   GET /d1/all             → 200 {ids: [...]}
+//   GET /kv/put?k=&v=[&ttl=] → KV.put(k, v[, {expirationTtl}]); 200 {epoch}
+//   GET /kv/get?k=          → KV.get(k); 200 {v (null if missing), epoch}
+//   GET /clock              → 200 {now: Date.now()} (the skew fault's check)
 //   /pulse/start?url=...    → Pulse DO: an egress call every 250 ms
 //   /locks/...              → the lock template
 import { DurableObject } from "cloudflare:workers";
@@ -82,6 +85,16 @@ export default {
         await db.prepare("INSERT OR IGNORE INTO ops (id) VALUES (?)").bind(u.searchParams.get("id")).run();
         return Response.json({ id: u.searchParams.get("id") });
       }
+      if (p === "/kv/put") {
+        const ttl = Number(u.searchParams.get("ttl") || 0);
+        await env.KV.put(u.searchParams.get("k"), u.searchParams.get("v"), ttl ? { expirationTtl: ttl } : undefined);
+        return Response.json({ epoch: await epochOf(ctx) });
+      }
+      if (p === "/kv/get") {
+        const v = await env.KV.get(u.searchParams.get("k"));
+        return Response.json({ v, epoch: await epochOf(ctx) });
+      }
+      if (p === "/clock") return Response.json({ now: Date.now() });
       if (p === "/d1/all") {
         const db = await d1(env);
         const { results } = await db.prepare("SELECT id FROM ops").all();
