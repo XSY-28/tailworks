@@ -84,11 +84,12 @@ test-sdk: deps
 
 ## test-images: ADR-032 D3 on the developer machine: tw deploy's image builder for real (docker
 ## buildx, both arches, alias contexts from tailworks' registry) and the registry conformance run with
-## crane (CRANE=<path>, default: crane on PATH; go install github.com/google/go-containerregistry/cmd/crane@v0.20.6).
+## crane (CRANE=<path>, default: crane on PATH; go install github.com/google/go-containerregistry/cmd/crane@v0.20.6), and
+## that each published arm64 sandbox rebuild's pinned digest resolves (skipped while the digests are placeholders).
 CRANE ?= $(shell command -v crane)
 .PHONY: test-images
 test-images:
-	TW_TEST_DOCKER=1 TW_CRANE="$(CRANE)" $(GO) test -count=1 -v -run 'TestBuildAndPush|TestCraneConformance|TestCLIImages' ./internal/imagebuild/ ./internal/registry/ ./cmd/tw/
+	TW_TEST_DOCKER=1 TW_TEST_IMAGE_SOURCES=1 TW_CRANE="$(CRANE)" $(GO) test -count=1 -v -run 'TestBuildAndPush|TestCraneConformance|TestCLIImages|TestDefaultAliasSourcesResolve' ./internal/imagebuild/ ./internal/registry/ ./cmd/tw/
 
 ## e2e-placement: smart placement (ADR-033) and D1 across a restart and a move (ADR-038), hermetic: real tw-mgmt + two tw-hostd processes on
 ## testcontrol + local DERP, a tag:db peer, one host forced onto DERP; placement, stickiness, --replace.

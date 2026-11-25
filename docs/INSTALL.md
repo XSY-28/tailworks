@@ -890,6 +890,9 @@ arch on either. A guest of the wrong arch is refused (`tw doctor`:
   Ubuntu 24.04 arm64. On amd64, `make e2e-vm` passes on a nested KVM test
   host (2026-11-22); containers on amd64 are not verified yet
   ([details](install-testing.md#the-microvm-tier)).
+- For `cloudflare/sandbox` containers on arm64: tailworks' arm64 rebuilds in
+  mgmt's registry. They aren't published yet, so build them once with Docker
+  and `tw image push` them ([containers.md](containers.md#platforms)).
 - `cryptsetup`, `losetup`, `mkfs.ext4`, `ip` (Ubuntu/Debian cloud images
   have them; else `apt-get install cryptsetup-bin util-linux e2fsprogs iproute2`).
 - For tenants that don't trust each other, a host set up as Firecracker's

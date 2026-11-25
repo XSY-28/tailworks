@@ -4117,6 +4117,7 @@ Live usage against `HostCapacity`, reported with every heartbeat. `containers` i
 |---|---|---|---|
 | `arch` | string | no | "" = every arch. |
 | `from` | string | yes |  |
+| `source` | string | no | A digest-pinned external image (`ghcr.io/…:<tag>@sha256:…`) that fills `to` when it is not in tailworks' registry yet: mgmt copies it into `public/` at deploy (unless `-no-mirror`), and `tw deploy` builds from it. Absent: `to` must be pushed (`tw image push`). |
 | `to` | string | yes |  |
 
 #### `ImageAliasList`

@@ -196,6 +196,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### image_build_failed
 1 · cli. **When:** `tw deploy` could not build or push an app's Dockerfile container image with `docker buildx`. **Fix:** the build output is in the detail; check `docker buildx version` works on the deploying machine.
 
+### image_unavailable
+502 · mgmt, hostd. **When:** a container image could not be pinned at deploy: it isn't in tailworks' registry, it has no image for any of the pool's arches, or the upstream mirror failed. On an arm64 host, `cloudflare/sandbox:<v>` is pinned to tailworks' rebuild `tw.local/cloudflare-sandbox:<v>-arm64`; mgmt fills that from the alias's published `source` image on first use, and only when the alias has no `source` (or the fetch failed) does the deploy stop here. From hostd: the container's pin is for another arch, or names a repository outside the tenant's scope. **Fix:** the message names the image and the registry repository. For an image your app builds, run `tw deploy` (it builds and pushes). For an arm64 sandbox rebuild, check mgmt can reach the `source` registry; without one, or with `-no-mirror`, build it with `guest/images/build-sandbox-images.sh` and push it with `tw image push` ([containers.md](containers.md#platforms)). From hostd, redeploy so mgmt pins the image for that host's arch.
+
 ### immutable_field
 400 · mgmt. **When:** a PATCH touched a field the caller may not change (IDs, tailnet, creation time). **Fix:** send only the mutable fields (`tw tenant set`, `PATCH /v1/objects/{id}`).
 
@@ -240,6 +243,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### mint_mode_required
 400 · cli. **When:** `tw up` was given no credential. **Fix:** `tw up --oauth-client-file <file>` with an OAuth client of your tailnet (the error prints how to create one; INSTALL.md); on Headscale, `tw up --control-url <server_url> --tailnet <base_domain>` with the API key in `~/.config/tailworks/headscale.env` or `--api-key-file <file>`.
+
+### mirror_disabled
+409 · mgmt. **When:** `tw image public add` named an external image, and this tw-mgmt does not mirror external images (`-no-mirror`). **Fix:** push the image into the public namespace instead (`tw image push`), or restart tw-mgmt without `-no-mirror` ([containers.md](containers.md#images-build-registry-pinning-host-pull-adr-032-d3)).
 
 ### misdirected_request
 421 · mgmt. **When:** a request on mgmt's tailnet listeners (`:80`, `:443`, the `-tsnet-service` VIP, the operator console) whose `Host` header is neither one of mgmt's own names (its MagicDNS FQDN or short name, `-tsnet-hostname`, `-tsnet-service`) nor an IP literal. This is the DNS-rebinding guard: a web page on a domain rebound to mgmt's IP sends its own domain as `Host` (docs/ADMIN-UI.md). Refused before WhoIs, for every method. **Fix:** address mgmt by its tailnet name (`http(s)://tw-mgmt.<tailnet>/`, `tw whoami` prints it) or its tailnet IP; not through a CNAME or another DNS name that points at it. If you renamed the mgmt node, restart tw-mgmt so it learns the new name. A browser opening the admin UI by the wrong name gets an HTML page listing mgmt's own names.
