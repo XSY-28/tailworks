@@ -16,6 +16,7 @@ import { wrapStores } from "./d1.js";
 import { sealedRequest } from "./seal.js";
 import { installFetchPropagation, runTraced, tracedStubFetch, type SpanRecord } from "./trace.js";
 import { rpcCall, tracedEntry, traceGate, type EntryInfo } from "./rpctrace.js";
+import { facetNamespaces } from "./facetns.js";
 
 // Egress fetch() carries the running handler's trace context
 // (ADR-045).
@@ -343,7 +344,9 @@ export function wrapFacetClass(C: any, name: string, bindings: BindingMap, opts:
         const tw = env?.__TW;
         // Bindings admit before they reach an object (chained creation by
         // an attested object; hostd records it), and __TW stays platform-only.
-        const e = guardEnv(env, bindings, "tailnet", admitter(tw, {}));
+        // Its namespace bindings are NsProxy stubs: facetns.ts gives them
+        // idFromName and get() (#391).
+        const e = guardEnv(facetNamespaces(env, bindings), bindings, "tailnet", admitter(tw, {}));
         // Workflow bindings: the platform's WorkflowGate, as the Workflow API.
         for (const k of Object.keys(opts.workflows ?? {})) if (e?.[k]) e[k] = workflowClient(e[k]);
         define(ctx, createTailnetContext(tw, e, bindings));
