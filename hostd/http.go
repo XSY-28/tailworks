@@ -14,6 +14,7 @@ import (
 	"github.com/rosskukulinski/tailworks/hostd/gen"
 	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
 	"github.com/rosskukulinski/tailworks/hostd/sandbox"
+	"github.com/rosskukulinski/tailworks/internal/wallclock"
 	"github.com/rosskukulinski/tailworks/netd"
 )
 
@@ -110,8 +111,8 @@ func (h *Host) ingressHandler(t *tenant) http.Handler {
 			// A tailnet request may create objects: its ticket (hostd-issued,
 			// hostd-verified) is what the runtime's guarded env presents to
 			// "admit". Public requests get none (RT3-06/07).
-			route["ticket"] = gen.CreateTicket(inst.macKey(), trace, time.Now())
-			sealCaller(blob, inst.macKey(), time.Now()) // sealcf.go (#148)
+			route["ticket"] = gen.CreateTicket(inst.macKey(), trace, wallclock.Now())
+			sealCaller(blob, inst.macKey(), wallclock.Now()) // sealcf.go (#148)
 		}
 		b, _ := json.Marshal(blob)
 		r.Header.Set(netd.HeaderCF, string(b))
@@ -159,7 +160,7 @@ func (h *Host) egressObjHandler(inst *instance) http.Handler {
 			h.serveConnect(w, r, inst, h.connectAsFacet(inst)) // connect.go
 			return
 		}
-		cls, name, ok := gen.VerifyEgressOnce(inst.res.MACKey, r.Header, r.Method, r.RequestURI, time.Now(), &inst.nonces)
+		cls, name, ok := gen.VerifyEgressOnce(inst.res.MACKey, r.Header, r.Method, r.RequestURI, wallclock.Now(), &inst.nonces)
 		bc := takeBinding(r) // servicebind.go
 		if !ok {
 			writeAPIError(w, &apiError{Code: "unknown_object", Detail: "egress request failed platform authentication"})
@@ -398,7 +399,7 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 			// request is held to public.create (ADR-029 D5).
 			var existing bool
 			var e *apiError
-			_, ticketOK := gen.VerifyTicket(inst.macKey(), req.Ticket, time.Now())
+			_, ticketOK := gen.VerifyTicket(inst.macKey(), req.Ticket, wallclock.Now())
 			if req.As != nil || ticketOK {
 				existing, e = h.admitCreate(wl, inst.app, req.Class, req.Name)
 			} else if req.Workflow {
@@ -442,7 +443,7 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 				// A spawn from the Worker (workload identity) is admitted by the
 				// request's ticket; a public request has none, and neither has
 				// code that reached __TW some other way (RT3-07).
-				if _, ok := gen.VerifyTicket(inst.macKey(), req.Ticket, time.Now()); !ok {
+				if _, ok := gen.VerifyTicket(inst.macKey(), req.Ticket, wallclock.Now()); !ok {
 					fail(&apiError{Code: "create_not_admitted", Detail: "spawn from the workload needs the request's create ticket (a public request may not spawn)"})
 					return
 				}
