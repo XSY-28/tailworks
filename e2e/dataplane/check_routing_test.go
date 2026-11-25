@@ -406,6 +406,17 @@ func checkN5(h *rhist) result {
 		}
 		return end
 	}
+	// crashed: host's hostd was killed (kill-host, crash-hostd) between
+	// from and to.
+	crashed := func(host string, from, to time.Time) bool {
+		for _, f := range h.faults {
+			if f.Host == host && (f.Kind == "kill-host" || f.Kind == "crash-hostd") && f.Start.After(from) && !f.Start.After(to) {
+				return true
+			}
+		}
+		return false
+	}
+	orphaned := map[string]bool{}
 	msgs, answered, disorder, lost, holes, boots := 0, 0, 0, 0, 0, map[string]bool{}
 	for _, id := range sortedKeys(conns) {
 		c := conns[id]
@@ -446,6 +457,15 @@ func checkN5(h *rhist) result {
 			case c.end != nil && c.end.Kind == "close" && !c.end.At.After(deadline):
 			case c.end != nil && c.end.Kind == "stop" && c.end.At.Before(deadline):
 			case c.end == nil && last.Before(deadline):
+			case crashed(c.via, c.opens, at):
+				// The host crashed with the connection open: nothing on it
+				// remembers the connection, so only a reset from the
+				// restarted node (if the client reaches it before the node
+				// moves away) or the client's own timeout or ping ends it.
+				if !orphaned[id] {
+					orphaned[id] = true
+					r.note("%s (via %s): open across a host crash, unanswered from message %d (sent %s); ended %v", id, c.via, s, at.Format("15:04:05.000"), c.end != nil)
+				}
 			default:
 				holes++
 				endAt := "never"
@@ -458,8 +478,8 @@ func checkN5(h *rhist) result {
 		}
 	}
 	delete(boots, "")
-	r.Summary = fmt.Sprintf("%d connections, %d messages, %d answered, %d out of order or duplicated, %d lost, %d black-holed, %d object boots",
-		len(conns), msgs, answered, disorder, lost, holes, len(boots))
+	r.Summary = fmt.Sprintf("%d connections, %d messages, %d answered, %d out of order or duplicated, %d lost, %d black-holed, %d left open across a host crash, %d object boots",
+		len(conns), msgs, answered, disorder, lost, holes, len(orphaned), len(boots))
 	return r
 }
 
