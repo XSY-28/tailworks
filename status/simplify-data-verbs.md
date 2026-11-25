@@ -38,4 +38,21 @@ Last update: 2026-11-24 PT. Data commands: one verb helper, per-verb flags, one 
 
 ## Tests
 
-See the PR's Tests section for the commands and results.
+After merging origin/master (which added `needsSubcommand`, now used by
+all five commands):
+
+- `make lint`: ok. `make changes-check`: ok (fragment names protocol: the
+  openapi change is description text).
+- `make test`: cmd/tw failed only `TestSubcommandHelp` (its expectations
+  named list/delete; fixed), then `go test -race ./cmd/tw/` ok. hostd
+  failed `TestLockTemplate`, `TestWorkersKV`, `TestContainerPolyfill`,
+  `TestPythonQueues`, `TestR2Binding` with timeouts under machine load;
+  rerun alone, all pass. An earlier run's mgmt failures
+  (`TestWorkloadReplicas`, `TestWarmKeysRevokedOnCloseInParallel`) passed
+  rerun alone.
+- `make e2e-tw-upgrade`: ok (`TestTwUpgradeSingleMachine`, which drives
+  `kv key get/put --binding` through old and new binaries).
+- Skipped: `make e2e-queues` (drives queues through workers and mgmt, not
+  the tw CLI, whose parsing is what changed); `e2e-compat` / `e2e-wrangler`
+  (binding resolution in a deploy is unchanged; the CLI resolver is new
+  code covered by unit tests).
