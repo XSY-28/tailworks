@@ -98,13 +98,16 @@ var cliSurface = []struct {
 	{"host cordon", []string{"host", "cordon", "h1"}},
 	{"host uncordon", []string{"host", "uncordon", "h1"}},
 	{"host drain", []string{"host", "drain", "h1", "--dry-run"}},
-	{"release ls", []string{"release", "ls"}},
-	{"release import", []string{"release", "import", "/nonexistent/tailworks-0.0.0-linux-amd64.tar.gz"}},
 	{"uninstall", []string{"uninstall", "--dry-run"}},
 	{"backup", []string{"backup"}},
 	{"restore", []string{"restore", "/nonexistent/backup", "--yes"}},
 	{"custody migrate", []string{"custody", "migrate", "--setec-url", "https://secrets.example.ts.net"}},
 	{"upgrade", []string{"upgrade", "--plan", "--from", "/nonexistent"}},
+	{"upgrade", []string{"upgrade", "fleet", "--plan"}},
+	{"upgrade", []string{"upgrade", "fleet", "status"}},
+	{"upgrade import", []string{"upgrade", "import", "/nonexistent/tailworks-0.0.0-linux-amd64.tar.gz"}},
+	{"upgrade releases", []string{"upgrade", "releases"}},
+	{"upgrade rollback", []string{"upgrade", "rollback", "--yes"}},
 	{"host setup", []string{"host", "setup"}},
 	{"host vmcheck", []string{"host", "vmcheck", "app"}},
 	{"image public add", []string{"image", "public", "add", "docker.io/library/alpine:3"}},
@@ -243,7 +246,7 @@ func subDepth(args []string) int {
 			return 3
 		}
 		return 2
-	case "tenant", "host", "secret", "docs", "agent", "queues", "release":
+	case "tenant", "host", "secret", "docs", "agent", "queues":
 		return 2
 	case "kv":
 		return 3 // kv namespace create, kv key put, …

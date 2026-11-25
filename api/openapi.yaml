@@ -3861,7 +3861,7 @@ paths:
       summary: Import catalog entries (from a release's share/tailworks/catalog.json)
       description: |
         Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
-        `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
+        `tw upgrade import <tarball>…|<version>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
         then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
         `release_import`.
       x-tw-role: admin

@@ -37,7 +37,7 @@ func TestSubcommandHelp(t *testing.T) {
 		"image":     {"public add|ls|rm", "push"},
 		"r2":        {"bucket ls|create|rm", "object ls"},
 		"queues":    {"create", "ls", "info", "rm", "purge", "messages", "send"},
-		"upgrade":   {"status|pause|resume|abort"},
+		"upgrade":   {"fleet|status|pause|resume|abort", "import", "releases", "rollback"},
 		"telemetry": {"set", "rm"},
 		"expose":    {"on|off"},
 		"custody":   {"migrate"},

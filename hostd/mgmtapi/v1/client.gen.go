@@ -6575,7 +6575,7 @@ type ClientInterface interface {
 	// ImportReleasesWithBody Import catalog entries (from a release's share/tailworks/catalog.json)
 	//
 	// Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
-	// `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
+	// `tw upgrade import <tarball>…|<version>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 	// then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 	// `release_import`.
 	//
@@ -6587,7 +6587,7 @@ type ClientInterface interface {
 	// ImportReleases Import catalog entries (from a release's share/tailworks/catalog.json)
 	//
 	// Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
-	// `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
+	// `tw upgrade import <tarball>…|<version>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 	// then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 	// `release_import`.
 	//
@@ -9289,7 +9289,7 @@ func (c *Client) ListReleases(ctx context.Context, reqEditors ...RequestEditorFn
 // ImportReleasesWithBody Import catalog entries (from a release's share/tailworks/catalog.json)
 //
 // Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
-// `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
+// `tw upgrade import <tarball>…|<version>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 // then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 // `release_import`.
 //
@@ -9311,7 +9311,7 @@ func (c *Client) ImportReleasesWithBody(ctx context.Context, contentType string,
 // ImportReleases Import catalog entries (from a release's share/tailworks/catalog.json)
 //
 // Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
-// `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
+// `tw upgrade import <tarball>…|<version>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 // then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 // `release_import`.
 //
@@ -18729,7 +18729,7 @@ type ClientWithResponsesInterface interface {
 	// ImportReleasesWithBodyWithResponse Import catalog entries (from a release's share/tailworks/catalog.json)
 	//
 	// Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
-	// `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
+	// `tw upgrade import <tarball>…|<version>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 	// then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 	// `release_import`.
 	//
@@ -18741,7 +18741,7 @@ type ClientWithResponsesInterface interface {
 	// ImportReleasesWithResponse Import catalog entries (from a release's share/tailworks/catalog.json)
 	//
 	// Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
-	// `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
+	// `tw upgrade import <tarball>…|<version>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 	// then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 	// `release_import`.
 	//
@@ -31426,7 +31426,7 @@ func (c *ClientWithResponses) ListReleasesWithResponse(ctx context.Context, reqE
 // ImportReleasesWithBodyWithResponse Import catalog entries (from a release's share/tailworks/catalog.json)
 //
 // Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
-// `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
+// `tw upgrade import <tarball>…|<version>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 // then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 // `release_import`.
 //
@@ -31444,7 +31444,7 @@ func (c *ClientWithResponses) ImportReleasesWithBodyWithResponse(ctx context.Con
 // ImportReleasesWithResponse Import catalog entries (from a release's share/tailworks/catalog.json)
 //
 // Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
-// `tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
+// `tw upgrade import <tarball>…|<version>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 // then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 // `release_import`.
 //

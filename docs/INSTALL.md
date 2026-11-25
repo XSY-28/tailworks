@@ -522,7 +522,7 @@ dir's entries. It deletes nothing else it finds there, and names it.
 | Entry | Written by | In `tw backup`? | Removed by uninstall? | Safe to delete by hand? |
 |---|---|---|---|---|
 | `bin/`, `share/`, `VERSION`, `install.sh` | `install.sh`, `tw upgrade` | no | yes | no: it is the install |
-| `bin.prev/`, `share.prev/`, `VERSION.prev` | `install.sh` on an upgrade: the previous release, for `install.sh --rollback` | no | yes | yes, if you won't roll back |
+| `bin.prev/`, `share.prev/`, `VERSION.prev` | `install.sh` on an upgrade: the previous release, for `tw upgrade rollback` (or `install.sh --rollback`) | no | yes | yes, if you won't roll back |
 
 `/tmp/tw-<hash>` (the sockets of a long state dir) goes too. Without a
 working `tw` binary, `install.sh --uninstall --purge` (from the prefix or a

@@ -25,7 +25,12 @@
 //     its backup), which runs again with the data;
 //
 //  5. upgrades to a good N+1: a backup is taken, tw restarts on N+1, the
-//     health gate passes, and the data is there.
+//     health gate passes, and the data is there;
+//
+//  6. restarts N+1 (tw down, tw up);
+//
+//  7. rolls back to N with tw upgrade rollback (binaries only: no contract
+//     migration ran), and the data is there.
 //
 // Run it with `make e2e-tw-upgrade`.
 package twupgrade
@@ -423,6 +428,32 @@ func TestTwUpgradeSingleMachine(t *testing.T) {
 	m.must("down")
 	m.must("up", "--yes")
 	m.checkWorkerInternetOff("after tw down and tw up")
+
+	// 7. tw upgrade rollback (issue #486) puts N back by hand. No contract
+	// migration ran between N and N+1, so the store stays.
+	st = time.Now()
+	var rb struct {
+		From, To, Mode, SafetyBackup, Health string
+	}
+	m.mustJSON(&rb, "upgrade", "rollback", "--yes")
+	if rb.From != newV || rb.To != oldV || rb.Mode != "binary" || rb.Health != "ok" || !strings.HasSuffix(rb.SafetyBackup, "-before-rollback") {
+		t.Fatalf("tw upgrade rollback: %+v", rb)
+	}
+	if _, err := os.Stat(filepath.Join(rb.SafetyBackup, "mgmt", "mgmt.db")); err != nil {
+		t.Fatalf("the state before the rollback wasn't kept: %v", err)
+	}
+	if v, pv := m.read("VERSION"), m.read("VERSION.prev"); v != oldV || pv != newV {
+		t.Fatalf("after tw upgrade rollback VERSION %s, VERSION.prev %s", v, pv)
+	}
+	if v := m.installedVersion(); v != oldV {
+		t.Fatalf("installed tw is %s after tw upgrade rollback", v)
+	}
+	if v := m.runningVersion(); v != oldV {
+		t.Fatalf("running tw up is %s after tw upgrade rollback", v)
+	}
+	m.checkData("after tw upgrade rollback")
+	m.checkWorkerInternetOff("after tw upgrade rollback")
+	t.Logf("✓ tw upgrade rollback %s → %s in %v", newV, oldV, time.Since(st).Round(time.Second))
 }
 
 // checkWorkerInternetOff asserts tw up's --worker-internet=off survived:

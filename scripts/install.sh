@@ -7,6 +7,7 @@
 #   ./install.sh --uninstall     remove bin/ and share/ (keeps tailworks state: tw.json, logs, …)
 #   ./install.sh --uninstall --purge   remove the whole prefix, state and backups/ included (run `tw down --purge` first)
 #   ~/.tailworks/install.sh --rollback swap the previous install (bin.prev, share.prev) back in
+#                                (`tw upgrade rollback` does it with tw stopped and restarted, the store too when it must)
 #   ./install.sh --allow-unsigned      install a release without a valid SHA256SUMS.sig (local builds)
 #
 # The release must be signed: SHA256SUMS.sig, an SSH signature of SHA256SUMS
@@ -99,7 +100,7 @@ if [ "$MODE" = rollback ]; then
 		[ -e "$PREFIX/$d.swap" ] && mv "$PREFIX/$d.swap" "$PREFIX/$d.prev"
 	done
 	say "✓ rolled back tw $cur → $prev in $PREFIX ($cur is kept as bin.prev: --rollback again to return)"
-	say "  restore the mgmt store from the backup taken before the upgrade if a migration ran (tw upgrade prints the command)"
+	say "  if a contract migration ran since, put the store back too: tw restore <state dir>/backups/<time>-$prev --yes (tw upgrade rollback does both)"
 	exit 0
 fi
 
@@ -217,7 +218,7 @@ mv "$STAGE/VERSION" "$PREFIX/VERSION"
 cp "$SRC/install.sh" "$PREFIX/install.sh.tmp" && chmod 755 "$PREFIX/install.sh.tmp" && mv "$PREFIX/install.sh.tmp" "$PREFIX/install.sh"
 
 say "✓ installed tw $VERSION into $PREFIX ($(($(date +%s) - t0)) s)"
-[ $keepprev = 1 ] || say "  previous install ($old) kept as bin.prev/share.prev: $PREFIX/install.sh --rollback restores it"
+[ $keepprev = 1 ] || say "  previous install ($old) kept as bin.prev/share.prev: tw upgrade rollback restores it"
 say "  $("$PREFIX/bin/tw" version)"
 say "  $("$PREFIX/bin/workerd" --version) · process tier ($( [ "$os" = darwin ] && echo "dev-grade isolation on macOS; microVM tier on Virtualization.framework when the release has share/tailworks/vm" || echo "see tw doctor for the sandbox and the microVM tier"))"
 case ":$PATH:" in
