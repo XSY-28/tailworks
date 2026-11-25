@@ -6,6 +6,7 @@
 #   TW_HOME=DIR sh get.sh        install into DIR
 #   TW_RELEASE_BASE=URL sh get.sh vX.Y.Z   download from a mirror instead of GitHub
 #   TW_ALLOW_UNSIGNED=1 sh get.sh vX.Y.Z   skip the signature check (your own builds only)
+#   TW_INSTALL_FORCE=1 sh get.sh vX.Y.Z    replace another version while tw runs (use tw upgrade instead)
 #
 # It downloads tailworks-<version>-<os>-<arch>.tar.gz, SHA256SUMS and
 # SHA256SUMS.sig, checks that SHA256SUMS is signed by a tailworks release key
@@ -13,6 +14,10 @@
 # checks the tarball's hash, extracts it into a fresh temporary directory,
 # and runs its install.sh (no sudo; touches nothing outside ~/.tailworks,
 # your shell profile included). Read it first: it's short.
+#
+# While tailworks runs from ~/.tailworks it won't install another version
+# over it (no backup, health check or rollback that way): `tw upgrade` does
+# that. It checks before downloading anything.
 set -eu
 REPO=${TW_REPO:-rosskukulinski/tailworks}
 TAG=${1:-latest}
@@ -49,6 +54,15 @@ if [ "$TAG" = latest ]; then
 fi
 VERSION=${TAG#v}
 NAME=tailworks-$VERSION-$os-$arch.tar.gz
+
+# Another version over a running tailworks: refuse before downloading
+# (install.sh checks the same; TW_INSTALL_FORCE=1 passes it --force).
+PREFIX=${TW_HOME:-$HOME/.tailworks}
+cur=$(cat "$PREFIX/VERSION" 2>/dev/null || true)
+pid=$(cat "$PREFIX/supervisor.pid" 2>/dev/null || true)
+if [ "${TW_INSTALL_FORCE:-0}" != 1 ] && [ -n "$cur" ] && [ "$cur" != "$VERSION" ] && [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+	die "tw $cur is running from $PREFIX: \`$PREFIX/bin/tw upgrade $VERSION\` backs up, health-checks and rolls back; or \`tw down\` first; TW_INSTALL_FORCE=1 swaps anyway"
+fi
 BASE=${TW_RELEASE_BASE:-https://github.com/$REPO/releases/download/$TAG}
 
 TMP=$(mktemp -d)
@@ -87,4 +101,4 @@ mkdir "$TMP/x"
 tar -xzf "$TMP/$NAME" -C "$TMP/x"
 set -- "$TMP"/x/tailworks-*/install.sh
 [ -f "$1" ] || die "the tarball has no install.sh"
-sh "$1"
+if [ "${TW_INSTALL_FORCE:-0}" = 1 ]; then sh "$1" --force; else sh "$1"; fi
