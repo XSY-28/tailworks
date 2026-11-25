@@ -34,7 +34,13 @@ Issues #466 and #467 from the interface-simplification audit (#434).
 - `go test ./agent/` (TestMCPRegistrations): ok.
 - `go test ./cmd/tw/ -run TestMCPShowConfig`: ok.
 - `make lint`: ok.
-- `make test`: see the PR's Tests section for the final result.
+- `make lint` after merging origin/master (7619df42): ok; `make cli-docs`: no change.
+- `make test` after the merge: everything passes except three `hostd` tests
+  that timed out on a heavily loaded machine (TestPythonQueues "workerd did
+  not become healthy", TestWorkersKV/DeleteAndLimits client timeout,
+  TestTailnetHTTPS 20m package timeout). This branch doesn't touch hostd;
+  they were rerun on their own (see the PR). `cmd/tw`, `agent`, `mgmt`: ok.
+- `TestAgentSetupSnapshot` golden updated for the new `next:` line.
 
 Not run: `make demo-test` (no change to the mcp/agent templates' routes,
 demo scripts, or `tw ls`/`tw status` JSON).
