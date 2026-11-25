@@ -41,6 +41,9 @@ import (
 
 	"github.com/rosskukulinski/tailworks/e2e/cliflow"
 	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
+	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
+	"github.com/rosskukulinski/tailworks/internal/oci"
+	"github.com/rosskukulinski/tailworks/internal/registry"
 	"github.com/rosskukulinski/tailworks/netd/nettest"
 )
 
@@ -720,10 +723,11 @@ var kfaults = map[string]kfault{
 			return "no VMM running"
 		}
 		p := vs[n.rnd.Intn(len(vs))]
+		name := filepath.Base(comm(p))
 		n.c.record(h+"/vmm(kill)", p)
 		syscall.Kill(p, syscall.SIGKILL)
 		time.Sleep(2 * time.Second)
-		return fmt.Sprintf("killed VMM %d (%s) of %d", p, filepath.Base(comm(p)), len(vs))
+		return fmt.Sprintf("killed VMM %d (%s) of %d", p, name, len(vs))
 	}},
 	// A blue/green redeploy on the same host: a container survives it
 	// (ADR-032: durable_object instances never roll), checked by K1.
@@ -949,6 +953,7 @@ func TestContainers(t *testing.T) {
 		return base64.StdEncoding.EncodeToString(hostdtest.MustTar(files))
 	}
 	img := envOr("TW_DPK_IMAGE", "tw.local/debian-trixie-python:1")
+	pushPublicImage(t, c, images, img)
 	bundle := build("ctr", func(f map[string][]byte) {
 		f["tailworks.jsonc"] = []byte(strings.ReplaceAll(string(f["tailworks.jsonc"]), "tw.local/debian-trixie-python:1", img))
 	})
@@ -1114,4 +1119,36 @@ func keyscans(c *cluster, final map[string]hostObs) map[string]string {
 		}
 	}
 	return out
+}
+
+// pushPublicImage pushes ref from the images dir into mgmt's registry as a
+// public base, as the operator's `tw image push` does: the deploy pins it
+// by digest and each host pulls it from mgmt (ADR-032 D3).
+func pushPublicImage(t *testing.T, c *cluster, images, ref string) {
+	t.Helper()
+	var idx map[string]string
+	b, err := os.ReadFile(filepath.Join(images, "images.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &idx); err != nil || idx[ref] == "" {
+		t.Fatalf("%s: no %s in images.json (%v)", images, ref, err)
+	}
+	mc, err := mgmtapi.NewClient("unix://" + c.sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mc.TokenFile = filepath.Join(c.work, "token")
+	r, err := oci.ParseRef(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := oci.OpenLayout(filepath.Join(images, idx[ref]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	if _, err := oci.Copy(context.Background(), l, "", l.Top.Digest, mc.OCI(), registry.PublicNamespace+"/"+r.Repository, nil, r.Tag); err != nil {
+		t.Fatalf("push %s: %v", ref, err)
+	}
 }
