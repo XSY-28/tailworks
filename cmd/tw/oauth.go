@@ -159,15 +159,24 @@ func oauthPreflight(ctx context.Context, api *tsapi.Client, src *tsapi.OAuthSour
 		fmt.Fprintf(out, "› policy   the OAuth client can't read the policy (%s); tag ownership is checked by the first mint instead\n", firstLine(netd.Redact(perr.Error())))
 		return tailnet, nil, false, nil
 	}
+	return tailnet, p, true, oauthNeededCheck(p, true, needed)
+}
+
+// oauthNeededCheck is tw up's hard stop when the policy it could read
+// (readable) lacks the tag ownership needed for this layout.
+func oauthNeededCheck(p []byte, readable bool, needed policy.Snippet) error {
+	if !readable {
+		return nil
+	}
 	miss, merr := policy.Missing(p, needed)
 	if merr != nil {
-		return tailnet, p, true, fail("bad_request", "can't parse the tailnet policy", merr.Error())
+		return fail("bad_request", "can't parse the tailnet policy", merr.Error())
 	}
 	if !miss.Empty() {
-		return tailnet, p, true, policyMissingTagOwners("the policy (read with the OAuth client) lacks tag:tw as an owner of: "+strings.Join(slices.Sorted(maps.Keys(miss.TagOwners)), ", "), nil, p).
+		return policyMissingTagOwners("the policy (read with the OAuth client) lacks tag:tw as an owner of: "+strings.Join(slices.Sorted(maps.Keys(miss.TagOwners)), ", "), nil, p).
 			withFix("or let tw write it: tw up --apply-policy (needs an OAuth client with the Policy File › Write scope)")
 	}
-	return tailnet, p, true, nil
+	return nil
 }
 
 // mintNodeKey mints a single-use, pre-authorized node key for tailworks' own

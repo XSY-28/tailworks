@@ -21,7 +21,7 @@ usage: tw up [--apply-policy [--yes]] [--service=false]
 
 flags:
   -apply-policy
-    	write the tagOwners and grants tailworks needs to the tailnet policy instead of printing them (additive, validated first, written with If-Match); tw up shows the lines and asks first (--yes to skip). Tailscale: the OAuth client needs Policy File write. Headscale: needs policy.mode database
+    	write the tagOwners and grants tailworks needs to the tailnet policy instead of printing them (additive, validated first, written with If-Match); tw up shows the lines and asks first (--yes to skip). Without the flag tw up asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes. Tailscale: the OAuth client needs Policy File write. Headscale: needs policy.mode database
   -oauth-client-file string
     	mint mode "oauth" (Tailscale): file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (an OAuth client with Auth Keys write, tag tag:tw; tightened to 0600). Default on the default state dir: ~/.config/tailworks/oauth.env, asked for and saved on the first tw up
   -service
@@ -194,8 +194,6 @@ tw init: create an app from a template (--list: every template, with the demos a
 usage: tw init <dir> [--template hello|agent|mcp|static-site] [--name <workload>] [--tags <tag>,…] [--object-tags [<Class>=]<tag>,…]…  |  init --list
 
 flags:
-  -keep-tags
-    	keep the template's object class tags instead of naming them after the app (tag:tw-<workload>-<class>); the workload tag follows the app either way (--tags sets it)
   -list
     	list every template: the starting points, then demos and patterns (templates.go)
   -name string
@@ -252,9 +250,9 @@ global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 generate Env types from tailworks.jsonc and wrangler config
 
 ```text
-tw types: write the app's TypeScript Env (vars, Durable Object, KV, R2, D1, Queue and Workflow bindings, secret names) from its wrangler config and tailworks.jsonc, like wrangler types; --check fails when the file is stale (CI)
+tw types: write the app's TypeScript Env (vars, Durable Object, KV, R2, D1, Queue and Workflow bindings, secret names) from its wrangler config and tailworks.jsonc, like wrangler types; secret names come from .dev.vars, .dev.vars.example (names and placeholder values only) and secrets.required; --check fails when the file is stale (CI)
 
-usage: tw types [dir] [--env <name>] [--out worker-configuration.d.ts] [--check] [--remote]
+usage: tw types [dir] [--env <name>] [--out worker-configuration.d.ts] [--check]
 
 flags:
   -check
@@ -263,10 +261,8 @@ flags:
     	wrangler environment: type env.<name> from the wrangler config, as 'tw deploy --env' deploys it
   -out string
     	the declaration file to write, relative to the app directory (default "worker-configuration.d.ts")
-  -remote
-    	also declare the workload's secrets from mgmt (the names 'tw secret ls' lists); needs a running or linked tw
 
-global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · --tenant <tailnet|id> (default: the tw up tenant)
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 ```
 
 ### tw docs
@@ -289,15 +285,20 @@ tw docs <subcommand> --help   its flags
 
 ```text
 flags:
-  -limit int
-    	search: at most this many sections (default 10)
+  (none besides the global ones)
 
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 ```
 
 #### tw docs search
 
-Same flags as [tw docs ls](#tw-docs-ls).
+```text
+flags:
+  -limit int
+    	at most this many sections (default 10)
+
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
+```
 
 #### tw docs show
 
@@ -388,7 +389,7 @@ usage: tw deploy [dir] [--env <name>] [--name <workload>] [--var K=V]… [--appl
 
 flags:
   -apply-policy
-    	when the preflight finds tagOwners, grants, funnel nodeAttrs or Service auto-approval missing, write them to the tailnet policy first (as tw policy --apply)
+    	when the preflight finds tagOwners, grants, funnel nodeAttrs or Service auto-approval missing, write them to the tailnet policy first (as tw policy --apply; shows the lines and asks, --yes to skip). Without the flag tw deploy asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes
   -env string
     	wrangler environment: use env.<name> from the wrangler config, as 'wrangler --env' does (the workload is named <name>-<env> unless the env sets a name)
   -name string
@@ -1158,7 +1159,7 @@ tw notify: tell people when a Workflow waits for an approval: mgmt POSTs JSON wi
 
 subcommands:
   tw notify [show]
-  tw notify set --webhook <url|-> [--header NAME[=VALUE]]... [--events approval_requested]
+  tw notify set --webhook <url|-> [--header NAME[=VALUE]]...
   tw notify test
   tw notify rm
   common flags: [--tenant <tailnet>]
@@ -1177,8 +1178,6 @@ Same flags as [tw notify](#tw-notify).
 
 ```text
 flags:
-  -events string
-    	what to send, comma-separated (default approval_requested)
   -header value
     	a header for every notification, NAME=VALUE, or NAME alone to read its value from stdin (repeatable)
   -webhook string
@@ -1386,7 +1385,7 @@ serve, list, update or remove tenants
 tw tenant: serve another tenant (its own tailnet) from this host; list, update (PATCH) or remove tenants
 
 subcommands:
-  tw tenant add <tailnet> --oauth-client-file <file> [--apply-policy [--yes]] [--owner-tag <tag> --name-prefix <p>]
+  tw tenant add <tailnet> [--oauth-client-file <file>] [--apply-policy [--yes]] [--owner-tag <tag> --name-prefix <p>]
   tw tenant ls
   tw tenant set <tenant> [--<setting> <value>]…  (tw tenant set --help; docs/limits.md)
   tw tenant rm <tenant> [--force]
@@ -1402,7 +1401,7 @@ flags:
   -api-key-file string
     	--control=headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied
   -apply-policy
-    	write the base policy snippet to the tailnet policy instead of printing it (additive, validated first, written with If-Match); shows the lines and asks first
+    	--control=headscale: write the owner tag's tagOwners entry ("tag:tw": []) when it is missing instead of printing it (additive, validated first, written with If-Match); shows the line and asks first. Without the flag it asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes. A Tailscale tenant's policy is never written
   -control string
     	control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; the tailnet argument is its dns.base_domain) (default "tailscale")
   -control-url string
@@ -1410,11 +1409,9 @@ flags:
   -name-prefix string
     	with --owner-tag: goes in front of every tailnet name tw makes for this tenant (up to 11 of a-z, 0-9, -)
   -oauth-client-file string
-    	this tailnet's OAuth client (mint mode "oauth"): 0600 file with TS_OAUTH_CLIENT_ID=… and TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:tw); read at use, never copied
+    	this tailnet's OAuth client (mint mode "oauth"): 0600 file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:tw); read at use, never copied. Omitted on a terminal: asked for and saved to ~/.config/tailworks/<tenant>-oauth.env
   -owner-tag string
     	another team's tenant on a tailnet that already has one (docs/teams.md): the tag that owns its tags, e.g. tag:tw-t-payments; its --oauth-client-file must be scoped to it
-  -registrations-per-minute int
-    	this tenant's node registration throttle (default 200/min)
   -yes
     	skip the confirmation before --apply-policy writes the policy; needed without a terminal and with --json
 

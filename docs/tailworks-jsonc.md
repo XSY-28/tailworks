@@ -268,9 +268,9 @@ tailnet-only.
 `support-agent`). Two apps made from the same template then don't share
 tags, so they don't share grants either. Templates whose workload needs
 nothing else (`hello`, `static-site`, `python`) leave `tailnet.tags` out:
-it defaults to `tag:tw-wl-<workload>`. `--keep-tags` keeps the template's
-class tag names; the workload tag follows the app either way. `--tags`
-sets the workload's tags, adding `tailnet.tags` when the template has none.
+it defaults to `tag:tw-wl-<workload>`. To use tags you already own
+instead, `--tags` sets the workload's tags (adding `tailnet.tags` when the
+template has none) and `--object-tags` sets the classes' ([below](#reusing-existing-tags)).
 
 Each new tag needs a `tagOwners` entry in your tailnet policy. `tw deploy`
 checks this first and prints the lines to add:
@@ -371,8 +371,7 @@ tw policy    # nothing to add when the policy already owns and grants these tags
   and wins over the form without a class. Repeat the flag for more classes.
 - `--tags` adds `tailnet.tags` when the template leaves it out (`hello`,
   `static-site`, `python`).
-- Tags you don't set are still named after the app (class tags are kept
-  with `--keep-tags`).
+- Tags you don't set are still named after the app.
 
 `tw init` checks the tags before it writes anything: they must be valid
 tags, can't be one of tailworks' own tags

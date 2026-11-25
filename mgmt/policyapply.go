@@ -43,6 +43,11 @@ type PolicyApplyResult struct {
 	// call the app (callergrant.go); "" when Added has none.
 	CallerGrant string `json:"callerGrant,omitempty"`
 
+	// CanWrite (dryRun with Added non-empty): the control plane accepted
+	// the merged policy, so the write would go through (Tailscale refuses
+	// a client without Policy File write). tw deploy asks only then (#481).
+	CanWrite *bool `json:"canWrite,omitempty"`
+
 	OldETag string `json:"oldETag,omitempty"`
 	NewETag string `json:"newETag,omitempty"`
 	// Preflight is the bundle's preflight against the policy as it is
@@ -114,7 +119,12 @@ func (m *Mgmt) ApplyWorkloadPolicy(ctx context.Context, tenantID, workload strin
 	}
 	res.Manual = manual
 	res.Added = snip.HuJSON()
-	if dryRun || snip.Empty() {
+	if snip.Empty() {
+		return res, nil
+	}
+	if dryRun {
+		can := m.policyWritable(ctx, t, snip, popts) // policyapply_canwrite.go
+		res.CanWrite = &can
 		return res, nil
 	}
 	fail := func(e *Error) (PolicyApplyResult, error) {
