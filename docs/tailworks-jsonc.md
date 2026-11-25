@@ -15,7 +15,8 @@ A tailworks app has a `tailworks.jsonc` next to its wrangler config (`wrangler.j
 `tailworks.jsonc` is JSONC: comments and trailing commas are fine.
 
 A project with only a wrangler config deploys too. Then tailworks uses defaults:
-the workload node is tagged `tag:tw-wl-<workload>`, and every Durable
+the workload node is tagged `tag:tw-wl-<workload>` (the same default as a
+`tailworks.jsonc` without `tailnet.tags`), and every Durable
 Object class is internal (`"node": false`). `tw deploy` says when it does
 this ([wrangler.md](wrangler.md#without-a-twjsonc)).
 
@@ -65,7 +66,7 @@ schema. `tw init` writes this line for you:
 
 | key | type | what it does |
 |---|---|---|
-| `tags` | `["tag:…"]` | **Required.** Tags of the workload's own node. Your policy must let `tag:tw` own them; `tw policy` (and `tw deploy`'s preflight) prints the snippet if it doesn't, and `tw policy --apply` writes it ([below](#tags-and-tw-init)) |
+| `tags` | `["tag:…"]` | Tags of the workload's own node. Default (filled in by `tw deploy` and `tw dev`): `["tag:tw-wl-<workload>"]`, so a minimal `tailworks.jsonc` is `{}`. An empty `[]` is an error. Your policy must let `tag:tw` own them; `tw policy` (and `tw deploy`'s preflight) prints the snippet if it doesn't, and `tw policy --apply` writes it ([below](#tags-and-tw-init)) |
 | `connects` | `["tag:…" or name]` | what the workload calls. `tw deploy` preflights these grants, and smart placement measures paths to them. Add the TCP port a socket dials (`"tag:db:5432"`) and the preflight checks the grant for that port instead of `tcp:80` |
 | `service` | `true` or `"svc:<name>"` | a Tailscale Service: a stable name and VIP in front of the workload ([services.md](services.md)) |
 | `https` | boolean | also serve the workload on `https://<name>.<tailnet>.ts.net` with its ts.net certificate, so `request.url` is `https://` for requests that arrive that way; [below](#tailnethttps) |
@@ -220,13 +221,15 @@ A class listed here with no matching binding is an error.
 | key | type | default | what it does |
 |---|---|---|---|
 | `tags` | `["tag:…"]` | | tags of each instance's own node |
-| `agent` | boolean | `false` | the class is an Agents SDK `Agent` |
 | `ttl` | string, e.g. `"10m"` | | lifetime from creation: then the object (and its sub-agents) is killed. The default for `spawn()`, which can set its own |
 | `node` | boolean | `true` | `false`: an internal class with no tailnet node. Its outbound `fetch()` leaves as the workload node, so it needs no `egress` |
 | `egress` | `"object"` \| `"workload"` | `"object"` (`"workload"` with `"node": false`) | whose node outbound `fetch()` leaves from, for a class with its own node ([egress-modes.md](egress-modes.md)). Changing it later empties the class's storage |
 | `fence` | `"never"` | | instances tolerate running on two hosts at once, so mgmt can move the workload off a dead host without `--force-takeover` |
 | `public.create` | boolean | `false` | public requests may create new objects of this class ([public-ingress.md](public-ingress.md)) |
 | `public.maxObjects` | integer | | required with `create`: the most objects public requests may create |
+
+An older `"agent": true` here is accepted and ignored: an Agents SDK class
+needs no flag.
 
 ## `placement`
 
@@ -263,8 +266,11 @@ tailnet-only.
 `tag:tw-wl-<workload>` for the workload node, and
 `tag:tw-<workload>-<class>` for each class (`SupportAgent` becomes
 `support-agent`). Two apps made from the same template then don't share
-tags, so they don't share grants either. `--keep-tags` keeps the template's
-tag names.
+tags, so they don't share grants either. Templates whose workload needs
+nothing else (`hello`, `static-site`, `python`) leave `tailnet.tags` out:
+it defaults to `tag:tw-wl-<workload>`. `--keep-tags` keeps the template's
+class tag names; the workload tag follows the app either way. `--tags`
+sets the workload's tags, adding `tailnet.tags` when the template has none.
 
 Each new tag needs a `tagOwners` entry in your tailnet policy. `tw deploy`
 checks this first and prints the lines to add:
@@ -363,8 +369,10 @@ tw policy    # nothing to add when the policy already owns and grants these tags
 - `--object-tags tag:a,tag:b` sets the tags of every Durable Object class
   that has its own node. `--object-tags <Class>=tag:a,tag:b` sets one class,
   and wins over the form without a class. Repeat the flag for more classes.
-- Tags you don't set are still named after the app (or kept, with
-  `--keep-tags`).
+- `--tags` adds `tailnet.tags` when the template leaves it out (`hello`,
+  `static-site`, `python`).
+- Tags you don't set are still named after the app (class tags are kept
+  with `--keep-tags`).
 
 `tw init` checks the tags before it writes anything: they must be valid
 tags, can't be one of tailworks' own tags

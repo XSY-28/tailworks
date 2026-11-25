@@ -32,8 +32,8 @@ func TestSubcommandHelp(t *testing.T) {
 	for name, want := range map[string][]string{
 		"tenant":    {"add", "ls", "set", "rm"},
 		"host":      {"add", "ls", "rm", "cordon", "uncordon", "drain", "setup", "vmcheck"},
-		"d1":        {"create", "list", "delete", "execute", "export", "repair", "migrations create|list|apply"},
-		"kv":        {"namespace create|list|delete", "key put|get|delete|list"},
+		"d1":        {"create", "ls", "rm", "execute", "export", "repair", "migrations create|ls|apply"},
+		"kv":        {"namespace create|ls|rm", "key put|get|rm|ls"},
 		"image":     {"public add|ls|rm", "push"},
 		"r2":        {"bucket ls|create|rm", "object ls"},
 		"queues":    {"create", "ls", "info", "rm", "purge", "messages", "send"},

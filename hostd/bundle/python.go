@@ -73,8 +73,8 @@ func finishPython(a *App) error {
 	// own (the per-object wrapper is JavaScript; hostd/gen/python.go).
 	for _, n := range a.ClassNames() {
 		c := a.Classes[n]
-		if len(c.Tags) > 0 || c.Agent || c.Public != nil || c.TTL != "" {
-			return fmt.Errorf("bundle: tailworks.jsonc tailnet.objects.%s: Python Durable Objects have no node of their own, so no tags, agent, ttl or public (docs/python.md#durable-objects)", n)
+		if len(c.Tags) > 0 || c.Public != nil || c.TTL != "" {
+			return fmt.Errorf("bundle: tailworks.jsonc tailnet.objects.%s: Python Durable Objects have no node of their own, so no tags, ttl or public (docs/python.md#durable-objects)", n)
 		}
 		c.Node, c.Egress = false, EgressWorkload
 	}

@@ -128,7 +128,6 @@ type tenant struct {
 type classConfig struct {
 	Class string   `json:"class"`
 	Tags  []string `json:"tags"`
-	Agent bool     `json:"agent"`
 	TTL   string   `json:"ttl"`
 }
 

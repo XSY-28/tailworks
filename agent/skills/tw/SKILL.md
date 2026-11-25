@@ -81,8 +81,8 @@ agent.
 4. **Ask before anything destructive.** None of these has an undo. Run one
    only after the user has said yes to that specific action.
    - `tw kill`, `tw undeploy`, `tw down`, `tw secret rm` and
-     `tw kv key delete` act immediately.
-   - `tw d1 delete`, `tw kv namespace delete`, `tw queues rm`,
+     `tw kv key rm` act immediately.
+   - `tw d1 rm`, `tw kv namespace rm`, `tw queues rm`,
      `tw queues purge`, `tw r2 bucket rm`, `tw tenant rm` and
      `tw host rm` delete data or a tenant's resources. Without a terminal
      they refuse with `confirmation_required`. Tell the user what will be

@@ -207,7 +207,6 @@ func (h Host) Live(now time.Time) bool {
 type ClassConfig struct {
 	Class string   `json:"class"`
 	Tags  []string `json:"tags"`
-	Agent bool     `json:"agent,omitempty"`
 	TTL   string   `json:"ttl,omitempty"`
 	// Service (the _workload namespace only) is the Tailscale Service the
 	// workload entry node hosts (tailworks.jsonc tailnet.service).

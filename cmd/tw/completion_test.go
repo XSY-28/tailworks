@@ -41,9 +41,9 @@ func TestCompletionTree(t *testing.T) {
 	}
 	for path, subs := range map[string][]string{
 		"kv":            {"namespace", "key"},
-		"kv key":        {"put", "get", "delete", "list"},
+		"kv key":        {"put", "get", "rm", "ls"},
 		"d1":            {"create", "execute", "migrations"},
-		"d1 migrations": {"create", "list", "apply"},
+		"d1 migrations": {"create", "ls", "apply"},
 		"r2 bucket":     {"ls", "create", "rm"},
 		"image public":  {"add", "ls", "rm"},
 		"host":          {"add", "ls", "rm", "setup", "vmcheck"},
@@ -175,7 +175,7 @@ c tw deploy --tenant ""
 		},
 		func(l string) bool { return l == "" }, // nothing starts with "ku"
 		func(l string) bool { return l == "namespace key" },
-		func(l string) bool { return l == "put get delete list" },
+		func(l string) bool { return l == "put get rm ls" },
 		func(l string) bool { return l == "--ttl" },
 		func(l string) bool { return l == "apply" },
 		func(l string) bool { return l == "on off" },

@@ -660,7 +660,7 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 		if tags == nil {
 			tags = []string{}
 		}
-		nss = append(nss, mgmtapi.NamespaceSpec{Class: c, Tags: tags, Agent: cl.Agent})
+		nss = append(nss, mgmtapi.NamespaceSpec{Class: c, Tags: tags})
 	}
 	if app.Public != nil {
 		nss = append(nss, mgmtapi.NamespaceSpec{Class: publicspec.Namespace, Tags: []string{publicspec.Tag}})

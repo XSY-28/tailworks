@@ -56,10 +56,11 @@ func confirmDestroy(f *flags, yes bool, what, name, cmdline string, fix ...strin
 // arguments of a minimal invocation. TestDestructiveCommandsConfirm runs
 // each without --yes and without a terminal.
 var destructiveCommands = [][]string{
-	{"d1", "delete", "db", "--workload", "app"},
+	{"d1", "delete", "db", "--workload", "app"}, // wrangler's spelling of rm (normalizeVerb)
 	{"d1", "repair", "db", "--skip", "3", "--workload", "app"},
+	{"d1", "rm", "db", "--workload", "app"},
 	{"host", "rm", "h1"},
-	{"kv", "namespace", "delete", "sessions", "--workload", "app"},
+	{"kv", "namespace", "rm", "sessions", "--workload", "app"},
 	{"queues", "purge", "jobs"},
 	{"queues", "rm", "jobs"},
 	{"r2", "bucket", "rm", "photos", "--workload", "app"},

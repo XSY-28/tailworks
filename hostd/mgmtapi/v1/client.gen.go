@@ -1904,7 +1904,6 @@ type ChainStatus struct {
 
 // ClassConfig One DO namespace from `tailworks.jsonc` `tailnet.objects`.
 type ClassConfig struct {
-	Agent *bool  `json:"agent,omitempty"`
 	Class string `json:"class"`
 
 	// PreviewOf `_workload` only, previews: the workload this deployment is a preview of (ADR-048), deployed as the workload `<workload>--preview-<alias>`.
@@ -5875,7 +5874,7 @@ type ClientInterface interface {
 	//
 	// mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 	// the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+	// node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -5936,7 +5935,7 @@ type ClientInterface interface {
 	//
 	// mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 	// the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+	// node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -7605,7 +7604,7 @@ type ClientInterface interface {
 
 	// ListKVKeys List a KV namespace's keys
 	//
-	// Workers KV's `list()` for operators (`tw kv key list`,
+	// Workers KV's `list()` for operators (`tw kv key ls`,
 	// ADR-037): live keys in UTF-8 byte order, with their
 	// expiration and metadata, `limit` at a time (default and maximum
 	// 1000). Pass the answer's `cursor` to get the next page. mgmt reads
@@ -7618,7 +7617,7 @@ type ClientInterface interface {
 
 	// DeleteKVValue Delete one KV value
 	//
-	// `tw kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+	// `tw kv key rm`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
 	//
 	// Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `DeleteKVValue` operationId).
 	DeleteKVValue(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *DeleteKVValueParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7801,7 +7800,7 @@ type ClientInterface interface {
 	// host, once per change: with `degraded` when it stops, without it
 	// when the entry applies (or was skipped with `…/repair`). mgmt
 	// keeps the latest report on the store (`Store.degraded`, shown by
-	// `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+	// `tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 	// and the console) and audits the first report of each failing
 	// entry on each host (`kind: store_replay_failed`). A report for
 	// another incarnation is ignored. A healthy report clears the record
@@ -7824,7 +7823,7 @@ type ClientInterface interface {
 	// host, once per change: with `degraded` when it stops, without it
 	// when the entry applies (or was skipped with `…/repair`). mgmt
 	// keeps the latest report on the store (`Store.degraded`, shown by
-	// `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+	// `tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 	// and the console) and audits the first report of each failing
 	// entry on each host (`kind: store_replay_failed`). A report for
 	// another incarnation is ignored. A healthy report clears the record
@@ -8187,7 +8186,7 @@ func (c *Client) ListDeployments(ctx context.Context, params *ListDeploymentsPar
 //
 // mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 // the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+// node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 // `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 // wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -8258,7 +8257,7 @@ func (c *Client) CreateDeploymentWithBody(ctx context.Context, params *CreateDep
 //
 // mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 // the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+// node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 // `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 // wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -10969,7 +10968,7 @@ func (c *Client) ListWorkloadStores(ctx context.Context, id TenantID, workload W
 
 // ListKVKeys List a KV namespace's keys
 //
-// Workers KV's `list()` for operators (`tw kv key list`,
+// Workers KV's `list()` for operators (`tw kv key ls`,
 // ADR-037): live keys in UTF-8 byte order, with their
 // expiration and metadata, `limit` at a time (default and maximum
 // 1000). Pass the answer's `cursor` to get the next page. mgmt reads
@@ -10992,7 +10991,7 @@ func (c *Client) ListKVKeys(ctx context.Context, id TenantID, workload WorkloadN
 
 // DeleteKVValue Delete one KV value
 //
-// `tw kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+// `tw kv key rm`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
 //
 // Corresponds with DELETE /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `DeleteKVValue` operationId).
 func (c *Client) DeleteKVValue(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *DeleteKVValueParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -11295,7 +11294,7 @@ func (c *Client) RepairStore(ctx context.Context, id TenantID, workload Workload
 // host, once per change: with `degraded` when it stops, without it
 // when the entry applies (or was skipped with `…/repair`). mgmt
 // keeps the latest report on the store (`Store.degraded`, shown by
-// `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+// `tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 // and the console) and audits the first report of each failing
 // entry on each host (`kind: store_replay_failed`). A report for
 // another incarnation is ignored. A healthy report clears the record
@@ -11328,7 +11327,7 @@ func (c *Client) ReportStoreStatusWithBody(ctx context.Context, id TenantID, wor
 // host, once per change: with `degraded` when it stops, without it
 // when the entry applies (or was skipped with `…/repair`). mgmt
 // keeps the latest report on the store (`Store.degraded`, shown by
-// `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+// `tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 // and the console) and audits the first report of each failing
 // entry on each host (`kind: store_replay_failed`). A report for
 // another incarnation is ignored. A healthy report clears the record
@@ -17987,7 +17986,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 	// the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+	// node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -18048,7 +18047,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 	// the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-	// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+	// node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 	// `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 	// `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 	// wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -19823,7 +19822,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListKVKeysWithResponse List a KV namespace's keys
 	//
-	// Workers KV's `list()` for operators (`tw kv key list`,
+	// Workers KV's `list()` for operators (`tw kv key ls`,
 	// ADR-037): live keys in UTF-8 byte order, with their
 	// expiration and metadata, `limit` at a time (default and maximum
 	// 1000). Pass the answer's `cursor` to get the next page. mgmt reads
@@ -19838,7 +19837,7 @@ type ClientWithResponsesInterface interface {
 
 	// DeleteKVValueWithResponse Delete one KV value
 	//
-	// `tw kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+	// `tw kv key rm`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -20033,7 +20032,7 @@ type ClientWithResponsesInterface interface {
 	// host, once per change: with `degraded` when it stops, without it
 	// when the entry applies (or was skipped with `…/repair`). mgmt
 	// keeps the latest report on the store (`Store.degraded`, shown by
-	// `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+	// `tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 	// and the console) and audits the first report of each failing
 	// entry on each host (`kind: store_replay_failed`). A report for
 	// another incarnation is ignored. A healthy report clears the record
@@ -20056,7 +20055,7 @@ type ClientWithResponsesInterface interface {
 	// host, once per change: with `degraded` when it stops, without it
 	// when the entry applies (or was skipped with `…/repair`). mgmt
 	// keeps the latest report on the store (`Store.degraded`, shown by
-	// `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+	// `tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 	// and the console) and audits the first report of each failing
 	// entry on each host (`kind: store_replay_failed`). A report for
 	// another incarnation is ignored. A healthy report clears the record
@@ -30442,7 +30441,7 @@ func (c *ClientWithResponses) ListDeploymentsWithResponse(ctx context.Context, p
 //
 // mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 // the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+// node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 // `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 // wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -30509,7 +30508,7 @@ func (c *ClientWithResponses) CreateDeploymentWithBodyWithResponse(ctx context.C
 //
 // mgmt reads `tailworks.jsonc` from the bundle (a tar, optionally gzipped;
 // the shallowest `tailworks.jsonc`): `tailnet.tags` (the `_workload` entry
-// node), `tailnet.objects.<Class>.{tags, agent, ttl, node}`,
+// node), `tailnet.objects.<Class>.{tags, ttl, node}`,
 // `tailnet.spawn.{maxLive ≤ 64, maxDepth ≤ 3}`, `tailnet.connects`,
 // `tier`, `runtime`, `placement.{mode, targets, aggregate}` (or
 // wrangler's `placement`). A bundle with neither `tailnet.tags` nor
@@ -32910,7 +32909,7 @@ func (c *ClientWithResponses) ListWorkloadStoresWithResponse(ctx context.Context
 
 // ListKVKeysWithResponse List a KV namespace's keys
 //
-// Workers KV's `list()` for operators (`tw kv key list`,
+// Workers KV's `list()` for operators (`tw kv key ls`,
 // ADR-037): live keys in UTF-8 byte order, with their
 // expiration and metadata, `limit` at a time (default and maximum
 // 1000). Pass the answer's `cursor` to get the next page. mgmt reads
@@ -32931,7 +32930,7 @@ func (c *ClientWithResponses) ListKVKeysWithResponse(ctx context.Context, id Ten
 
 // DeleteKVValueWithResponse Delete one KV value
 //
-// `tw kv key delete`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
+// `tw kv key rm`. Deleting a key that does not exist succeeds and writes nothing. Audited (`kind: kv_delete`, the namespace only) when it deletes.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -33198,7 +33197,7 @@ func (c *ClientWithResponses) RepairStoreWithResponse(ctx context.Context, id Te
 // host, once per change: with `degraded` when it stops, without it
 // when the entry applies (or was skipped with `…/repair`). mgmt
 // keeps the latest report on the store (`Store.degraded`, shown by
-// `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+// `tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 // and the console) and audits the first report of each failing
 // entry on each host (`kind: store_replay_failed`). A report for
 // another incarnation is ignored. A healthy report clears the record
@@ -33227,7 +33226,7 @@ func (c *ClientWithResponses) ReportStoreStatusWithBodyWithResponse(ctx context.
 // host, once per change: with `degraded` when it stops, without it
 // when the entry applies (or was skipped with `…/repair`). mgmt
 // keeps the latest report on the store (`Store.degraded`, shown by
-// `tw d1 list`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
+// `tw d1 ls`, `tw kv namespace ls`, `tw r2 bucket ls`, `tw status`
 // and the console) and audits the first report of each failing
 // entry on each host (`kind: store_replay_failed`). A report for
 // another incarnation is ignored. A healthy report clears the record

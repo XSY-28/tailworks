@@ -81,7 +81,7 @@ spec.
   to parent), the subtree below (this object and its descendants), caps,
   the node certificate when the object has a node, the object's audit
   records (newest first) with chain status, a **Logs** link, and the
-  **Kill** form (cascade checkbox, reason). A killed object renders its tombstone / kill record (the
+  **Kill** form (cascade checkbox, checked by default like `tw kill`; reason). A killed object renders its tombstone / kill record (the
   `/v1` 410 body: killed at, by, reason, cascade root, device deletion)
   and offers no kill form.
 - **`/ui/deployments/{id}`**: the deployment, its endpoint, namespaces
