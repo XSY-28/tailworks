@@ -38,7 +38,16 @@ Issues #438 and #437 from the interface-simplification audit (#434).
   identical, so `tw tenant set` and the host subcommands still complete
   every flag.
 - `make cli-docs`, `make lint`: ok.
-- `make test`: see below.
+- `make test` (load average ~110 from parallel agents): every package ok
+  except timing failures in cmd/tw TestCLIOAuth, mgmt (TestWorkloadReplicas,
+  TestWarmKeysRevokedOnClose*, TestSecretsRelease, TestServiceDeploy,
+  TestRT3_H23_PlacementPoison, TestTenantAdminScope,
+  TestWarmKeyRefillRespectsThrottle), hostd TestR2Streaming and hostd/gen
+  TestPythonAssets ("workerd did not come up"). Rerun: `go test ./cmd/tw`
+  (whole package) ok, those mgmt tests ok, TestR2Streaming ok,
+  TestPythonAssets ok. mgmt and hostd don't import cmd/tw.
+- After merging origin/master: `make lint` ok.
+- Extra suites: none in the AGENTS.md table apply (help text and docs only).
 
 ## Decisions
 
