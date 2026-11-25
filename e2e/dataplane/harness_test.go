@@ -156,6 +156,8 @@ type cluster struct {
 	token   string
 	stopped map[string]bool // names currently SIGSTOPped (whole group or hostd only)
 	orphans []int           // workerds that outlived a crashed hostd
+
+	clocks *hostClocks // skew_test.go
 }
 
 func (c *cluster) record(name string, pid int) {
@@ -177,6 +179,7 @@ func (c *cluster) start(name string, args ...string) {
 	cmd := exec.Command(filepath.Join(c.bin, bin), args...)
 	cmd.Stdout, cmd.Stderr = lf, lf
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Env = append(os.Environ(), c.clockEnv(name)...) // skew_test.go
 	if err := cmd.Start(); err != nil {
 		c.t.Fatal(err)
 	}
