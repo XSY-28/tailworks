@@ -507,6 +507,7 @@ func TestDoctor(t *testing.T) {
 	want := map[string]string{"binaries": "ok", "workerd": "ok", "bundler": "ok", "tw_home_writable": "ok",
 		"state_dir_writable": "ok", "mint_mode": "skip", "transport": "skip", "api_key": "skip", "https_certs": "skip", "sandbox": "skip", "host_sockets": "skip", "worker_internet": "skip", "node_egress": "skip", "system_tailscaled_not_used": "ok",
 		"store_sizes": "skip",
+		"containers":  "skip",
 		"node_budget": "skip",
 		"install":     "info", // a test build: not an install.sh prefix or npm package (npm_install_test.go covers those)
 	}

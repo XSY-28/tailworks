@@ -763,6 +763,10 @@ type StatusView struct {
 	Containers []ContainerStatus `json:",omitempty"`
 	// ImageCacheBytes is the converted container image cache on disk.
 	ImageCacheBytes int64 `json:",omitempty"`
+
+	// ContainersOff is why this host offers no containers ("" when it
+	// does; containersoff.go).
+	ContainersOff string `json:",omitempty"`
 }
 
 // Status returns a snapshot.
@@ -771,6 +775,7 @@ func (h *Host) Status() StatusView {
 	v := StatusView{HostID: h.cfg.HostID, Sandbox: h.SandboxInfo(), Tiers: h.tiers(), InsecureSharedHost: h.cfg.InsecureSharedHost}
 	v.WorkerInternet = workerInternetMode(h.cfg.WorkerInternet) // internet.go
 	v.WorkerInternetProblem = workerInternetProblem(h.cfg.WorkerInternet)
+	v.ContainersOff = h.containersOff() // containersoff.go
 	if h.cfg.VM != nil {
 		if vv, ok := h.cfg.VM.(interface{ Via() string }); ok {
 			v.VMVia = vv.Via()
