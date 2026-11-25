@@ -136,7 +136,7 @@ A project that has only a wrangler config gets these defaults:
   "name": "<workload>",
   "tailnet": {
     "tags": ["tag:tw-wl-<workload>"],
-    // every durable_objects class:
+    // every durable_objects class (as for any class a tailworks.jsonc leaves out):
     "objects": { "<Class>": { "node": false } }
   }
 }
