@@ -229,7 +229,7 @@ flags:
   -once
     	start, make one request (GET /; for an MCP app an initialize to its route), print it and exit (smoke test)
   -port int
-    	local port (127.0.0.1) (default 8787)
+    	local port on 127.0.0.1 (default: wrangler dev.port, else 8787, else a free port when 8787 is busy; 0 picks a free one) (default 8787)
   -test-scheduled
     	serve /__scheduled?cron=<expr>[&time=<ms>] on the local port: run a cron trigger's scheduled() now
   -wrangler

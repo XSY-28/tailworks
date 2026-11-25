@@ -61,7 +61,7 @@ type devResult struct {
 
 func cmdDev(args []string) error {
 	f := newFlags("dev")
-	port := f.Int("port", 8787, "local port (127.0.0.1)")
+	port := f.Int("port", devDefaultPort, "local port on 127.0.0.1 (default: wrangler dev.port, else 8787, else a free port when 8787 is busy; 0 picks a free one)")
 	once := f.Bool("once", false, "start, make one request (GET /; for an MCP app an initialize to its route), print it and exit (smoke test)")
 	workerdFlag := f.String("workerd", "", "workerd binary (default: $TW_WORKERD, the install's, or PATH)")
 	verbose := f.Bool("v", false, "hostd logs to stderr")
@@ -95,7 +95,7 @@ func cmdDev(args []string) error {
 	a.printWarnings(os.Stderr)
 	printDevEgressVia(a.TwRaw, os.Stderr)                  // dev_egressvia.go
 	printDevTailnetHTTPS(a.TwRaw, os.Stderr)               // tailnethttps.go
-	if err := checkDevPort(*port, os.Stderr); err != nil { // devlog.go
+	if *port, err = resolveDevPort(*port, flagGiven(f.FlagSet, "port"), a, os.Stderr); err != nil { // dev_port.go
 		return err
 	}
 	wd, err := findWorkerd(*workerdFlag)

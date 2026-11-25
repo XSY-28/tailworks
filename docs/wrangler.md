@@ -257,7 +257,8 @@ before anything else. Nothing is ignored silently:
 | `routes`, `route`, `workers_dev`, `preview_urls`, `account_id`, `zone_id` | ignored: the workload is reached at its MagicDNS name. Public routes are `tailworks.jsonc` `public` ([public-ingress.md](public-ingress.md)) |
 | `ai`, `browser`, `vectorize`, `hyperdrive`, `analytics_engine_datasets`, `send_email`, `dispatch_namespaces`, `mtls_certificates`, `images`, `pipelines`, `ratelimits`, `secrets_store_secrets`, `version_metadata`, `worker_loaders`, `vpc_services`, `media`, `tail_consumers`, `logfwdr`, `unsafe` | no such binding on tailworks; the warning names each `env.X` that will be undefined. A section tailworks supports as a [platform store](design/adr/044-platform-stores.md) (`kv_namespaces`, [Workers KV](kv.md); `r2_buckets`, [R2](r2.md); `d1_databases`, [D1](d1.md)) or as [service bindings](#service-bindings) (`services`) is not warned about |
 | `site` | not supported (Workers Sites; use `assets`) |
-| `observability`, `logpush`, `limits`, `usage_model`, `keep_vars`, `send_metrics`, `dev`, … | ignored by tailworks |
+| `dev` other than `dev.port` (`ip`, `local_protocol`, `host`, …) | ignored by tailworks: `tw dev` serves plain HTTP on 127.0.0.1 only. `dev.port` is `tw dev`'s port, as in `wrangler dev` |
+| `observability`, `logpush`, `limits`, `usage_model`, `keep_vars`, `send_metrics`, … | ignored by tailworks |
 | `python_modules` (its `exclude` globs) | ignored: `tw deploy` ships `python_modules/` whole, less `__pycache__` and `*.pyc` ([python.md](python.md#modules-and-files)) |
 | a `durable_objects` binding with `script_name` | not supported (the deploy fails) |
 | anything else | unknown key, ignored |
