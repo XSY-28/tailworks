@@ -5778,6 +5778,8 @@ type ServerInterface interface {
 	UpdateObject(w http.ResponseWriter, r *http.Request, id ObjectID, params UpdateObjectParams)
 	// GetObjectCertificate Read the object's node certificate
 	// (GET /v1/objects/{id}/certificate)
+	//
+	// Deprecated: this operation has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	GetObjectCertificate(w http.ResponseWriter, r *http.Request, id ObjectID)
 	// CreateObjectCredential Mint a single-use auth key for the object's node
 	// (POST /v1/objects/{id}/credentials)
@@ -21432,6 +21434,8 @@ type StrictServerInterface interface {
 	UpdateObject(ctx context.Context, request UpdateObjectRequestObject) (UpdateObjectResponseObject, error)
 	// GetObjectCertificate Read the object's node certificate
 	// (GET /v1/objects/{id}/certificate)
+	//
+	// Deprecated: this operation has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	GetObjectCertificate(ctx context.Context, request GetObjectCertificateRequestObject) (GetObjectCertificateResponseObject, error)
 	// CreateObjectCredential Mint a single-use auth key for the object's node
 	// (POST /v1/objects/{id}/credentials)

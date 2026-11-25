@@ -147,7 +147,7 @@ hostd's API, not this document's.
 | `GET` | `/v1/objects/{id}` | admin\|host\|tenant:read | no | `GetObject` | Read an object (lineage, children, kill record) |
 | `PATCH` | `/v1/objects/{id}` | host\|admin\|tenant:kill | yes | `UpdateObject` | Update an object (JSON Merge Patch) |
 | `DELETE` | `/v1/objects/{id}` | admin\|host\|tenant:kill | yes | `DeleteObject` | Kill an object |
-| `GET` | `/v1/objects/{id}/certificate` | host\|admin | no | `GetObjectCertificate` | Read the object's node certificate |
+| `GET` | `/v1/objects/{id}/certificate` | host\|admin | no | `GetObjectCertificate` | **Deprecated.** Read the object's node certificate |
 | `POST` | `/v1/objects/{id}/credentials` | host | yes | `CreateObjectCredential` | Mint a single-use auth key for the object's node |
 | `GET` | `/v1/releases` | admin | no | `ListReleases` | The release catalog |
 | `POST` | `/v1/releases` | admin | yes | `ImportReleases` | Import catalog entries (from a release's share/tailworks/catalog.json) |
@@ -1527,13 +1527,12 @@ A later `GET` is `410 Gone` with the kill record. Replaces
 
 `GetObjectCertificate` · role **host\|admin** · audited: no
 
-The certificate mgmt signed at `ready` (re-issued on fetch when missing
-or within 1 h of expiry). The receiving netd verifies it against the
-tenant's `oboPublicKey` and narrows the caller's caps to `cert.lim`;
-a certificate that fails verification, names another node or cannot
-be fetched makes netd withhold the caller's caps. `410 killed` for
-tombstones. Replaces `GET /v0/certs/{nodeID}`; see also
-`GET /v1/certificates/{stableNodeID}` for lookup by node.
+**Deprecated:** use `GET /v1/certificates/{stableNodeID}?tenant=`
+with the object's `stableNodeID` and `tenantID` (both on `Object`).
+This route returns the same certificate, sends a `Deprecation` header
+and a `Link` to that route (`rel="successor-version"`), and will be
+removed no earlier than two releases later. `409 not_ready` when the
+object has no node yet; `410 killed` for tombstones.
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -1635,6 +1634,17 @@ The receiver-side lookup: "is the peer that just connected a tailworks
 object, and what is its `lim`?" `404 not_found` when no live object
 of the tenant has that node (the receiver then applies the WhoIs caps
 unchanged: the peer is not a tailworks object); `410 killed` for a tombstone.
+
+The certificate is the one mgmt signed at `ready` (re-issued on fetch
+when missing or within 1 h of expiry). The receiving netd verifies it
+against the tenant's `oboPublicKey` and narrows the caller's caps to
+`cert.lim`; a certificate that fails verification, names another node
+or cannot be fetched makes netd withhold the caller's caps.
+
+To read an object's certificate, pass the object's `stableNodeID` and
+`tenantID` (the admin UI's object page does). Replaces
+`GET /v0/certs/{nodeID}` and the deprecated
+`GET /v1/objects/{id}/certificate`.
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|

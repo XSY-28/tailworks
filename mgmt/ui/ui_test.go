@@ -146,7 +146,7 @@ func populatedAPI() *fakeAPI {
 	f.routes["GET /v1/objects/obj_root"] = root
 	f.routes["GET /v1/objects/obj_kid"] = kid
 	f.routes["GET /v1/objects/obj_dead"] = &apiError{Status: 410, Code: "killed", Message: "object obj_dead was killed (test kill)", Tombstone: tomb}
-	f.routes["GET /v1/objects/obj_root/certificate"] = map[string]any{"stableNodeID": "nROOTSTABLE0001", "status": "ready", "cert": "c", "payload": map[string]any{"exp": 1}, "oboPublicKey": "pk"}
+	f.routes["GET /v1/certificates/nROOTSTABLE0001"] = map[string]any{"stableNodeID": "nROOTSTABLE0001", "status": "ready", "cert": "c", "payload": map[string]any{"exp": 1}, "oboPublicKey": "pk"}
 	f.routes["GET /v1/audit"] = map[string]any{"items": audit, "nextCursor": "c2", "chains": chains, "verified": true}
 	f.routes["GET /v1/audit/verification"] = map[string]any{"ok": false, "chains": []any{map[string]any{"chain": "mgmt", "ok": false, "records": 6, "brokenAt": 4, "error": "hash mismatch"}}, "verifiedAt": now}
 	f.routes["GET /v1/tenants/tn_1/workloads/w/logs"] = workloadLogs(now) // logs_test.go

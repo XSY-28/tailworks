@@ -300,7 +300,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 1 · cli. **When:** workerd, or create-tailworks (bundler and templates), is not where tailworks expects it. **Fix:** install from a release tarball (`install.sh`); in a checkout `make deps`, or `--workerd <path>` / `$TW_WORKERD`, `$TW_CREATE_TAILWORKS`.
 
 ### not_ready
-409 · mgmt. **When:** a node certificate was requested before the object is `ready`. **Fix:** wait for `identity_pending` to clear; hostd retries.
+409 · mgmt. **When:** a node certificate was requested through the deprecated `GET /v1/objects/{id}/certificate` before the object is `ready`. **Fix:** wait for the object to reach `ready`; better, switch to `GET /v1/certificates/{stableNodeID}?tenant=` with the object's `stableNodeID` and `tenantID`.
 
 ### not_running
 409 · cli. **When:** tailworks is set up in this state dir but its supervisor is not running. **Fix:** `tw up` (or `systemctl --user start tw`).
