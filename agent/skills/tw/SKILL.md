@@ -62,7 +62,8 @@ have them, prefer them for inspecting and operating: they are typed,
 authorized per tool by the user's tailnet policy, and audited. A
 `cap_missing` error means the user hasn't granted that tool; show them its
 `snippet` instead of working around it with the CLI. To set it up, the
-user runs `tw mcp --config`.
+user runs `tw mcp --config`: it prints the command or config for each
+agent.
 
 ## Rules for agents
 

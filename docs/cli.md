@@ -312,7 +312,7 @@ flags:
 tailworks' MCP server for coding agents (stdio)
 
 ```text
-tw mcp: tailworks' MCP server for coding agents, over stdio (a bridge to mgmt's /mcp; tools: whoami status ls logs audit, and deploy kill undeploy when allowed); --config prints how to register it
+tw mcp: tailworks' MCP server for coding agents, over stdio (a bridge to mgmt's /mcp; tools: whoami status ls logs audit, and deploy kill undeploy when allowed); --config prints how to register it with each agent, and is what tw mcp does on a terminal or with --json
 
 usage: tw mcp [--allow deploy,kill,undeploy] | mcp --config
 
@@ -320,7 +320,7 @@ flags:
   -allow string
     	also allow these tools: deploy, kill, undeploy (comma-separated). On the tw host this is what enables them; from a linked machine your github.com/rosskukulinski/tailworks/cap/mcp grant decides, and this only narrows
   -config
-    	print how to register tailworks' MCP server with a coding agent, and exit
+    	print how to register tailworks' MCP server with a coding agent, and exit (the default on a terminal and with --json)
   -json
     	machine-readable output
   -state-dir string

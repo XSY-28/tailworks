@@ -643,7 +643,7 @@
     },
     "mcp": {
       "type": "object",
-      "description": "tw mcp --config: how to register tailworks' MCP server (tw mcp without --config is the MCP stdio protocol itself)",
+      "description": "tw mcp --config (and tw mcp --json, or tw mcp on a terminal): how to register tailworks' MCP server (tw mcp with stdin a pipe is the MCP stdio protocol itself)",
       "properties": {
         "url": {
           "type": "string",
@@ -665,8 +665,44 @@
         },
         "commands": {
           "type": "object",
+          "description": "by agent ID (claude, codex, cursor, gemini, opencode): the command, or the config JSON; json: the generic mcpServers entry",
           "additionalProperties": {
             "type": "string"
+          }
+        },
+        "agents": {
+          "type": "array",
+          "description": "how to register the server with each supported agent, the ones installed here first",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "command": {
+                "type": "string",
+                "description": "a shell command that registers it (absent when the agent takes config instead)"
+              },
+              "config": {
+                "type": "string",
+                "description": "JSON to merge into file"
+              },
+              "file": {
+                "type": "string"
+              },
+              "detected": {
+                "type": "boolean",
+                "description": "the agent looks installed on this machine"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "detected"
+            ]
           }
         },
         "grant": {

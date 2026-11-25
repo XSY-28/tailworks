@@ -48,9 +48,11 @@ The exit code is 1 when a command fails (including a bad flag or a missing
 argument, code `bad_request`) and 2 for an unknown command. With `--json`,
 both are JSON. Key material is redacted from everything tailworks prints.
 
-`tw mcp` (without `--config`) is not a `--json` command: its stdout is the
+`tw mcp` with stdin a pipe is not a `--json` command: its stdout is the
 MCP stdio protocol (newline-delimited JSON-RPC). A refusal from mgmt
 becomes a JSON-RPC error whose `data` is the error object above.
+`tw mcp --json` means `tw mcp --config --json` (as does plain `tw mcp` on a
+terminal, without `--json`).
 
 `tw doctor` is the one command that prints a result *and* fails: its report
 is on stdout, then `doctor_failed` is on stderr if a check failed.

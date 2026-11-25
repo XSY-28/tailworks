@@ -185,7 +185,10 @@ same way: [docs/wrangler.md#pages](docs/wrangler.md#pages).
 tw agent setup    # installs skills for Claude Code, Codex, Cursor, Gemini CLI, OpenCode
 ```
 
-Then ask your agent to "build me an MCP server and run it on tw". Every
+Then register tailworks' MCP server with your agent: `tw mcp --config`
+prints the command for each one (`claude mcp add -s user tw -- tw mcp`).
+
+Ask your agent to "build me an MCP server and run it on tw". Every
 command takes `--json`. Details: [docs/agents.md](docs/agents.md).
 
 ## What you should know before you run this
