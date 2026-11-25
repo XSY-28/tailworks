@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rosskukulinski/tailworks/hostd"
 	"github.com/rosskukulinski/tailworks/hostd/fakemgmt"
 	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
 	"github.com/rosskukulinski/tailworks/internal/pyodide"
@@ -105,7 +106,14 @@ func TestPythonRPC(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := startSuiteCapsOpts(t, fakemgmt.Config{}, tailcfg.PeerCapMap{nettest.TestCap: []tailcfg.RawMessage{nettest.TestCapValue}},
-		func(o *hostdtest.Options) { o.PyodideDir = pd })
+		func(o *hostdtest.Options) {
+			o.PyodideDir = pd
+			// Under the host's process sandbox where there is one (Seatbelt,
+			// Landlock), as a deployment runs.
+			if sb, _ := hostd.ResolveSandbox(hostd.SandboxAuto); sb != hostd.SandboxNone {
+				o.Sandbox, o.InsecureSharedHost = hostd.SandboxAuto, true
+			}
+		})
 	e := s.e
 	e.WaitActive("pyrpc", e.DeployFiles(map[string][]byte{
 		"wrangler.jsonc": []byte(`{"name": "pyrpc", "main": "src/entry.py", "compatibility_date": "2026-04-01",

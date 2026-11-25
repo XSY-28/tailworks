@@ -89,8 +89,9 @@ A public method of the `Default` class, or of a named `WorkerEntrypoint`
 class (a binding with `"entrypoint": "Admin"`), can be called. Handler
 names (`fetch`, `scheduled`, `queue`, …) and names starting with `_` can't.
 Arguments arrive as Python values and the return value goes back as the
-`workers` SDK converts them (a `dict` reaches JavaScript as a `Map` with
-the built-in SDK). An exception reaches the caller as an `Error` with the
+`workers` SDK converts them, as on Cloudflare: a returned `dict` reaches
+JavaScript as a plain object with the vendored `workers-runtime-sdk`, and
+as a `Map` with the SDK built in before `compatibility_date` 2026-04-21. An exception reaches the caller as an `Error` with the
 Python exception in its message. `get_caller(self.ctx)` names the caller,
 as `getCaller(this.ctx)` does in JavaScript: tailworks puts the verified
 caller in `self.ctx.cf` for the call.
