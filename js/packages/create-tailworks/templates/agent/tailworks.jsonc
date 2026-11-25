@@ -9,7 +9,8 @@
       // schedule()/scheduleEvery() work in this (facet) mode: alarms are
       // delegated to the host DO. "egress": "workload" (plain-DO mode) is
       // only needed if egress may leave as the workload node.
-    },
-    "spawn": { "maxLive": 64, "maxDepth": 3 }
+    }
+    // "spawn": { "maxLive": 64, "maxDepth": 3 } is the default and the
+    // ceiling: set it only to lower the sub-agent budget.
   }
 }

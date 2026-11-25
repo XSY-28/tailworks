@@ -65,6 +65,11 @@ type fakeTS struct {
 	// keyDeleteDelay (ns) is each key DELETE's latency, outside mu
 	// (warmrevoke_test.go).
 	keyDeleteDelay atomic.Int64
+
+	// keyDeletesInFlight and keyDeletesPeak count concurrent key DELETEs
+	// (warmrevoke_test.go).
+	keyDeletesInFlight atomic.Int64
+	keyDeletesPeak     atomic.Int64
 }
 
 type fakeOAuthClient struct {
@@ -93,7 +98,11 @@ func newFakeTS(t *testing.T) *fakeTS {
 
 func (f *fakeTS) serve(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "DELETE" && strings.Contains(r.URL.Path, "/keys/") {
+		n := f.keyDeletesInFlight.Add(1)
+		for p := f.keyDeletesPeak.Load(); n > p && !f.keyDeletesPeak.CompareAndSwap(p, n); p = f.keyDeletesPeak.Load() {
+		}
 		time.Sleep(time.Duration(f.keyDeleteDelay.Load()))
+		f.keyDeletesInFlight.Add(-1)
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
