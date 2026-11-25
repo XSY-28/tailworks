@@ -707,6 +707,10 @@ func (m *Mgmt) PullQueue(ctx context.Context, tenantID, name string, c QueueCall
 			wakeQueue(queueWakeKey(tenantID, dlq.Name))
 		}
 		if len(rows) > 0 {
+			if ctx.Err() != nil { // the caller left while the claim committed (queueclaimgone.go)
+				m.releaseUndelivered(tenantID, name, claimLeases(rows))
+				return res, nil
+			}
 			for _, r := range rows {
 				body, err := openQueueBody(key, q.Incarnation, r.ID, r.Body)
 				if err != nil {
@@ -935,7 +939,7 @@ func (a *v1api) PullQueueMessages(w http.ResponseWriter, r *http.Request, id v1.
 		writeErr(w, r, err)
 		return
 	}
-	writeJSON(w, 200, res)
+	a.s.M.writePulled(w, id, queue, res) // queueclaimgone.go
 }
 
 func (a *v1api) AckQueueMessages(w http.ResponseWriter, r *http.Request, id v1.TenantID, queue v1.QueueName, params v1.AckQueueMessagesParams) {

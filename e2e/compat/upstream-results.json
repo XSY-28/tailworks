@@ -1,7 +1,7 @@
 {
   "dev": {
     "date": "2026-11-25",
-    "commit": "80a4c2562e735ec7a5b1dde95330d07bd618b635",
+    "commit": "a506f283d5390e6f05db48551209e0b40e23932e",
     "platform": "darwin/arm64",
     "results": {
       "ag-cross-domain": {
@@ -38,8 +38,9 @@
         "steps": 14
       },
       "ag-playground": {
-        "outcome": "XFAIL",
-        "source": "cloudflare/agents/examples/playground@95dacf84dcdf"
+        "outcome": "PASS",
+        "source": "cloudflare/agents/examples/playground@95dacf84dcdf",
+        "steps": 26
       },
       "ag-push-notifications": {
         "outcome": "PASS",
@@ -148,7 +149,7 @@
   },
   "deployed": {
     "date": "2026-11-25",
-    "commit": "80a4c2562e735ec7a5b1dde95330d07bd618b635",
+    "commit": "a506f283d5390e6f05db48551209e0b40e23932e",
     "platform": "darwin/arm64",
     "results": {
       "ag-cross-domain": {
@@ -180,8 +181,9 @@
         "steps": 5
       },
       "ag-playground": {
-        "outcome": "XFAIL",
-        "source": "cloudflare/agents/examples/playground@95dacf84dcdf"
+        "outcome": "PASS",
+        "source": "cloudflare/agents/examples/playground@95dacf84dcdf",
+        "steps": 26
       },
       "ag-push-notifications": {
         "outcome": "PASS",
