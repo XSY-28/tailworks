@@ -225,10 +225,10 @@ only a name and a tag. Anything more is in the last column.
 
 Upstream: [cloudflare/agents](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples) `examples/` at commit `95dacf84dcdf`. Versions: `agents` 0.34.0 (the examples depend on `"agents": "*"`, a workspace link; the suite installs the published version the repo carries at that commit, with `npm install`), `@modelcontextprotocol/server` 2.4.0 and `@modelcontextprotocol/sdk` 1.32.2 (pinned by the examples themselves). No other versions were run, so none is known not to work.
 
-- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-25 on darwin/arm64, tailworks `80a4c2562e73`.
-- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-25 on darwin/arm64, tailworks `80a4c2562e73`.
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-25 on darwin/arm64, tailworks `a506f283d539`.
+- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-25 on darwin/arm64, tailworks `a506f283d539`.
 
-69 examples: **10 pass, 0 pass with a change, 4 fail, 55 not run.** (The repo has 56 example directories. One of them, `next/`, holds 14 examples of its own, counted here one by one, with `next/harnesses` as one.) A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
+69 examples: **11 pass, 0 pass with a change, 3 fail, 55 not run.** (The repo has 56 example directories. One of them, `next/`, holds 14 examples of its own, counted here one by one, with `next/harnesses` as one.) A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
 
 | Example | What it is | `tw dev` | Deployed | Result | The change, or why it fails |
 |---|---|---|---|---|---|
@@ -245,7 +245,7 @@ Upstream: [cloudflare/agents](https://github.com/cloudflare/agents/tree/95dacf84
 | [`webmcp`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/webmcp) | McpAgent (MCP SDK v1, state in a Durable Object) + browser WebMCP adapter page | pass | pass | **pass** | — |
 | [`webmcp-react`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/webmcp-react) | WebMCP starter: a React SPA (tools run in the browser), Worker only as the 404 fallback | pass | pass | **pass** | — |
 | [`workflows`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/workflows) | AgentWorkflow started by an agent: steps, progress reports to the agent and its clients, restart, list. (Its approval step sits behind the example's intentional random failures and isn't reached) | pass | pass | **pass** | — |
-| [`playground`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/playground) | The Agents playground: 30 agent classes in one Worker (state, callable, streaming, schedule, SQL, routing, multi-agent, MCP, workflows; AI, email, voice and codemode demos too) | fail | fail | **fail** | It starts, and 8 of the 9 demo families the probe covers pass; the multi-agent demo's `SupervisorAgent.createChild` (an agent calling another agent's method over Durable Object RPC after `getAgentByName`) fails with `Could not serialize object of type "RpcPromise"`. A smaller app bundled by the built-in bundler with the same two classes and calls passes |
+| [`playground`](https://github.com/cloudflare/agents/tree/95dacf84dcdf6582bc9bdd5fa61c6ed5528ec01c/examples/playground) | The Agents playground: 30 agent classes in one Worker (state, callable, streaming, schedule, SQL, routing, multi-agent, MCP, workflows; AI, email, voice and codemode demos too) | pass | pass | **pass** | — |
 
 Not run:
 
@@ -403,8 +403,8 @@ streaming and agent loop running on tailworks, not a model.
 
 Upstream: [vercel/ai](https://github.com/vercel/ai/tree/8956ca55ed9c31b4b7680621a10ad0269f9629b1/examples) `examples/` at commit `8956ca55ed9c`. Versions: `ai` 7.0.181 and `@ai-sdk/openai` 4.0.122 (the examples depend on `workspace:*`; the suite installs the published versions the repo carries at that commit). No other versions were run.
 
-- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-25 on darwin/arm64, tailworks `80a4c2562e73`.
-- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-25 on darwin/arm64, tailworks `80a4c2562e73`.
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-25 on darwin/arm64, tailworks `a506f283d539`.
+- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-25 on darwin/arm64, tailworks `a506f283d539`.
 
 25 examples: **0 pass, 3 pass with a change, 0 fail, 22 not run.** A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
 
@@ -435,8 +435,8 @@ The three examples in [vercel/mcp-handler](https://github.com/vercel/mcp-handler
 
 Upstream: [vercel/mcp-handler](https://github.com/vercel/mcp-handler/tree/5518e8af4386a92756d189169a97601a4a7162ee/examples) `examples/` at commit `5518e8af4386`. Versions: `mcp-handler` 2.4.0 (the repo's version at that commit), `@modelcontextprotocol/server` 2.4.0, `zod` 4.6.7. No other versions were run.
 
-- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-25 on darwin/arm64, tailworks `80a4c2562e73`.
-- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-25 on darwin/arm64, tailworks `80a4c2562e73`.
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-25 on darwin/arm64, tailworks `a506f283d539`.
+- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-25 on darwin/arm64, tailworks `a506f283d539`.
 
 3 examples: **0 pass, 3 pass with a change, 0 fail, 0 not run.** A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
 
@@ -459,8 +459,8 @@ repository ([Python Workers](#python)).
 
 Upstream: [cloudflare/python-workers-examples](https://github.com/cloudflare/python-workers-examples/tree/47ec7d69f4052cd57bed5d3676cb7af76ca0656b), every top-level directory, at commit `47ec7d69f405`. Versions: the Pyodide bundles the pinned workerd runs (`internal/pyodide`); no package is vendored (`python_modules/`), so an example that needs one is not run. No other versions were run.
 
-- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-25 on darwin/arm64, tailworks `80a4c2562e73`.
-- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-25 on darwin/arm64, tailworks `80a4c2562e73`.
+- Under `tw dev` (`make e2e-compat-dev`, no tailnet and no credentials): run 2026-11-25 on darwin/arm64, tailworks `a506f283d539`.
+- Deployed with `tw deploy` to a real host on a real tailnet and called from a tailnet client (`make e2e-compat`): run 2026-11-25 on darwin/arm64, tailworks `a506f283d539`.
 
 28 examples: **7 pass, 0 pass with a change, 2 fail, 19 not run.** A row's result is the worse of its two runs. "Pass" means the suite's probe passed: it does what the example's README or client does (the requests, the WebSocket and `@callable` calls, the MCP sessions), not everything the example can do.
 

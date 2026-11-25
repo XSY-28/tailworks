@@ -182,7 +182,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 409 · mgmt. **When:** an object ID collided across identities (two workloads derived the same ID). **Fix:** rename one object or class; report it (IDs are HMAC-derived and this should not happen).
 
 ### identity_pending
-503 · netd, mgmt, cli. **When:** the object's node is minted but not ready yet (`Retry-After: 1`); `tw dev` waited 60 s for a deploy. **Fix:** retry; if it persists, `tw logs <workload>` and check the control plane.
+503 · netd, mgmt, cli. **When:** the object's node is minted but not ready yet (`Retry-After: 1`); an outbound call from a new object waited 20 s for mgmt to accept its ready report (its node certificate), or that report failed; `tw dev` waited 60 s for a deploy. **Fix:** retry (a failed ready report is re-sent on a later call); if it persists, `tw logs <workload>` and check the control plane and mgmt.
 
 ### image_build_failed
 1 · cli. **When:** `tw deploy` could not build or push an app's Dockerfile container image with `docker buildx`. **Fix:** the build output is in the detail; check `docker buildx version` works on the deploying machine.

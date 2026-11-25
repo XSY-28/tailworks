@@ -22,7 +22,7 @@ Each Durable Object class picks how its outbound `fetch()` is attributed, in `ta
 | Kill | Enforced in platform code (the `Host_` flag, plus the facet aborted) | Enforced by the tenant-side wrapper's `fetch`; the node is killed by netd either way |
 | `ctx.container` (classes with wrangler `containers`, docs/containers.md) | ✅ Only the object's own container (platform-attested) | ✅ Its own container; like `spawn/kill`, claimed by the tenant-side wrapper, so code in the workload could drive another plain object's container of the same workload, never a facet object's |
 | A container's intercepted requests (`interceptOutboundHttp(s)`, docs/containers.md) | Run in the object; the handler's `fetch()` leaves as **the object's node** | Run in the object; the handler's `fetch()` leaves as **the workload node** |
-| Env bindings to other DOs | Proxies: `env.X.getByName(name)` only. **Await** it, or call a method on it at once; don't store the un-awaited result. `idFromName`/`get(id)` are not available inside facets | Real namespaces |
+| Env bindings to other DOs | Proxies: `env.X.getByName(name)`, or `env.X.get(env.X.idFromName(name))`. Such an id's `toString()` is the object's name; `idFromString` and `newUniqueId` fail with `bad_request` | Real namespaces |
 | `newUniqueId()` objects | Not supported (objects must have names; a name is the node's identity) | Work, but get no node (no `ctx.id.name`) |
 
 Switching a class between modes changes its storage namespace (`Host_<Class>` vs `<Class>`), so existing objects of that class start empty. Pick the mode before you store data. The fix for both columns is upstream ask WD-3 (per-actor `globalOutbound`), which removes the facet requirement and gives alarms *and* per-object egress.
