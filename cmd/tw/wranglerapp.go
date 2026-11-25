@@ -97,13 +97,7 @@ func (a *app) loadWrangler(twName string) (string, error) {
 	if err := a.detectPages(); err != nil { // pages.go
 		return "", err
 	}
-	base := twName
-	if base == "" {
-		base, _ = cfg["name"].(string)
-	}
-	if base == "" {
-		base = filepath.Base(a.Dir)
-	}
+	base := appBaseName(twName, a.WranglerName, a.Dir) // appworkload.go
 	switch {
 	case a.Opts.Env == "":
 		return base, nil

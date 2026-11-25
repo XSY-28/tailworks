@@ -6,7 +6,8 @@ Every `tw` command and subcommand with its `--help` output: the usage line
 and each flag with its default. `tw help` lists the commands by group;
 `tw <command> --help` prints one of these sections. Every command also
 takes `--state-dir` (default `$TW_STATE_DIR` or `~/.tailworks`) and `--json`
-([cli-json.md](cli-json.md)).
+([cli-json.md](cli-json.md)). The environment variables tw reads are at the
+end: [Environment](#environment).
 
 ## Set up
 
@@ -227,7 +228,7 @@ flags:
   -once
     	start, make one request (GET /; for an MCP app an initialize to its route), print it and exit (smoke test)
   -port int
-    	local port (127.0.0.1) (default 8787)
+    	local port on 127.0.0.1 (default: wrangler dev.port, else 8787, else a free port when 8787 is busy; 0 picks a free one) (default 8787)
   -test-scheduled
     	serve /__scheduled?cron=<expr>[&time=<ms>] on the local port: run a cron trigger's scheduled() now
   -wrangler
@@ -566,10 +567,13 @@ global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · -
 open or close a workload's public routes
 
 ```text
-tw expose: open or close a workload's public (Funnel) routes; survives redeploys (tailworks.jsonc "public", ADR-029)
+tw expose: open or close a workload's public (Funnel) routes; survives redeploys (tailworks.jsonc "public", ADR-029). names lists the public names the tenant owns (it keeps one across undeploys); release frees one nothing serves
 
 subcommands:
   tw expose on|off <workload>
+  tw expose names
+  tw expose release <name>
+  common flags: [--tenant <tailnet>]
 
 flags:
   (none besides the global ones)
@@ -577,11 +581,19 @@ flags:
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · --tenant <tailnet|id> (default: the tw up tenant)
 ```
 
+#### tw expose names
+
+Same flags as [tw expose](#tw-expose).
+
 #### tw expose off
 
 Same flags as [tw expose](#tw-expose).
 
 #### tw expose on
+
+Same flags as [tw expose](#tw-expose).
+
+#### tw expose release
 
 Same flags as [tw expose](#tw-expose).
 
@@ -635,7 +647,7 @@ subcommands:
   tw d1 create <db>
   tw d1 ls
   tw d1 rm <db> [--yes]
-  tw d1 execute <db> --command <sql> | --file <file>
+  tw d1 execute <db> [--command <sql> | --file <file>]
   tw d1 export <db> [--output <file>]
   tw d1 repair <db> --skip <seq> [--yes]
   tw d1 migrations create <db> <message>
@@ -661,7 +673,7 @@ flags:
   -command string
     	SQL to run (one or more statements, run as one batch)
   -file string
-    	a file of SQL to run as one batch
+    	a file of SQL to run as one batch (with neither flag, the SQL is read from stdin: tw d1 execute <db> < file.sql)
   -workload string
     	workload whose database it is (default: the app in the current directory, as tw deploy names it)
 
@@ -1629,3 +1641,31 @@ Same flags as [tw release](#tw-release).
 #### tw release ls
 
 Same flags as [tw release](#tw-release).
+
+## Environment
+
+The variables `tw` reads, and the ones `get.sh` and `install.sh` read
+("scripts"). A flag, where there is one, wins over the variable. The
+`tw up --service` unit sets only `PATH` and passes `--state-dir`, so
+none of these reach a tailworks that runs as a service unless the unit
+sets them. `TW_*` and `__TW*` names are reserved: a Worker never sees
+them, and secrets and `node.env` can't use them.
+
+| Variable | What it does | Flag | Read by |
+| --- | --- | --- | --- |
+| `TW_STATE_DIR` | the state dir (default `~/.tailworks`). A `tw up --service` unit passes `--state-dir` itself. | `--state-dir` | tw |
+| `TW_HOME` | where `get.sh` and `install.sh` install the release (the prefix; default `~/.tailworks`). It shares the state dir's default but is a different thing: [What is in ~/.tailworks](INSTALL.md#what-is-in-tailworks). | `install.sh --prefix` | scripts |
+| `TW_INSTALL_FORCE` | `1`: `get.sh` replaces another version while tailworks runs from the prefix, with no backup or health check. Use `tw upgrade` instead. | `install.sh --force` | scripts |
+| `TW_NO_UPDATE_CHECK` | set (to `1`): no once-a-day "newer release" notice after a command. `CI` does the same. |  | tw |
+| `CI` | set (as CI systems do): no update notice, as with `TW_NO_UPDATE_CHECK`. |  | tw |
+| `TW_WORKERD` | the workerd binary, when it isn't next to `tw` or in `~/.tailworks/bin`. | `--workerd` (`tw up`, `tw dev`) | tw |
+| `TW_NODE` | the Node.js binary that runs `"runtime": "node"` workloads (default: `node` on `PATH`). |  | tw |
+| `TW_CREATE_TAILWORKS` | the create-tailworks package directory (bundler and templates), when it isn't in the install or a checkout. |  | tw |
+| `TW_WRANGLER` | the wrangler CLI that builds a wrangler project (default: the project's `node_modules/.bin/wrangler`, then `PATH`). |  | tw |
+| `TW_REPO` | the GitHub repository releases come from (default `rosskukulinski/tailworks`), for `tw upgrade` and `tw version --check`. |  | tw, scripts |
+| `TW_RELEASE_BASE` | a mirror to download release tarballs and `SHA256SUMS` from instead of GitHub (the per-tag directory). The signature check still applies. |  | tw, scripts |
+| `TW_RELEASE_API` | a mirror of the GitHub API that answers "latest release" (default `https://api.github.com`), for `tw upgrade`, `tw version --check` and `get.sh`. For tests and private mirrors. |  | tw, scripts |
+| `TW_RELEASE_SIGNERS` | an `allowed_signers` file that replaces the pinned release keys. For tests and private builds; a host's self-upgrade (`tw-hostd`) ignores it. |  | tw, scripts |
+| `TW_ALLOW_UNSIGNED` | `1`: the per-invocation form of `--allow-unsigned`, for a build you made yourself. Don't export it in a shell profile: every later `get.sh`, `install.sh` and `tw upgrade` would skip the release signature check ([security-model.md](security-model.md)). A host's self-upgrade ignores it. | `--allow-unsigned` | tw, scripts |
+
+For debugging and the test harness only: `TW_KEEP_INSTANCES`, when set, keeps a workload instance's directory after it stops; its VM disks and tenant secrets stay on disk, so never set it on a production host. `TW_TEST_LINK_NAME` is the name `tw link` discovers instead of `tw-mgmt`, for hermetic tests.

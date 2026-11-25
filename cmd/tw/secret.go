@@ -158,12 +158,10 @@ func cmdSecretSub(sub string, args []string) error {
 // workload, for tw secret sub.
 func secretWorkload(workload, sub string) (string, error) {
 	if workload == "" {
-		a, err := loadApp(".", "")
-		if err != nil {
-			return "", fail("bad_request", "no app in the current directory to take the workload from").
-				withFix("cd <app dir> && tw secret "+sub+" …", "tw secret "+sub+" … --workload <workload>")
+		var err error
+		if workload, err = appWorkload("secret " + sub); err != nil { // appworkload.go
+			return "", err
 		}
-		workload = a.Name
 	}
 	if workloadLabel(workload) != workload {
 		return "", fail("bad_request", fmt.Sprintf("workload %q is not a DNS label", workload))

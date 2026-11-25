@@ -491,7 +491,9 @@ See [upgrading.md](upgrading.md): what may run together, upgrading a
 `~/.tailworks` is two directories that share a default. The **prefix**
 is where `install.sh` puts the release (`TW_HOME`, `tw upgrade
 --prefix`). The **state dir** is where tailworks keeps its data
-(`TW_STATE_DIR`, `--state-dir`). Either can move without the other.
+(`TW_STATE_DIR`, `--state-dir`). Either can move without the other. Every
+variable `tw`, `get.sh` and `install.sh` read is in
+[cli.md](cli.md#environment).
 
 `tw down --purge` deletes no files: it kills every object and deletes its
 device. "Uninstall" below is [`tw uninstall`](#uninstall): it removes every

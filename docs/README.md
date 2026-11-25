@@ -85,8 +85,8 @@ design records (`design/`) don't; read them here on GitHub.
 ## Look up: reference
 
 - CLI: [cli.md](cli.md) has every command, subcommand and flag (generated
-  from `--help`); `tw help` groups the commands, `tw <command> --help`
-  shows one.
+  from `--help`) and the environment variables `tw` reads; `tw help`
+  groups the commands, `tw <command> --help` shows one.
 - `tailworks.jsonc`, every key: [tailworks-jsonc.md](tailworks-jsonc.md)
 - What works from Cloudflare Workers: [COMPAT.md](COMPAT.md)
 - Error codes and their fixes: [errors.md](errors.md)

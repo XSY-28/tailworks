@@ -128,8 +128,7 @@ func cmdR2(args []string) error {
 	workload := *o.workload
 	if workload == "" {
 		if a == nil {
-			return fail("bad_request", "no app in the current directory to take the workload from").
-				withFix("cd <app dir> && tw r2 "+verb+" …", "tw r2 "+verb+" … --workload <workload>")
+			return appWorkloadErr(".", "r2 "+verb, appErr, "") // appworkload.go
 		}
 		workload = a.Name
 	}
