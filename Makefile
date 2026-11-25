@@ -104,6 +104,14 @@ e2e-placement: deps
 e2e-dataplane: deps
 	$(GO) test -tags e2edataplane -count=1 -v -timeout 25m -run TestDataplane ./e2e/dataplane/...
 
+## e2e-dataplane-routing: the data-plane loop for routing (issue #422, e2e/dataplane/LOOP.md "Routing"): public
+## ingress through netd's public listener, service bindings (fetch and RPC) and WebSockets to a Durable Object,
+## across moves, takeovers, binding revocations, route changes and hibernation. TW_DP_SCENARIO=public|bindings|
+## websockets|routing (default routing); TW_DP_SEED defaults to today's date; TW_DP_DURATION (default 4m).
+.PHONY: e2e-dataplane-routing
+e2e-dataplane-routing: deps
+	$(GO) test -tags e2edataplane -count=1 -v -timeout 25m -run 'TestRouting$$' ./e2e/dataplane/...
+
 ## e2e-locks: locks and leader election on DO leases (docs/locks.md), hermetic: real tw-mgmt + two
 ## tw-hostd processes, default timings; one host cut off from mgmt while still on the tailnet.
 .PHONY: e2e-locks

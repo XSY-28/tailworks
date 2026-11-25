@@ -150,6 +150,9 @@ type cluster struct {
 	token   string
 	stopped map[string]bool // names currently SIGSTOPped (whole group or hostd only)
 	orphans []int           // workerds that outlived a crashed hostd
+
+	// hostArgs, when set, adds tw-hostd flags for a host (routing_test.go).
+	hostArgs func(id string) []string
 }
 
 func (c *cluster) record(name string, pid int) {
@@ -390,10 +393,14 @@ func (c *cluster) startMgmt(first bool) {
 
 func (c *cluster) startHost(id string) {
 	hd := filepath.Join(c.work, id)
-	c.start(id, "-local-dev", "-mgmt", "unix://"+filepath.Join(c.work, id+"-mgmt.sock"), "-mgmt-token-file", filepath.Join(c.work, "token"),
+	var extra []string
+	if c.hostArgs != nil {
+		extra = c.hostArgs(id)
+	}
+	c.start(id, append([]string{"-local-dev", "-mgmt", "unix://" + filepath.Join(c.work, id+"-mgmt.sock"), "-mgmt-token-file", filepath.Join(c.work, "token"),
 		"-host-id", id, "-data-dir", filepath.Join(hd, "data"), "-run-dir", filepath.Join(hd, "run"),
 		"-control-url", c.ctl.URL, "-ephemeral", "-queue-visibility", "5s",
-		"-sandbox", "none", "-workerd", c.workerd, "-hostname-prefix", id+"-", "-log-level", "debug")
+		"-sandbox", "none", "-workerd", c.workerd, "-hostname-prefix", id + "-", "-log-level", "debug"}, extra...)...)
 }
 
 // try is one mgmt API call; err is a transport failure.

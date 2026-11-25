@@ -74,6 +74,10 @@ jobs:
           - target: e2e-dataplane
             timeout: 30
             allow_failure: "https://github.com/rosskukulinski/tailworks/issues/501"
+          # Public ingress, service bindings and WebSockets across moves (#422).
+          - target: e2e-dataplane-routing
+            timeout: 30
+            allow_failure: ""
           - target: e2e-headscale
             timeout: 45
             allow_failure: ""
