@@ -33,3 +33,4 @@
 - `go test ./cmd/tw/ -run 'TestTenant|TestSubcommandHelp|TestApplyPolicyFlagSpelling'`: pass
 - `make lint`: pass
 - `make changes-check`: ok
+- `make test`: all Go packages pass except `mgmt` TestWarmKeysRevokedOnCloseInParallel (timed out under load from parallel agents; passes on rerun alone, untouched code). test-js did not run after test-go stopped; no JS changed.
