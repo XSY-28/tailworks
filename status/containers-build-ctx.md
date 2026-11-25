@@ -31,3 +31,12 @@ why.
 ## Tests
 
 See the PR body.
+
+- `make lint`: ok (after merging origin/master).
+- `make test` (mbp): all ok except hostd, which panicked in a test helper
+  (`hostd/connect_test.go:42` serveWhoisTCP: `who.Node` nil, untouched
+  here); `go test ./hostd -count=1` locally: ok.
+- `make e2e-wrangler`: ok.
+- Not run: `make e2e-container` (needs Linux + KVM), `make e2e-compat`
+  (no container project runs on this Mac's host; the change is in the
+  build and diagnostics, not the runtime).
