@@ -64,3 +64,8 @@ Last update: 2026-11-24. `tw uninstall` (#487); install.sh/get.sh refuse another
 - Skipped: `make e2e-tw-upgrade` (the disk is full; tw upgrade passes
   `--force` to install.sh, and `tw down`'s stop path is only split into
   functions), `make npm-cli-test` (npm packaging untouched).
+- CI fix (2026-11-25): PR #560's `test` job failed only in hostd
+  `TestRealMgmtStores/D1/*` (503 `upstream_unavailable`, the 1s heartbeat
+  fence on a loaded runner), unrelated to this branch. Master's
+  fix-591-d1-test-fence addresses that flake; merged origin/master (clean).
+  After the merge: `make lint` ok, `make install-test` ok.
