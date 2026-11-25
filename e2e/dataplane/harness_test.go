@@ -145,6 +145,10 @@ type cluster struct {
 	pids     *os.File
 	tenantID string
 
+	// pg, when set (TW_DP_MGMT=pg3), runs mgmt as replicas on Postgres
+	// (mgmtpg_test.go) instead of one tw-mgmt on SQLite.
+	pg *mgmtPG
+
 	mu      sync.Mutex
 	procs   map[string]*proc
 	token   string
@@ -165,7 +169,7 @@ func (c *cluster) start(name string, args ...string) {
 		c.t.Fatal(err)
 	}
 	bin := "tw-hostd"
-	if name == "mgmt" {
+	if strings.HasPrefix(name, "mgmt") { // "mgmt", or "mgmt-r<i>" (mgmtpg_test.go)
 		bin = "tw-mgmt"
 	}
 	cmd := exec.Command(filepath.Join(c.bin, bin), args...)
@@ -360,6 +364,10 @@ func (c *cluster) stopAll() {
 }
 
 func (c *cluster) startMgmt(first bool) {
+	if c.usePG(first) {
+		c.startMgmtPG(first) // mgmtpg_test.go
+		return
+	}
 	args := []string{"-local-dev", "-socket", c.sock, "-host-token-file", filepath.Join(c.work, "token"),
 		"-state-dir", filepath.Join(c.work, "mgmt"), "-tsapi-url", c.tsURL, "-reap-interval", "1h"}
 	if first {
