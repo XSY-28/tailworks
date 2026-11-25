@@ -212,7 +212,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 409 · mgmt, hostd, netd (SDK). **When:** the host's lease epoch was fenced: the store knows a newer holder (after a partition or a restart race). **Fix:** hostd re-acquires on its own; persistent `lease_lost` means two hosts with the same host ID.
 
 ### login_timeout
-408 · cli. **When:** a tailnet node tailworks joins interactively (`tw link --tsnet`) printed a login URL and nobody completed the browser login within 5 minutes. **Fix:** run the command again and finish the login, or pass an auth key file for an unattended join.
+408 · cli. **When:** a tailnet node tailworks joins interactively (`tw link --tsnet`) printed a login URL and nobody completed the browser login within 5 minutes. **Fix:** run the command again and finish the login, or pass an auth key file (`tw link --tsnet --tsnet-authkey-file <file>`) for an unattended join.
 
 ### mgmt_failed
 1 · cli. **When:** `tw up` (single process): the embedded tw-mgmt failed to start. Also the supervisor's exit error (in `supervisor.log`) when mgmt stopped after start: its listener failed (single process) or tw-mgmt kept exiting (two processes); it exits 1 so the service manager restarts it. **Fix:** the detail has the cause; `tw logs --component mgmt` and `tw doctor`, then `tw up` again (under `tw up --service` it restarts on its own).
@@ -296,7 +296,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 409 · cli. **When:** this state dir has no tailworks config or tenant yet. **Fix:** `tw up …` on the host, or `tw link <mgmt>` on a developer machine.
 
 ### npm_install
-1 · cli. **When:** `tw upgrade` ran from a tailworks that npm installed (`npm install -g tailworks` or `npx tailworks`): npm owns the binaries' directory, so `tw upgrade` won't replace it; or `tw up --service` ran from npx's cache, which npm may clear at any time, so a login service can't point there. **Fix:** upgrade with npm: `tw down && npm install -g tailworks@latest && tw up` (`tw backup` first; [upgrading.md](upgrading.md#installed-with-npm)); for a service, install globally (`npm install -g tailworks`), or run `tw up --service=false`. For `tw upgrade` itself, install the release tarball (`scripts/get.sh`).
+1 · cli. **When:** `tw upgrade` ran from a tailworks that npm installed (`npm install -g tailworks` or `npx tailworks`): npm owns the binaries' directory, so `tw upgrade` won't replace it; or `tw up --service` ran from npx's cache, which npm may clear at any time, so a login service can't point there. **Fix:** upgrade with npm: `tw backup && tw down && npm install -g tailworks@latest && tw up` (`tw upgrade --plan`, `tw version --check` and `tw doctor` print it; [upgrading.md](upgrading.md#installed-with-npm)); for a service, install globally (`npm install -g tailworks`), or run `tw up --service=false`. For `tw upgrade` itself, install the release tarball (`scripts/get.sh`).
 
 ### oauth_exchange_failed
 401 · cli. **When:** Tailscale refused the OAuth client in `--oauth-client-file` (wrong secret, revoked client). **Fix:** generate a new client (Settings › Trust credentials), overwrite the file (0600), `tw up`.

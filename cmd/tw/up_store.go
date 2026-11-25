@@ -24,6 +24,12 @@ type storeFlags struct {
 }
 
 func addStoreFlags(f *flags) storeFlags {
+	f.group(upGroupStore,
+		"db",
+		"db-file",
+		"custody",
+		"setec-url",
+	)
 	return storeFlags{
 		db:       f.String("db", "", "mgmt's store: a postgres://… DSN (saved in tw.json; prefer --db-file for a DSN with a password). Default: SQLite in <state>/mgmt/mgmt.db. Move an existing install first: tw-mgmt migrate --from sqlite --to-file <file>"),
 		dbFile:   f.String("db-file", "", "read mgmt's store DSN from this 0600 file at every start (keeps a Postgres password out of tw.json and argv)"),

@@ -113,9 +113,17 @@ func cmdPromote(args []string) error {
 	replace := f.Bool("replace", false, "re-place the workload (as tw deploy --replace); by default it stays on its host, with its Durable Object storage")
 	forceTakeover := f.Bool("force-takeover", false, "as tw deploy --force-takeover")
 	keep := f.Bool("keep-preview", false, "leave the preview running (default: undeploy it once promoted)")
-	allowMissing := f.Bool("allow-missing-grants", false, "promote even if the current policy lacks grants the preview's bundle needs")
+	allowMissing := f.Bool("allow-missing-grants", false, "promote even if the preflight finds policy lines the preview's bundle needs missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)")
 	noWait := f.Bool("no-wait", false, "return once mgmt accepted the promotion")
 	wait := f.Duration("wait", 3*time.Minute, "how long to wait for ready")
+	// --help lists these under Advanced (helpflags.go).
+	f.group(advancedFlags,
+		"host",
+		"replace",
+		"force-takeover",
+		"allow-missing-grants",
+		"wait",
+	)
 	pos, err := f.parse(args)
 	if err != nil {
 		return err

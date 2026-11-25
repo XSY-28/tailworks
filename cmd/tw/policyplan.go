@@ -53,7 +53,7 @@ func cmdPolicy(args []string) error {
 	f.Var(vars, "var", "override a wrangler var (KEY=VALUE, repeatable)")
 	ao := addAppFlags(f) // wranglerapp.go: --env, --wrangler, --from-wrangler-out
 	apply := f.Bool("apply", false, "write the missing tagOwners, grants, funnel nodeAttrs and Service auto-approval to the tailnet policy (additive, tag:tw* only, If-Match; needs Policy File write)")
-	yes := f.Bool("yes", false, "with --apply: write without asking (needed without a terminal, and with --json)")
+	yes := yesFlagBefore(f, "--apply writes the policy")
 	pos, err := f.parse(args)
 	if err != nil {
 		return err

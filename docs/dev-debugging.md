@@ -21,7 +21,7 @@ tw dev                      # ready on http://127.0.0.1:8787 · edits reload · 
 tw dev --once --json        # start, make one request, print it, exit (a smoke test)
 ```
 
-`tw dev --help` lists the flags (`--port`, `--once`, `--workerd`, `-v`).
+`tw dev --help` lists the flags (`--port`, `--once`, `--test-scheduled`, and under Advanced `--workerd`, which defaults to `$TW_WORKERD`, and `-v`).
 The `mcp` template serves on `/mcp` (its `/` answers 404); `tw dev` says
 so and its smoke test sends an MCP `initialize` there. Not in dev yet: a
 policy evaluator. Every dev node sees every other and gets the same test
