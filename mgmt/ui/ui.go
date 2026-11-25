@@ -276,7 +276,10 @@ func (u *ui) base(r *http.Request, title string) base {
 	} else {
 		u.call(r, "GET", "/v1/whoami", &b.Who)
 	}
-	if b.Who.Admin || b.Who.Kind == "local" || b.Who.Kind == "" {
+	// whoami reports admin for mgmt's own node too. A zero Who (whoami
+	// failed; only the error page gets here) skips /v1/status and renders
+	// the approvals-only nav.
+	if b.Who.Admin {
 		u.call(r, "GET", "/v1/status", &b.Status) // a tenant admin may not read it
 	}
 	b.Flash = r.URL.Query().Get("ok")
@@ -343,7 +346,7 @@ func (u *ui) overview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var err error
-	operator := d.Who.Admin || d.Who.Kind == "local"
+	operator := d.Who.Admin
 	if operator { // a tenant admin sees its own tenants, not hosts
 		d.Hosts, err = listAll[host](u, r, "/v1/hosts?limit=500", 2000)
 		note("hosts", err)
