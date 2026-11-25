@@ -222,7 +222,13 @@ func (h *Host) deploy(w *workload, a mgmtapi.Assignment) {
 		}
 	}
 	w.mu.Lock()
-	w.tenant, w.epoch = t, a.Epoch
+	w.tenant = t
+	if a.Epoch > w.epoch {
+		// Only ever up: a deploy held up (a slow bundle fetch) may finish
+		// after a newer assignment raised the epoch (#584), and the epoch
+		// is what fencing tokens are built on.
+		w.epoch = a.Epoch
+	}
 	if w.app == nil {
 		w.app = app
 	}
