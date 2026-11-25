@@ -25,7 +25,7 @@ import (
 	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
-const d1Usage = "d1 create <db> | d1 ls | d1 rm <db> [--yes] | d1 execute <db> --command <sql> | --file <file> | d1 export <db> [--output <file>] | d1 repair <db> --skip <seq> [--yes] | d1 migrations create <db> <message> | d1 migrations ls <db> | d1 migrations apply <db>   [--workload <workload>] [--tenant <tailnet>]"
+const d1Usage = "d1 create <db> | d1 ls | d1 rm <db> [--yes] | d1 execute <db> [--command <sql> | --file <file>] | d1 export <db> [--output <file>] | d1 repair <db> --skip <seq> [--yes] | d1 migrations create <db> <message> | d1 migrations ls <db> | d1 migrations apply <db>   [--workload <workload>] [--tenant <tailnet>]"
 
 type d1Result struct {
 	Workload  string           `json:"workload"`
@@ -82,7 +82,7 @@ func d1Flags(f *flags, verb string) *d1Opts {
 	o.workload = f.String("workload", "", "workload whose database it is (default: the app in the current directory, as tw deploy names it)")
 	if onVerb(verb, "execute") {
 		o.command = f.String("command", "", "SQL to run (one or more statements, run as one batch)")
-		o.file = f.String("file", "", "a file of SQL to run as one batch")
+		o.file = f.String("file", "", "a file of SQL to run as one batch (with neither flag, the SQL is read from stdin: tw d1 execute <db> < file.sql)")
 	}
 	if onVerb(verb, "export") {
 		o.output = f.String("output", "", "write the SQL to this file (default: stdout)")
@@ -178,8 +178,11 @@ func cmdD1(args []string) error {
 	if workloadLabel(workload) != workload {
 		return fail("bad_request", fmt.Sprintf("workload %q is not a DNS label", workload))
 	}
-	if sub == "execute" && (*o.command == "") == (*o.file == "") {
-		return fail("bad_request", "tw d1 execute needs --command <sql> or --file <file>")
+	execSQL := ""
+	if sub == "execute" {
+		if execSQL, err = d1ExecuteSQL(*o.command, *o.file); err != nil { // d1stdin.go
+			return err
+		}
 	}
 	if sub == "rm" {
 		if err := confirmDestroy(f, *o.yes, "deleting database "+name+" deletes its data (its journal and key in mgmt)", name, "tw d1 rm "+name,
@@ -255,20 +258,12 @@ func cmdD1(args []string) error {
 			fmt.Printf("✓ database %s of workload %s deleted (tenant %s)\n", name, workload, tn.Tailnet)
 		})
 	case "execute":
-		sql := *o.command
-		if *o.file != "" {
-			b, err := os.ReadFile(*o.file)
-			if err != nil {
-				return fail("bad_request", err.Error())
-			}
-			sql = string(b)
-		}
 		var qs []d1mig.Query
-		for _, st := range d1mig.Split(sql) {
+		for _, st := range d1mig.Split(execSQL) {
 			qs = append(qs, d1mig.Query{SQL: st})
 		}
 		if len(qs) == 0 {
-			return fail("bad_request", "no SQL statement to run")
+			return fail("bad_request", "no SQL statement to run: pass --command <sql>, --file <file>, or SQL on stdin")
 		}
 		rs, err := exec(ctx, qs)
 		if err != nil {

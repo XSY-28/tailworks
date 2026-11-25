@@ -72,8 +72,8 @@ schema. `tw init` writes this line for you:
 | `https` | boolean | also serve the workload on `https://<name>.<tailnet>.ts.net` with its ts.net certificate, so `request.url` is `https://` for requests that arrive that way; [below](#tailnethttps) |
 | `egress.internet` | `true`, `false` or `[host, "*.suffix", IP, CIDR]`, each with an optional `:port` | internet egress for Worker code and containers; [below](#tailnetegressinternet) |
 | `egress.via` | `"exit-node"` | require a host whose internet egress leaves through a tailnet exit node; [below](#tailnetegressvia) |
-| `spawn.maxLive` | integer | the most live sub-agents (`ctx.tailnet.spawn`) |
-| `spawn.maxDepth` | integer | the deepest spawn chain |
+| `spawn.maxLive` | integer | the most live sub-agents (`ctx.tailnet.spawn`) under one root object. Default and ceiling 64: a deployment may only lower it; a larger value is lowered to 64, and 0 or absent means 64 ([limits.md](limits.md#durable-objects)) |
+| `spawn.maxDepth` | integer | the deepest spawn chain. Default and ceiling 3: a deployment may only lower it; a larger value is lowered to 3, and 0 or absent means 3 |
 | `objects` | map of class → [object](#tailnetobjectsclass) | the Durable Object classes that get a tailnet node per instance |
 
 ### `tailnet.egress.internet`

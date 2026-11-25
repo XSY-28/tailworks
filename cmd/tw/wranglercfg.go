@@ -259,7 +259,9 @@ func wranglerKeyNote(k string, v any, builder string) string {
 		}
 		return bindingHint + "ignored"
 	// limits.md#wrangler-limits-ignored
-	case "observability", "logpush", "limits", "usage_model", "send_metrics", "keep_vars", "dev",
+	case "dev":
+		return devWranglerNote(v) // dev_port.go: tw dev honours dev.port
+	case "observability", "logpush", "limits", "usage_model", "send_metrics", "keep_vars",
 		"compliance_region", "first_party_worker", "legacy_env":
 		return "ignored by tailworks"
 	case "python_modules":

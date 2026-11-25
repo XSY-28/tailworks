@@ -52,6 +52,8 @@ var cliSurface = []struct {
 	{"ls", []string{"ls"}},
 	{"undeploy", []string{"undeploy", "app"}},
 	{"expose", []string{"expose", "off", "app"}},
+	{"expose names", []string{"expose", "names"}},
+	{"expose release", []string{"expose", "release", "app"}},
 	{"secret put", []string{"secret", "put", "API_TOKEN", "--workload", "app"}},
 	{"secret bulk", []string{"secret", "bulk", "/nonexistent/secrets.env", "--workload", "app"}},
 	{"secret ls", []string{"secret", "ls", "--workload", "app"}},
