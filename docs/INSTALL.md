@@ -225,8 +225,8 @@ Funnel, no HTTPS requirement.**
    mgmt's and the host's tags, so the client can mint their keys. Only the
    `"tag:tw": ["autogroup:admin"]` line in `tagOwners` has to be pasted by
    hand (the tag must exist before the console lets you tag a client with
-   it): with **Policy File › Write** on the client (step 2), `tw up
-   --apply-policy` (step 3) writes the rest. The whole snippet, to paste
+   it): with **Policy File › Write** on the client (step 2), `tw up`
+   (step 3) offers to write the rest. The whole snippet, to paste
    yourself instead, is in step 2 of the
    [README quick start](../README.md#quick-start) (offline: `tw docs show
    ../README.md#quick-start`); `tw up` prints the lines that are missing. To let your Prometheus
@@ -240,23 +240,28 @@ Funnel, no HTTPS requirement.**
    |---|---|
    | **Auth Keys › Write** | Required: nothing can be minted. |
    | **Devices › Core › Write** | `tw kill` still holds (the node is unreachable and tombstoned), but the device stays listed: the kill result says [`device_delete_unavailable`](errors.md#device_delete_unavailable). |
-   | **Policy File › Write** (recommended), or **Read** | With Write, `tw up --apply-policy` adds the snippet and `tw deploy --apply-policy` (or `tw policy --apply`) each app's `tag:tw*` tagOwners, grants and Service auto-approval, and for a new app the grant that lets the tailnet's users call it ([tailworks-jsonc.md](tailworks-jsonc.md#tags-and-tw-init)); both show the lines and ask first, and only ever add. With Read you paste the lines yourself, and `tw deploy` still preflights your app's grants and `spawn()` checks sub-agent tags/caps against the policy. With neither, deploy says `preflight skipped` and `spawn()` answers `policy_unavailable`. |
+   | **Policy File › Write** (recommended), or **Read** | With Write, `tw up` adds the snippet and `tw deploy` (or `tw policy --apply`) each app's `tag:tw*` tagOwners, grants and Service auto-approval, and for a new app the grant that lets the tailnet's users call it ([tailworks-jsonc.md](tailworks-jsonc.md#tags-and-tw-init)); both show the lines and ask first, and only ever add. With Read you paste the lines yourself, and `tw deploy` still preflights your app's grants and `spawn()` checks sub-agent tags/caps against the policy. With neither, deploy says `preflight skipped` and `spawn()` answers `policy_unavailable`. |
    | **Services › Write** | A workload with `tailnet.service` (a Tailscale Service: a stable name and VIP, [services.md](services.md)) fails to deploy with `service_api_failed`. |
 
 3. **Start tailworks** and paste the **Client Secret** when asked:
    ```sh
-   tw up --apply-policy    # or plain `tw up` if you pasted the whole snippet
+   tw up
    ```
-   With `--apply-policy`, `tw up` prints the `tagOwners` and grants the
-   policy lacks and asks before writing them (`--yes` skips the question,
-   and is required without a terminal). It merges them into the policy
+   On a terminal, `tw up` prints the `tagOwners` and grants the policy
+   lacks and asks before writing them. Without a terminal, or with
+   `--json`, it only prints them: automation passes `--apply-policy --yes`
+   (a bare `--yes` never writes the policy), and `--apply-policy=false`
+   never asks or writes. It merges them into the policy
    (comments kept, nothing changed or removed), has the control plane
    validate the result, and writes it with `If-Match`, retrying once if
    someone saved the policy in the meantime. A tag that is already in
    `tagOwners` keeps its owners (`tag:tw-mgmt` and `tag:tw-host` only
-   gain `tag:tw`). If the client has no Policy File › Write scope,
-   nothing is written: `tw up` says so and goes on as without the flag.
-   Declining the question stops `tw up` before anything is minted.
+   gain `tag:tw`). If the client has no Policy File › Write scope, `tw up`
+   doesn't ask (with `--apply-policy` it says why) and goes on printing the
+   lines. Answering `n` goes on the same way, unless `tag:tw` doesn't own
+   `tag:tw-mgmt` yet: then nothing can be minted and `tw up` stops with
+   `policy_missing_tag_owners`. With `--apply-policy`, declining stops
+   `tw up` (`cancelled`) before anything is minted.
 
    It saves the secret to `~/.config/tailworks/oauth.env` (mode 0600; the
    client ID is part of the secret) and installs a login service (a macOS
@@ -389,7 +394,7 @@ places a workload on them, or size them: [hosts.md](hosts.md).
 tailworks also runs on a [Headscale](https://github.com/juanfont/headscale)
 server (v0.29 or later) instead of Tailscale: `tw up --control=headscale
 --control-url <server_url> --tailnet <base_domain> --api-key-file <file with
-HEADSCALE_API_KEY=…> --apply-policy`. The profile has no Tailscale Services,
+HEADSCALE_API_KEY=…>` (it asks before writing the policy). The profile has no Tailscale Services,
 no Funnel and no posture. See [headscale.md](headscale.md).
 
 ### 4. Day 2, stop and uninstall
@@ -405,7 +410,7 @@ sandbox lets every workload read: `tw up` refuses `--state-dir
 the grants your app declares (`tailnet.connects`), bundles it, and waits
 until the workload node is on your tailnet, then prints its address:
 `http://tw-support-<id>.<tailnet>.ts.net/`. To call it, a grant must let
-you reach the workload's tag on port 80 (`tw deploy --apply-policy` writes
+you reach the workload's tag on port 80 (`tw deploy` offers to write
 one for a new app; the
 [quick start](../README.md#quick-start)
 shows it, and `tw deploy` prints it with the tagOwners for new tags). If

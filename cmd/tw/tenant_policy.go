@@ -19,8 +19,9 @@ import (
 //     console only scopes an OAuth client to an existing tag), so this is a
 //     read-only check: a missing entry is reported with the line to paste.
 //     An existing entry is never touched, so a key is never widened.
-//   - Headscale: "<owner>": [] (only the API key mints it), written only
-//     with --apply-policy, behind the same confirm as tw up.
+//   - Headscale: "<owner>": [] (only the API key mints it), written with
+//     --apply-policy, or after a y on a terminal (#481), behind the same
+//     confirm as tw up.
 
 // tenantOwnerTag is the tag that owns a tenant's tags.
 func tenantOwnerTag(ownerTag string) string {
@@ -60,10 +61,12 @@ func tenantPolicy(ctx context.Context, f *flags, res *tenantAddResult, api contr
 		return nil
 	}
 	res.PolicyDiff = want.HuJSON()
-	if !apply || profile != controlHeadscale {
+	if profile != controlHeadscale {
 		return nil
 	}
-	if err := confirmBootstrapWrite(f, yes, "tw tenant add --apply-policy", profile, want, nil); err != nil { // up_policyapply.go
+	// On a terminal it asks without the flag too (policy_ask.go, #481).
+	write, err := bootstrapPolicyGate(ctx, api, f, policyModeOf(f, apply, yes), yes, "tw tenant add", profile, pol, want, popts, want, nil)
+	if err != nil || !write {
 		return err
 	}
 	ar, err := policy.ApplyWith(ctx, api, want, popts)

@@ -21,7 +21,7 @@ usage: tw up [--apply-policy [--yes]] [--service=false]
 
 flags:
   -apply-policy
-    	write the tagOwners and grants tailworks needs to the tailnet policy instead of printing them (additive, validated first, written with If-Match); tw up shows the lines and asks first (--yes to skip). Tailscale: the OAuth client needs Policy File write. Headscale: needs policy.mode database
+    	write the tagOwners and grants tailworks needs to the tailnet policy instead of printing them (additive, validated first, written with If-Match); tw up shows the lines and asks first (--yes to skip). Without the flag tw up asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes. Tailscale: the OAuth client needs Policy File write. Headscale: needs policy.mode database
   -oauth-client-file string
     	mint mode "oauth" (Tailscale): file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (an OAuth client with Auth Keys write, tag tag:tw; tightened to 0600). Default on the default state dir: ~/.config/tailworks/oauth.env, asked for and saved on the first tw up
   -service
@@ -388,7 +388,7 @@ usage: tw deploy [dir] [--env <name>] [--name <workload>] [--var K=V]… [--appl
 
 flags:
   -apply-policy
-    	when the preflight finds tagOwners, grants, funnel nodeAttrs or Service auto-approval missing, write them to the tailnet policy first (as tw policy --apply)
+    	when the preflight finds tagOwners, grants, funnel nodeAttrs or Service auto-approval missing, write them to the tailnet policy first (as tw policy --apply; shows the lines and asks, --yes to skip). Without the flag tw deploy asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes
   -env string
     	wrangler environment: use env.<name> from the wrangler config, as 'wrangler --env' does (the workload is named <name>-<env> unless the env sets a name)
   -name string
@@ -1402,7 +1402,7 @@ flags:
   -api-key-file string
     	--control=headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied
   -apply-policy
-    	--control=headscale: write the owner tag's tagOwners entry ("tag:tw": []) when it is missing instead of printing it (additive, validated first, written with If-Match); shows the line and asks first. A Tailscale tenant's policy is never written
+    	--control=headscale: write the owner tag's tagOwners entry ("tag:tw": []) when it is missing instead of printing it (additive, validated first, written with If-Match); shows the line and asks first. Without the flag it asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes. A Tailscale tenant's policy is never written
   -control string
     	control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; the tailnet argument is its dns.base_domain) (default "tailscale")
   -control-url string

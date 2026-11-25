@@ -168,7 +168,7 @@ func cmdTenantAdd(args []string) error {
 	oauthFile := f.String("oauth-client-file", "", "this tailnet's OAuth client (mint mode \"oauth\"): 0600 file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:tw); read at use, never copied. Omitted on a terminal: asked for and saved to ~/.config/tailworks/<tenant>-oauth.env")
 	keyFile := f.String("api-key-file", "", "--control=headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied")
 	profile := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; the tailnet argument is its dns.base_domain)")
-	apply := f.Bool("apply-policy", false, "--control=headscale: write the owner tag's tagOwners entry (\"tag:tw\": []) when it is missing instead of printing it (additive, validated first, written with If-Match); shows the line and asks first. A Tailscale tenant's policy is never written")
+	apply := f.Bool("apply-policy", false, "--control=headscale: write the owner tag's tagOwners entry (\"tag:tw\": []) when it is missing instead of printing it (additive, validated first, written with If-Match); shows the line and asks first. Without the flag it asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes. A Tailscale tenant's policy is never written")
 	yes := yesFlagBefore(f, "--apply-policy writes the policy")
 	control := f.String("control-url", prodControl, "coordination server for this tailnet's nodes")
 	ownerTag := f.String("owner-tag", "", "another team's tenant on a tailnet that already has one (docs/teams.md): the tag that owns its tags, e.g. tag:tw-t-payments; its --oauth-client-file must be scoped to it")

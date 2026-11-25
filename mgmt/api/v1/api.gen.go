@@ -3322,6 +3322,9 @@ type PolicyApply struct {
 	// CallerGrant The grant in `added` that lets every user of the tailnet call the app (`autogroup:member` to the workload's own tags, `tcp:80`), as JSON. Absent when `added` has none.
 	CallerGrant *string `json:"callerGrant,omitempty"`
 
+	// CanWrite With `dryRun`, when `added` is not empty — the control plane accepted the policy with `added` merged in, so the write would go through (Tailscale refuses a client without Policy File write). `tw deploy` on a terminal offers to write the lines only when it is true. Absent otherwise.
+	CanWrite *bool `json:"canWrite,omitempty"`
+
 	// Changed The policy was written.
 	Changed bool `json:"changed"`
 	DryRun  bool `json:"dryRun"`
