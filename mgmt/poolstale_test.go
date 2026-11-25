@@ -59,7 +59,7 @@ func TestStalePoolNodesKilledOnMove(t *testing.T) {
 	ep := deploy("h1")
 	old := join(h1, ep, "a1", "nOLD1")
 	// A redeploy on the same host keeps its pool nodes.
-	ep = deploy("h1")
+	deploy("h1")
 	time.Sleep(300 * time.Millisecond)
 	if s := status(old); s != StatusReady {
 		t.Fatalf("redeploy on the same host: pool node %s, want ready", s)
