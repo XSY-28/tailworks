@@ -23,8 +23,22 @@ Admission is the connection's WhoIs identity, exactly as for the API
 | mgmt's own node (the operator console on the host machine) | 200, the UI |
 | a user or tagged node holding only `github.com/rosskukulinski/tailworks/cap/approve` (toward `tag:tw-mgmt`) | the **approvals** page only, defaulting to the tenants on its own tailnet (`GET /v1/whoami` `tenants`; `?tenant=<tenant ID>` for another); 403 `forbidden` elsewhere |
 | a user or tagged node holding only `github.com/rosskukulinski/tailworks/cap/tenant-admin` ([teams.md](teams.md)) | 200, the UI for the tenants its grants name: their deployments, objects and audit records, without the hosts, status and audit-chain panels; admin-only actions are 403 `tenant_forbidden` |
-| any other tailnet user | 403 `not_admin`, with the grant snippet to add |
+| any other tailnet user | 403 `not_admin`, with the grant snippet to add (as an HTML page in a browser, see below) |
 | a `tag:tw-host` node (registered or not) | 403 `forbidden` (or `host_not_registered`); hosts never reach the UI or its assets |
+
+**Refusals in a browser.** Admission runs before the UI, so these refusals
+come from mgmt itself, not from the UI's own error page. When a `GET` or
+`HEAD` of `/`, `/ui` or `/ui/...` prefers `text/html` to JSON in its
+`Accept` header (a browser's navigation; `*/*` alone or a tie stays JSON),
+mgmt answers with a standalone HTML page instead of the JSON body
+(`mgmt/errors_html.go`). It has the same status and `Tw-Error` header, the
+code, the message, the grant snippet in a block (for `not_admin`), a fix
+sentence and the `docs/errors.md` link. For `misdirected_request` it leaves
+out the message (which echoes the request's `Host`) and lists mgmt's own
+names instead. The page is self-contained (inline style, CSP
+`default-src 'none'`, `no-store`, `nosniff`, no framing, no referrer).
+`/v1`, `/mcp`, mutations and every client without an explicit `text/html`
+preference (the CLI, hostd, curl) get the JSON body as before.
 
 There is no login, no cookie and no token: the tailnet connection is the
 credential, so the UI shows exactly what the API would show the same
@@ -225,7 +239,8 @@ set by tw-mgmt at start):
   attacker serves. The `tw` CLI dials mgmt's tailnet IP through the loopback
   proxy, and `tw up` points the embedded host at it.
 
-Anything else is 421 `misdirected_request`, naming the expected hosts.
+Anything else is 421 `misdirected_request`, naming the expected hosts (in
+a browser, as the HTML page above).
 Reaching mgmt through a CNAME or another DNS name you own is refused the
 same way. The unix socket (`-local-dev`) and the in-process host aren't
 checked because no browser can reach them.

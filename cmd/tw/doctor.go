@@ -104,19 +104,9 @@ func cmdDoctor(args []string) error {
 		if err != nil {
 			return "fail", "workerd not found", "reinstall tw, or set $TW_WORKERD"
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		out, err := exec.CommandContext(ctx, wd, "--version").CombinedOutput()
-		v := strings.TrimSpace(string(out))
+		v, fix, err := workerdRuns(wd, "see the glibc check above") // up_preflight.go
 		if err != nil {
-			fix := "check the binary runs: " + wd + " --version"
-			if runtime.GOOS == "linux" {
-				fix += " (see the glibc check above)"
-			}
-			if runtime.GOOS == "darwin" {
-				fix += " (unsigned? `codesign -f -s - " + wd + "`; quarantined? `xattr -d com.apple.quarantine " + wd + "`)"
-			}
-			return "fail", wd + " does not run: " + err.Error() + " " + v, fix
+			return "fail", err.Error(), fix
 		}
 		if runtime.GOOS == "darwin" {
 			if q, _ := exec.Command("xattr", "-p", "com.apple.quarantine", wd).Output(); len(bytes.TrimSpace(q)) > 0 {

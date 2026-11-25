@@ -30,7 +30,6 @@ func upFlagGroups(f *flags) {
 		"hostname-prefix",
 		"mgmt-hostname",
 		"separate-host",
-		"push-port",
 		"ephemeral",
 	)
 	f.group(upGroupIsolation, // and up_workerinternet.go
@@ -41,9 +40,6 @@ func upFlagGroups(f *flags) {
 		"warm-keys",
 		"pool-nodes",
 		"port-mapping",
-		"heartbeat",
-		"kill-tombstone",
-		"device-delete-delay",
 	)
 	f.group(upGroupDev,
 		"workerd",

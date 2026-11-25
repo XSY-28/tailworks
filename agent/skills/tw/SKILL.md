@@ -95,7 +95,10 @@ agent.
    the user type or pipe it (see `tw-secrets`).
 6. **The tailnet policy belongs to the user.** When tailworks prints a policy
    snippet (`tagOwners`, `grants`), show it to the user and ask them to add
-   it in the Tailscale admin console. Don't edit the policy yourself.
+   it in the Tailscale admin console. Tailworks writes the policy only
+   when the user passes `--apply-policy` or runs `tw policy --apply`, and
+   confirms. Don't pass those flags, or `--yes` with them, on the user's
+   behalf, and don't edit the policy yourself.
 
 ## More
 
