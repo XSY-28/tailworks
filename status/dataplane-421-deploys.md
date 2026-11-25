@@ -40,6 +40,7 @@ secrets, with mgmt as replicas on Postgres.
 | F2 V4: concurrent secret writes through two replicas lost one (a deleted secret came back) | #578 | PR #597 (multimgmt H24) |
 | F3 V1: a held-up deploy lowered the workload's epoch 147 → 145 | #584 | PR #601 |
 | F4 V6: a preview redeployed where promote undeployed it keeps a killed Durable Object (any undeploy + redeploy on the same host) | #577 | needs a decision (what undeploy does to DO storage); reported as a known note |
+| F5 V6 (Linux, SQLite mgmt): a ready report lost to a mgmt restart is never retried; the endpoint stays `minted` | #604 | fix is clear (retry on transport errors and 5xx); not done in this branch |
 
 This branch carries the three fixes (cherry-picked) so the loop runs
 past them; they merge cleanly when their PRs land.
@@ -64,6 +65,10 @@ Details and the run log: `e2e/dataplane/ledger/deploys.md`.
 
 - Wall-clock skew is not in the mix: the host skew hook
   (`dataplane-415-finish`) is not on master yet.
-- Linux: see the ledger (one run with SQLite mgmt in the twd-dev VM, which
-  has no Docker for the Postgres replicas).
+- Linux: one run (deploys-mixed 1, SQLite mgmt: the twd-dev VM has no
+  Docker for the Postgres replicas): V1–V5 pass, V6 found F5 (#604). No
+  clean Linux seeds yet.
+- After merging master: `deploys-mixed` 5 (90 s) and the #415 `mixed`
+  scenario with `TW_DP_MGMT=pg3` (90 s) pass; `make lint`, `make
+  changes-check` ok; `go test ./docs/` ok.
 - F4 (#577) needs Ross's decision.
