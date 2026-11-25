@@ -39,3 +39,4 @@ host-protocol intro links `hostd-api.md`.
 - `make test` (mbp): pass.
 - `make e2e-upgrade`: pass. `make e2e-placement`: pass, including
   TestR2MoveBetweenHosts.
+- After merging origin/master again (deprecated GetObjectCertificate, admin UI filters): `make lint` pass; `go test ./mgmt/... ./internal/r2wire ./api/...` pass.
