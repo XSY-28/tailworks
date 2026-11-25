@@ -624,7 +624,10 @@ func (a *v1api) CreateHost(w http.ResponseWriter, r *http.Request) {
 		Hostname           string   `json:"hostname"`
 		ControlURL         string   `json:"controlURL,omitempty"`
 		Tailnet            string   `json:"tailnet,omitempty"`
-	}{a.hostView(r, hj.Host), hj.AuthKey, hj.RegistrationSecret, hj.ExpiresAt, hj.Tags, hj.Hostname, hj.ControlURL, hj.Tailnet}
+		KeyTagsOnly        bool     `json:"keyTagsOnly,omitempty"`
+		MgmtURL            string   `json:"mgmtURL,omitempty"`
+	}{a.hostView(r, hj.Host), hj.AuthKey, hj.RegistrationSecret, hj.ExpiresAt, hj.Tags, hj.Hostname, hj.ControlURL, hj.Tailnet,
+		hj.KeyTagsOnly, a.hostJoinMgmtURL()}
 	if created {
 		location(w, "/v1/hosts/"+hj.Host.ID)
 		writeJSON(w, 201, out)

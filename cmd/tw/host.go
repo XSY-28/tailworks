@@ -186,12 +186,12 @@ func cmdHostVMCheck(args []string) error {
 // 10-minute tag:tw-host join key through the tenant's credential (its
 // OAuth client, or the Headscale API key). The key goes to --out as a TS_AUTHKEY=… file (0600; default
 // <host-id>.join.env in the current directory), never to the terminal or
-// the log. On the new machine: `tw-hostd join --token-file <file>`, then
-// start tw-hostd (or tw up on that machine).
+// the log, with the host ID, mgmt's URL and the control server. On the new
+// machine: `tw-hostd -join-token-file <file>`.
 func cmdHostAdd(args []string) error {
 	f := newFlags("host add")
 	tenantF := tenantFlag(f)
-	out := f.String("out", "", "write the join key (TS_AUTHKEY=…) and the one-time registration secret (TW_REGISTRATION_SECRET=…) here (default ./<host-id>.join.env)")
+	out := f.String("out", "", "write the join file here (default ./<host-id>.join.env): the join key (TS_AUTHKEY=…), the one-time registration secret (TW_REGISTRATION_SECRET=…), and the host ID, mgmt URL and control URL tw-hostd -join-token-file reads")
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
@@ -228,22 +228,16 @@ func cmdHostAdd(args []string) error {
 	if hj.RegistrationSecret == "" {
 		return fail("bootstrap_failed", "mgmt returned no registration secret for host "+pos[0]).withFix("upgrade tw-mgmt (POST /v1/hosts must answer registrationSecret)")
 	}
-	if err := os.WriteFile(path, hj.joinFileContent(), 0o600); err != nil {
+	mgmtURL := s.hostJoinMgmtURL(hj) // host_joinfile.go
+	if err := os.WriteFile(path, hj.hostJoinFileContent(pos[0], mgmtURL), 0o600); err != nil {
 		return err
 	}
 	res := map[string]any{"hostID": pos[0], "hostname": hj.Hostname, "tags": hj.Tags, "expiresAt": hj.ExpiresAt, "controlURL": hj.ControlURL,
-		"tailnet": hj.Tailnet, "joinFile": path, "mgmt": "http://" + s.Cfg.MgmtDNSName}
+		"tailnet": hj.Tailnet, "joinFile": path, "mgmt": mgmtURL}
 	emit(f, res, func() {
 		fmt.Printf("✓ host     %s added (pending) · join key for %s (%s) written to %s (single use, expires %s)\n", pos[0], hj.Hostname,
 			strings.Join(hj.Tags, ","), path, time.UnixMilli(hj.ExpiresAt).Local().Format("15:04:05"))
-		fmt.Printf("  on %s:  install tw, copy the file there (scp, 0600), then\n", pos[0])
-		keyTags := ""
-		if s.Cfg.headscale() {
-			keyTags = " --key-tags-only" // Headscale refuses a key join that requests tags
-		}
-		fmt.Printf("    tw-hostd join --host-id %s --token-file %s --control-url %s%s\n", pos[0], filepath.Base(path), hj.ControlURL, keyTags)
-		fmt.Printf("    tw-hostd -host-id %s -mgmt http://%s -tsnet-control-url %s%s\n", pos[0], s.Cfg.MgmtDNSName, hj.ControlURL, strings.Replace(keyTags, "--key-tags-only", "-tsnet-key-tags-only", 1))
-		fmt.Printf("  the key is used once by the join and the file is deleted (its registration secret is kept beside the node state);\n  mgmt binds the node to host %s on its first PUT /v1/hosts/%s, which must present that secret\n", pos[0], pos[0])
+		printHostRunbook(pos[0], path) // host_joinfile.go
 	})
 	return nil
 }
