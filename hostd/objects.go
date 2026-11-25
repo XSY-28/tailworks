@@ -60,6 +60,10 @@ type object struct {
 	// nodeGen counts node starts (startNodeLocked); an awaitNode whose
 	// start was superseded leaves the object alone (nodestart.go).
 	nodeGen uint64
+
+	// report is mgmt's answer to the node's ready reports; egress waits
+	// for it (egressgate.go, #331).
+	report readyReport
 }
 
 // key is the local lookup key: tenant|workload|class|name.
@@ -439,7 +443,9 @@ func (h *Host) awaitNode(t *tenant, o *object, no *netd.Object, gen uint64) {
 		epoch = w.epochNow()
 	}
 	req := mgmtapi.ReadyRequest{NodeID: info.NodeID, StableNodeID: info.NodeID, MagicDNS: magicDNS, Epoch: epoch}
-	if err := h.mgmt.Ready(rctx, o.ID, req); err != nil {
+	err = h.mgmt.Ready(rctx, o.ID, req)
+	h.noteReport(o, req.StableNodeID, err) // egressgate.go (#331)
+	if err != nil {
 		h.log.Warn("mgmt ready failed", "object", o.ID, "err", err)
 		if e, ok := mgmtapi.AsError(err); ok && e.Code == mgmtapi.CodeKilled {
 			rcancel()

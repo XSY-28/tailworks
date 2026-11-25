@@ -70,7 +70,8 @@ master, and replace the slug everywhere in that same change
 (`git grep ADR-<slug>`). ADRs are one file each in `docs/design/adr/`:
 draft as `docs/design/adr/<slug>.md`, rename to `NNN-<slug>.md` when the
 number is assigned, and add the row to `docs/design/adr/README.md` in sorted
-position.
+position. `TestADRIndex` accepts a draft whose first line starts
+`# ADR-<slug>`, so a design PR passes CI before it has a number.
 
 ### 6. Stay close to master
 

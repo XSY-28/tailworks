@@ -182,7 +182,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 409 · mgmt. **When:** an object ID collided across identities (two workloads derived the same ID). **Fix:** rename one object or class; report it (IDs are HMAC-derived and this should not happen).
 
 ### identity_pending
-503 · netd, mgmt, cli. **When:** the object's node is minted but not ready yet (`Retry-After: 1`); `tw dev` waited 60 s for a deploy. **Fix:** retry; if it persists, `tw logs <workload>` and check the control plane.
+503 · netd, mgmt, cli. **When:** the object's node is minted but not ready yet (`Retry-After: 1`); an outbound call from a new object waited 20 s for mgmt to accept its ready report (its node certificate), or that report failed; `tw dev` waited 60 s for a deploy. **Fix:** retry (a failed ready report is re-sent on a later call); if it persists, `tw logs <workload>` and check the control plane and mgmt.
 
 ### image_build_failed
 1 · cli. **When:** `tw deploy` could not build or push an app's Dockerfile container image with `docker buildx`. **Fix:** the build output is in the detail; check `docker buildx version` works on the deploying machine.
@@ -449,7 +449,7 @@ Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<bi
 400 · mgmt, hostd. **When:** a platform store write is too big: an entry over 2 MiB, an append over 4 MiB or 128 entries, a compaction key over 1 KiB, or a store over 1 GiB. **Fix:** write less at once, or delete data you no longer need.
 
 ### store_unavailable
-503 · hostd, mgmt. **When:** a platform store couldn't reach mgmt's journal (through hostd). Writes fail; reads still answer from the host's copy if the store has caught up with the journal on this host before, and fail if it never has (a new host). From the mgmt API it also means its database is unreachable. **Fix:** retry; check `tw status` for mgmt and the host.
+503 · hostd, mgmt. **When:** a platform store couldn't reach mgmt's journal (through hostd). Writes fail; reads answer from the host's copy (after waiting at most 2 s for mgmt) if the store has caught up with the journal on this host before, and fail if it never has (a new host) or if they need the journal (a D1 `first-primary` session or a bookmark ahead of the host's copy). hostd also returns it when mgmt doesn't answer a journal read within 10 s. From the mgmt API it also means its database is unreachable. **Fix:** retry; check `tw status` for mgmt and the host.
 
 ### superseded
 409 · mgmt. **When:** undeploy of a deployment that is not the latest for its workload. **Fix:** `tw undeploy <workload>` acts on the latest.

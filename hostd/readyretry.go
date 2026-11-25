@@ -47,6 +47,7 @@ func (h *Host) retryReady(o *object, req mgmtapi.ReadyRequest, gen uint64) {
 		ctx, cancel := context.WithTimeout(h.ctx, 15*time.Second)
 		err := h.mgmt.Ready(ctx, o.ID, req)
 		cancel()
+		h.noteReport(o, req.StableNodeID, err) // egressgate.go (#331)
 		if err == nil {
 			h.log.Info("mgmt ready retried", "object", o.ID, "attempt", try, "epoch", req.Epoch)
 			return

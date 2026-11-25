@@ -69,7 +69,7 @@ from the suite's results, and `make lint` fails if they are edited by hand.
 
 | Surface | Status | workerd provides | tailworks adds | Different from Cloudflare | Missing | Tests |
 |---|---|---|---|---|---|---|
-| <a id="do-identity"></a>One tailnet node per object | ✅ | — (tw-only) | every DO instance is its own tailnet node, with its own MagicDNS name, tags and grants; its egress is attributed to it; `tw kill` cuts it off | Cloudflare has no per-object network identity | — | `hostd:TestHostd/ObjectsGetOwnNodes`, `hostd:TestHostd/KillFailsFast`, `netd:TestChain/PerObjectEgressAttribution` |
+| <a id="do-identity"></a>One tailnet node per object | ✅ | — (tw-only) | every DO instance is its own tailnet node, with its own MagicDNS name, tags and grants; its egress is attributed to it; `tw kill` cuts it off | Cloudflare has no per-object network identity | `newUniqueId()` objects in facet mode (a name is the node's identity); in plain-DO mode they run but get no node ([egress-modes.md](egress-modes.md)) | `hostd:TestHostd/ObjectsGetOwnNodes`, `hostd:TestHostd/KillFailsFast`, `netd:TestChain/PerObjectEgressAttribution` |
 | <a id="do-storage"></a>Storage: KV API and SQLite | ✅ | `ctx.storage` `get`/`put`/`list`/`delete`/`transaction`, `ctx.storage.sql` | storage on the host's local disk; it survives redeploys | an object lives on one host; there's no replication across hosts | point-in-time recovery (`getBookmarkForTime`, `onNextSessionRestoreBookmark`): not tested | `hostd/gen:TestRuntimeCompat/DOStorageKVAndSQL`, `hostd:TestHostd/BlueGreenRedeploy`, `e2e/sdk:TestCloudflareAgents/SetStateOnStateChangedSQL` |
 | <a id="alarms"></a>Alarms | ✅ | `setAlarm`/`getAlarm`/`deleteAlarm`, `alarm()` | workerd facets can't set alarms, so tailworks delegates a facet's alarm to its Host DO (a shim); plain-DO objects use workerd's directly | — | — | `hostd/gen:TestGeneratedWrapperProbe/PlainDOAlarm`, `hostd:TestHostd/PlainDOAlarmWorkloadEgress`, `e2e/sdk:TestCloudflareAgents/Schedule`, `e2e/vm:TestE2EVMAlarms` |
 | <a id="hibernation"></a>Hibernation | ✅ | idle eviction; WebSocket hibernation (`acceptWebSocket`, attachments) | the object's tailnet node stays up while the object is evicted | — | — | `hostd:TestHostd/HibernationKeepsNode`, `e2e/sdk:TestCloudflareAgents/WebSocketsAndHibernation`, `e2e/vm:TestE2EVMWebSockets` |
@@ -322,8 +322,10 @@ How it differs from Cloudflare:
 - **Consistency.** A workload reads its own writes. Writes by another
   writer (a replica, `tw kv key put`) are seen within 60 s, or the read's
   `cacheTtl`. Writes are linearizable (the journal orders them).
-- **Availability.** A write needs mgmt; reads keep working from the local
-  copy when mgmt is down.
+- **Availability.** A write needs mgmt. When mgmt is down, reads work
+  from the local copy after waiting at most 2 s for it, until the host
+  stops the workload: after 30 s if it has a Durable Object class not
+  marked `"fence": "never"`, else not at all.
 - **Values** are at most 2 MiB − 4 KiB (Cloudflare: 25 MiB).
 - `cacheStatus` is always `null`.
 

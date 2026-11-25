@@ -232,7 +232,9 @@ func (h *Host) assignNode(o *object, from string) {
 	if w := h.workloadOf(o); w != nil {
 		epoch = w.epochNow()
 	}
-	if err := h.mgmt.Ready(ctx, o.ID, mgmtapi.ReadyRequest{NodeID: info.NodeID, StableNodeID: info.NodeID, MagicDNS: o.MagicDNS, Epoch: epoch}); err != nil {
+	err = h.mgmt.Ready(ctx, o.ID, mgmtapi.ReadyRequest{NodeID: info.NodeID, StableNodeID: info.NodeID, MagicDNS: o.MagicDNS, Epoch: epoch})
+	h.noteReport(o, info.NodeID, err) // egressgate.go (#331)
+	if err != nil {
 		h.log.Warn("mgmt ready failed", "object", o.ID, "err", err)
 		if e, ok := mgmtapi.AsError(err); ok && e.Code == mgmtapi.CodeKilled {
 			closeOnce(ch)

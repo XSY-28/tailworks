@@ -72,8 +72,12 @@ holding the workload's lease can append. So:
   or the read's `cacheTtl`. Cloudflare KV is eventually consistent, with
   about 60 s between locations.
 - **Writes need mgmt.** If mgmt is unreachable, `put` and `delete` fail
-  (`KV PUT failed: 503 …`), and reads keep serving the local copy. Use a
-  Durable Object for state that is written often.
+  (`KV PUT failed: 503 …`). Reads serve the local copy: a read that wants
+  fresher data waits at most 2 s for mgmt, and later ones don't wait until
+  mgmt is back. A host that has never synced the namespace fails reads.
+  If the workload has a Durable Object class (not `"fence": "never"`), the
+  host stops the whole workload after 30 s without mgmt, reads included.
+  Use a Durable Object for state that is written often.
 - **Expiry.** An expired key disappears from `get` and `list` at once. The
   namespace's alarm then deletes it from the journal too.
 

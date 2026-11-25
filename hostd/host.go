@@ -507,6 +507,7 @@ func New(cfg Config) (*Host, error) {
 	if err := h.audit.openSpill(filepath.Join(cfg.DataDir, "audit-spill.jsonl"), h.log); err != nil {
 		return nil, err
 	}
+	h.audit.loadResume(filepath.Join(cfg.DataDir, auditHeadFile), h.log)
 	if err := h.loadObjects(); err != nil {
 		return nil, err
 	}
@@ -599,7 +600,11 @@ func (h *Host) register(ctx context.Context) error {
 		// local-dev: the unix push socket.
 		req.PushURL = "unix://" + h.pushSock
 	}
-	return h.mgmt.Register(ctx, req)
+	reg, err := h.mgmt.RegisterHost(ctx, req)
+	if err == nil && h.audit.resume(reg.AuditHead, h.log) { // auditresume.go
+		h.log.Info("audit chain continued from mgmt's head", "head", reg.AuditHead)
+	}
+	return err
 }
 
 // tiers lists what this host offers: the process tier always, the microVM
@@ -651,6 +656,9 @@ func (h *Host) Close() error {
 	cl.lap("nodes")
 	h.tel.close()
 	h.flushAudit(context.Background())
+	if err := h.audit.saveHead(filepath.Join(h.cfg.DataDir, auditHeadFile)); err != nil { // auditresume.go
+		h.log.Warn("audit: saving the chain head failed; the next start begins a new chain segment", "err", err)
+	}
 	h.saveObjects()
 	if h.runDirOwned {
 		os.RemoveAll(h.cfg.RunDir)
