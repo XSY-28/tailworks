@@ -1,17 +1,19 @@
-package mgmtpg
+// Package chaoskit holds fault-injection helpers that the chaos loops
+// (e2e/multimgmt, e2e/dataplane) share: a TCP proxy that can stall, slow
+// or cut a connection, and the Docker containers they run backends in.
+package chaoskit
 
 import (
 	"net"
 	"sync"
 	"sync/atomic"
-	"testing"
 	"time"
 )
 
-// Proxy sits between one replica and Postgres and injects faults:
-// pass, delay (each forwarded read waits d, both directions), blackhole
-// (accept and hold connections, forward nothing) and reset (close every
-// connection now; new ones are refused while the mode lasts).
+// Proxy sits between one client and a TCP backend and injects faults:
+// "pass", "delay" (each forwarded read waits d, both directions),
+// "blackhole" (accept and hold connections, forward nothing) and "reset"
+// (close every connection now; new ones are refused while the mode lasts).
 type Proxy struct {
 	ln     net.Listener
 	target string
@@ -21,37 +23,40 @@ type Proxy struct {
 	conns  map[net.Conn]bool
 }
 
-// NewProxy listens on a free 127.0.0.1 port and forwards to target
-// (host:port). It closes when the test ends.
-func NewProxy(t testing.TB, target string) *Proxy {
+// Listen starts a proxy on 127.0.0.1 (a free port) to target.
+func Listen(target string) (*Proxy, error) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
 	p := &Proxy{ln: ln, target: target, conns: map[net.Conn]bool{}}
 	p.mode.Store("pass")
 	go p.serve()
-	t.Cleanup(func() { ln.Close(); p.CloseAll() })
-	return p
+	return p, nil
 }
 
 // Addr is the proxy's host:port.
 func (p *Proxy) Addr() string { return p.ln.Addr().String() }
+
+// Mode is the current mode.
+func (p *Proxy) Mode() string { return p.mode.Load().(string) }
 
 // Set changes the mode; "reset" also drops every open connection.
 func (p *Proxy) Set(mode string, d time.Duration) {
 	p.delay.Store(int64(d))
 	p.mode.Store(mode)
 	if mode == "reset" {
-		p.CloseAll()
+		p.closeAll()
 	}
 }
 
-// Mode is the current mode.
-func (p *Proxy) Mode() string { return p.mode.Load().(string) }
+// Close stops the proxy and drops its connections.
+func (p *Proxy) Close() {
+	p.ln.Close()
+	p.closeAll()
+}
 
-// CloseAll drops every open connection.
-func (p *Proxy) CloseAll() {
+func (p *Proxy) closeAll() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for c := range p.conns {

@@ -82,7 +82,7 @@ host needs a hook in both.
 **mgmt replicas.** `TW_DP_MGMT=pg3` (or `pg2`) runs mgmt as replicas on a
 throwaway Postgres container (docker context `PG_CTX`, default `orbstack`),
 each behind its own fault proxy, with a shared fake setec: the pieces of
-`e2e/multimgmt`, from `e2e/internal/mgmtpg` (`mgmtpg_test.go`). The
+`e2e/multimgmt`, from `e2e/internal/mgmtpg` and `e2e/chaoskit` (`mgmtpg_test.go`). The
 cluster's mgmt socket spreads connections over the running replicas, so
 hosts fail over when one dies; `restart-mgmt` then restarts one replica,
 and `pg-fault` blackholes, slows or resets one replica's path to Postgres.
@@ -152,6 +152,16 @@ digests. State: `ledger/deploys.md`.
 
 `TW_DP_REPLAY=<results dir> go test -tags e2edataplane -run
 TestReplayDeploys ./e2e/dataplane/` re-runs V1–V5 on a recorded run.
+
+## R2 (`TestR2`, issue #420)
+
+The same cluster runs `testdata/r2` with the `fs` or an `s3` backend (a
+Garage container, so Docker is needed), in the scenarios `r2-fs`, `r2-s3`
+and `r2-replicas`, with three more faults (`cut-s3`, `slow-s3`,
+`kill-mid-put`) and invariants R1–R6. `make e2e-dataplane-r2` runs all
+three (nightly too); `TW_DP_SCENARIO=r2-s3` and the other `TW_DP_*`
+variables pick one, as above, with `-run TestR2`. The rig, the invariants
+and the results are in [ledger/r2.md](ledger/r2.md).
 
 ## Each iteration
 

@@ -17,13 +17,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rosskukulinski/tailworks/e2e/chaoskit"
 	"github.com/rosskukulinski/tailworks/e2e/internal/mgmtpg"
 	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
 // mgmtPG is the cluster's mgmt as n tw-mgmt replicas sharing one Postgres
 // (TW_DP_MGMT=pg2|pg3), as in e2e/multimgmt, whose pieces it reuses
-// (e2e/internal/mgmtpg): a throwaway Postgres container, one fault proxy
+// (e2e/internal/mgmtpg, e2e/chaoskit): a throwaway Postgres container, one fault proxy
 // per replica between it and Postgres, and a fake setec custody the
 // replicas share. The cluster's mgmt socket (c.sock) becomes a front that
 // spreads connections over the running replicas, so hosts (through their
@@ -33,8 +34,8 @@ type mgmtPG struct {
 	n       int
 	pg      *mgmtpg.Postgres
 	setec   *mgmtpg.FakeSetec
-	proxies []*mgmtpg.Proxy // replica i's path to Postgres
-	socks   []string        // replica i's own socket
+	proxies []*chaoskit.Proxy // replica i's path to Postgres
+	socks   []string          // replica i's own socket
 	rr      int
 	mu      sync.Mutex
 	clients map[int]*http.Client
@@ -69,7 +70,12 @@ func (c *cluster) startMgmtPG(first bool) {
 			LogDir: c.dir, Record: func(kind, name string, pid int) { c.record(kind+":"+name, pid) }})
 		p.setec = mgmtpg.NewFakeSetec(c.t)
 		for i := 0; i < p.n; i++ {
-			p.proxies = append(p.proxies, mgmtpg.NewProxy(c.t, mgmtpg.Host(c.t, p.pg.DSN)))
+			px, err := chaoskit.Listen(mgmtpg.Host(c.t, p.pg.DSN))
+			if err != nil {
+				c.t.Fatal(err)
+			}
+			c.t.Cleanup(px.Close)
+			p.proxies = append(p.proxies, px)
 			p.socks = append(p.socks, filepath.Join(c.work, fmt.Sprintf("r%d.sock", i)))
 		}
 		tok := strings.Repeat("ab", 32)

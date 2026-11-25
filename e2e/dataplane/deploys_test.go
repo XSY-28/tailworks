@@ -284,7 +284,7 @@ func errCode(b []byte) string {
 	return e.Code
 }
 
-func trunc(b []byte) string {
+func bodyText(b []byte) string {
 	s := strings.TrimSpace(string(b))
 	if len(s) > 300 {
 		s = s[:300]
@@ -315,7 +315,7 @@ func (d *deploysRun) finish(o *depOp, st int, b []byte, err error, v depView) {
 	if err != nil {
 		o.Err = err.Error()
 	} else if st/100 != 2 {
-		o.Code, o.Err = errCode(b), trunc(b)
+		o.Code, o.Err = errCode(b), bodyText(b)
 	} else {
 		o.DeploymentID, o.Workload, o.Epoch, o.RHost = v.DeploymentID, v.Workload, v.Epoch, v.Host
 		if o.Workload == "" {
@@ -402,7 +402,7 @@ func (d *deploysRun) putSecret(client string, rep int, wl, name string) secOp {
 	if err != nil {
 		o.Err = err.Error()
 	} else if st/100 != 2 {
-		o.Err = trunc(b)
+		o.Err = bodyText(b)
 	}
 	d.dh.sec(o)
 	return o
@@ -415,7 +415,7 @@ func (d *deploysRun) deleteSecret(client string, rep int, wl, name string) secOp
 	if err != nil {
 		o.Err = err.Error()
 	} else if st/100 != 2 {
-		o.Err = trunc(b)
+		o.Err = bodyText(b)
 	}
 	d.dh.sec(o)
 	return o
@@ -728,7 +728,7 @@ func (d *deploysRun) fetchAudit(kinds ...string) ([]auditRec, []byte, error) {
 			time.Sleep(time.Second)
 		}
 		if err != nil || st != 200 {
-			return out, raw, fmt.Errorf("audit: %d %s %v", st, trunc(b), err)
+			return out, raw, fmt.Errorf("audit: %d %s %v", st, bodyText(b), err)
 		}
 		raw = append(raw, b...)
 		out = append(out, pg.Items...)
