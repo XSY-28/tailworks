@@ -24,16 +24,25 @@ import (
 // login and no Funnel or HTTPS requirement: the OAuth client mints mgmt's own node key (tag:tw-mgmt), the host's node key
 // (tag:tw-host) and every object's key, all tags tag:tw owns.
 
-const consoleOAuthURL = "https://login.tailscale.com/admin/settings/oauth"
+const (
+	consoleACLURL   = "https://login.tailscale.com/admin/acls/file"
+	consoleOAuthURL = "https://login.tailscale.com/admin/settings/oauth"
+)
 
-// oauthConsoleSteps are the admin-console steps to create the client.
+// oauthConsoleSteps are the admin-console steps to create the client
+// (issue #442), shared by the first-run prompt (promptOAuthSecret) and
+// mint_mode_required: each caller appends how the secret reaches tw. No
+// browser is opened: tw up often runs over SSH on a headless machine.
 func oauthConsoleSteps() []string {
 	return []string{
-		"1. Policy (admin console › Access controls): tag:tw must own tag:tw-mgmt and tag:tw-host (snippet below)",
-		"2. Admin console › Settings › Trust credentials › Credential › OAuth (" + consoleOAuthURL + ")",
-		"3. Scopes: Auth Keys › Write (required). When it asks for a tag, pick tag:tw",
-		"   recommended: Devices › Core › Write (tag tag:tw), Policy File › Write (tw up --apply-policy then writes the snippet below, after tag:tw; Read: paste it), Services › Write",
-		"4. tw up, and paste the Client Secret when asked (saved to ~/.config/tailworks/oauth.env, 0600)",
+		"1. Access controls (" + consoleACLURL + "): inside the existing \"tagOwners\" section, add",
+		"       \"tag:tw\": [\"autogroup:admin\"],",
+		"   the one line tw can't write (the console only offers existing tags for the client); tw up --apply-policy writes the rest after showing it, or tw up prints what is missing",
+		"2. Settings › Trust credentials › Credential › OAuth (" + consoleOAuthURL + ")",
+		"3. Scopes (they can't be changed on an existing client, so pick them now):",
+		"     Auth Keys › Write, tag tag:tw (required)",
+		"     Policy File › Write lets tw up --apply-policy write the policy; Read: you paste it yourself",
+		"     optional: Devices › Core › Write, tag tag:tw (tw kill deletes the device); Services › Write (apps that use a Tailscale Service)",
 	}
 }
 
@@ -116,7 +125,8 @@ func mintModeRequired() *cliErr {
 	for _, s := range oauthConsoleSteps() {
 		lines = append(lines, "  "+s)
 	}
-	lines = append(lines, "no terminal? put TS_OAUTH_CLIENT_SECRET=tskey-client-… in ~/.config/tailworks/oauth.env, or pass tw up --oauth-client-file <file>",
+	lines = append(lines, "  4. run tw up on a terminal and paste the Client Secret when asked (saved to ~/.config/tailworks/oauth.env, 0600)",
+		"     no terminal? put TS_OAUTH_CLIENT_SECRET=tskey-client-… in ~/.config/tailworks/oauth.env, or pass tw up --oauth-client-file <file>",
 		"",
 		"Headscale instead of Tailscale: tw up --control=headscale --control-url <server_url> --tailnet <base_domain> --api-key-file <file with HEADSCALE_API_KEY=…>",
 		"",

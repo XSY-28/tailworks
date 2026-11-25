@@ -2159,7 +2159,7 @@ move file custody to setec (tailworks stopped)
 ```text
 tw custody: move this install's secrets and store keys from file custody to setec, so it can run several mgmt replicas: every entry is mapped to its name (refused if one can't be), copied, read back, and tw.json switched; run with tailworks stopped
 
-usage: tw custody migrate --to setec --setec-url <url> [--dry-run]
+usage: tw custody migrate --setec-url <url> [--dry-run]
 
 flags:
   -dry-run
@@ -2167,11 +2167,11 @@ flags:
   -json
     	machine-readable output
   -setec-url string
-    	migrate --to setec: the setec server URL (what tw up --setec-url would take)
+    	migrate: the setec server URL to move file custody to (what tw up --setec-url would take)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -to string
-    	migrate: the custody to move to (setec)
+    	deprecated: setec is the only target; leave it out
 ```
 
 #### tw custody migrate
@@ -2183,11 +2183,11 @@ flags:
   -json
     	machine-readable output
   -setec-url string
-    	migrate --to setec: the setec server URL (what tw up --setec-url would take)
+    	migrate: the setec server URL to move file custody to (what tw up --setec-url would take)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -to string
-    	migrate: the custody to move to (setec)
+    	deprecated: setec is the only target; leave it out
 ```
 
 ### tw upgrade
