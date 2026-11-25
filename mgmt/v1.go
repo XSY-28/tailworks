@@ -162,6 +162,9 @@ type hostView struct {
 	Leases []Lease `json:"leases,omitempty"`
 
 	Skew string `json:"skew,omitempty"` // versions.go
+
+	// AuditHead: only in the RegisterHost answer (hostauditresume.go).
+	AuditHead string `json:"auditHead,omitempty"`
 }
 
 func (a *v1api) hostView(r *http.Request, h Host) hostView {
@@ -703,7 +706,14 @@ func (a *v1api) RegisterHost(w http.ResponseWriter, r *http.Request, id v1.HostI
 	if created {
 		status = 201
 	}
-	writeResource(w, r, status, a.hostView(r, h))
+	v := a.hostView(r, h)
+	et := etagOf(v) // the resource's ETag, as GET answers it: auditHead is not part of the host record
+	if v.AuditHead, err = a.s.M.hostAuditHead(r.Context(), h.ID); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	w.Header().Set("ETag", et)
+	writeJSON(w, status, v)
 }
 
 func (a *v1api) DeleteHost(w http.ResponseWriter, r *http.Request, id v1.HostID, params v1.DeleteHostParams) {
