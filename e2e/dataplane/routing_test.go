@@ -25,9 +25,6 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"net/http/httptest"
-	"net/http/httputil"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -42,6 +39,7 @@ import (
 	"github.com/rosskukulinski/tailworks/e2e/cliflow"
 	"github.com/rosskukulinski/tailworks/hostd/hostdtest"
 	"github.com/rosskukulinski/tailworks/netd/nettest"
+	"tailscale.com/tailcfg"
 )
 
 // routingScenario is a fault mix and the workloads its faults target.
@@ -262,58 +260,54 @@ func (c *rcluster) pubAddr(host string) string {
 	return ""
 }
 
-// deletingTS is fakeTS that also applies device deletes to testcontrol.
-// mgmt deletes a moved object's previous device (hostd re-mints the node
-// under the same hostname on its new host); fakeTS drops the delete, so
-// testcontrol would keep every old device, several under one MagicDNS name
-// (real control keeps names unique), and a binding call to that name
-// could reach a dead device long after the move. testcontrol has no
-// delete, so the device is renamed out of the way (it never comes back: a
-// rejoin is a new node).
-func deletingTS(t *testing.T, ctl *nettest.Control, deleted *atomic.Int64) string {
-	up, _ := url.Parse(fakeTS(t).URL)
-	rp := httputil.NewSingleHostReverseProxy(up)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if id, ok := strings.CutPrefix(r.URL.Path, "/api/v2/device/"); ok && r.Method == "DELETE" && !strings.Contains(id, "/") {
-			for _, n := range ctl.Server.AllNodes() {
-				if string(n.StableID) == id || strconv.FormatInt(int64(n.ID), 10) == id {
-					_, dom, _ := strings.Cut(n.Name, ".")
-					n.Name = "deleted-" + strings.ToLower(id) + "." + dom
-					ctl.Server.UpdateNode(n)
-					deleted.Add(1)
-				}
-			}
-		}
-		rp.ServeHTTP(w, r)
-	}))
-	t.Cleanup(srv.Close)
-	return srv.URL
-}
-
 // dedupeNames keeps MagicDNS names unique in testcontrol, as real control
-// does: a node that rejoins from its saved state is the same device there,
-// but testcontrol registers a new node under the same name and keeps the
-// old one. Every 200 ms, all but the newest node of a name are renamed.
+// does. Two things leave several nodes under one name there: mgmt deletes
+// a moved object's previous device through the API, which fakeTS ignores,
+// and a node that rejoins from saved state can come back as a new
+// testcontrol node while the old one stays. Then a call to the name (a
+// service binding's target, after a move back) could reach a dead node.
+// So, every 200 ms: of the nodes that ever had a name, the one that started
+// last (its disco key changed most recently) has it, and the others are
+// renamed out of the way; a renamed node that starts again gets it back.
 func dedupeNames(ctl *nettest.Control, stop <-chan struct{}, renamed *atomic.Int64) {
 	t := time.NewTicker(200 * time.Millisecond)
 	defer t.Stop()
+	type seen struct {
+		name    string // its own name (before any rename)
+		disco   string
+		started time.Time
+	}
+	nodes := map[tailcfg.NodeID]*seen{}
 	for {
 		select {
 		case <-stop:
 			return
 		case <-t.C:
 		}
-		newest := map[string]int64{}
-		nodes := ctl.Server.AllNodes()
-		for _, n := range nodes {
-			if !strings.HasPrefix(n.Name, "deleted-") && int64(n.ID) > newest[n.Name] {
-				newest[n.Name] = int64(n.ID)
+		all := ctl.Server.AllNodes()
+		owner := map[string]tailcfg.NodeID{}
+		for _, n := range all {
+			s := nodes[n.ID]
+			if s == nil {
+				s = &seen{name: n.Name}
+				nodes[n.ID] = s
+			}
+			if d := n.DiscoKey.String(); d != s.disco {
+				s.disco, s.started = d, time.Now()
+			}
+			if o, ok := owner[s.name]; !ok || s.started.After(nodes[o].started) {
+				owner[s.name] = n.ID
 			}
 		}
-		for _, n := range nodes {
-			if id, ok := newest[n.Name]; ok && int64(n.ID) != id {
-				_, dom, _ := strings.Cut(n.Name, ".")
-				n.Name = "deleted-" + strings.ToLower(string(n.StableID)) + "." + dom
+		for _, n := range all {
+			s := nodes[n.ID]
+			want := s.name
+			if owner[s.name] != n.ID {
+				_, dom, _ := strings.Cut(s.name, ".")
+				want = "stale-" + strings.ToLower(string(n.StableID)) + "." + dom
+			}
+			if n.Name != want {
+				n.Name = want
 				ctl.Server.UpdateNode(n)
 				renamed.Add(1)
 			}
@@ -388,11 +382,11 @@ func TestRouting(t *testing.T) {
 	}
 	t.Cleanup(ctl.Close)
 
-	var devDeleted, devRenamed atomic.Int64
+	var devRenamed atomic.Int64
 	dedupeStop := make(chan struct{})
 	t.Cleanup(func() { close(dedupeStop) })
 	go dedupeNames(ctl, dedupeStop, &devRenamed)
-	base :=&cluster{t: t, bin: cliflow.BuildBinaries(t), dir: rdir, work: work, ctl: ctl, tsURL: deletingTS(t, ctl, &devDeleted),
+	base := &cluster{t: t, bin: cliflow.BuildBinaries(t), dir: rdir, work: work, ctl: ctl, tsURL: fakeTS(t).URL,
 		sock: filepath.Join(work, "mgmt.sock"), workerd: wd, hosts: []string{"h1", "h2", "h3"},
 		proxies: map[string]*sockProxy{}, pids: pids, procs: map[string]*proc{}, stopped: map[string]bool{}}
 	t.Cleanup(base.stopAll)
@@ -570,7 +564,7 @@ func TestRouting(t *testing.T) {
 		}
 		writeJSON(rdir, "peers.json", peers)
 	}
-	t.Logf("testcontrol: %d devices deleted by mgmt, %d stale duplicates renamed", devDeleted.Load(), devRenamed.Load())
+	t.Logf("testcontrol: %d renames to keep names unique", devRenamed.Load())
 
 	h.mu.Lock()
 	res := []result{conv, checkN1(h), checkN2(h), checkN3(h), checkN4(h), checkN5(h), checkN6(h)}
