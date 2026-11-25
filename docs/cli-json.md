@@ -106,7 +106,7 @@ in this order:
 | `log` | `line`, `source: "image-build"` (output of `docker buildx`, containers only) |
 | `placed` | `deploymentID`, `host`, `placement` |
 | `status` | `deploymentID`, `status`, `node` (each time either changes) |
-| `ready` | `deploymentID`, `host`, `magicDNS`, `url` |
+| `ready` | `deploymentID`, `host`, `magicDNS`, `url`, `images` (container classes: each image's pin, as the result's `images`) |
 | `public_wait`, `public` | `url` (with `--wait-public`) |
 
 A failure ends the stream with the usual `{"error": …}` line instead.
