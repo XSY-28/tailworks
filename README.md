@@ -222,7 +222,7 @@ and the tests behind each row: [docs/COMPAT.md](docs/COMPAT.md).
 | Runtime | [TCP sockets (`connect()`)](docs/COMPAT.md#connect) | ⚠️ | to tailnet peers and the internet with the object's identity; no `secureTransport` TLS |
 | Runtime | [WebAssembly](docs/COMPAT.md#wasm) | ✅ | |
 | Runtime | [`nodejs_compat`](docs/COMPAT.md#nodejs-compat) | ✅ | |
-| Runtime | [Python Workers](docs/COMPAT.md#python) | ❌ | Python runs in containers |
+| Runtime | [Python Workers](docs/COMPAT.md#python) | ⚠️ | Pyodide, as on Cloudflare; Python Durable Objects have no node of their own; no Python Workflows yet ([docs/python.md](docs/python.md)) |
 | Runtime | [Node.js apps (`runtime: "node"`)](docs/COMPAT.md#node-runtime) | ✅ | tw-only |
 | Durable Objects | [One tailnet node per object](docs/COMPAT.md#do-identity) | ✅ | tw-only: own name, tags, grants, egress |
 | Durable Objects | [Storage (KV API, SQLite)](docs/COMPAT.md#do-storage) | ✅ | one host, no replication |

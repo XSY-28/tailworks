@@ -33,7 +33,7 @@ func workloadLabel(s string) string {
 
 func cmdInit(args []string) error {
 	f := newFlags("init")
-	tmpl := f.String("template", "hello", "hello | agent | mcp | ai-agent | lock | static-site | refund-approval | node-workflow")
+	tmpl := f.String("template", "hello", "hello | agent | mcp | ai-agent | lock | static-site | refund-approval | node-workflow | python")
 	name := f.String("name", "", "workload name (default: the directory name)")
 	keepTags := f.Bool("keep-tags", false, "keep the template's tags instead of naming them after the app (tag:tw-wl-<workload>, tag:tw-<workload>-<class>)")
 	tags := f.String("tags", "", "use these existing tags for the workload node instead of a new per-app tag (comma-separated, e.g. tag:tw-app); see docs/tailworks-jsonc.md#tags-and-tw-init")
@@ -267,6 +267,14 @@ func (a *app) srcTags() []string {
 // twin of create-tailworks's build.mjs), into what hostd/gen expects
 // (dist/index.js + tailworks.jsonc + wrangler.jsonc + tw-bundle.json), and packs it.
 func (a *app) build(vars map[string]string) ([]byte, int, error) {
+	if a.Runtime != bundle.RuntimeNode && isPythonApp(a.Wrangler) { // python.go: packed as it is, no bundler
+		files, main, types, n, err := a.buildPython()
+		if err != nil {
+			return nil, 0, err
+		}
+		tb, err := a.packWorkerd(files, main, types, vars)
+		return tb, n, err
+	}
 	ct, err := createTailworksDir()
 	if err != nil {
 		return nil, 0, err
@@ -299,9 +307,6 @@ func (a *app) build(vars map[string]string) ([]byte, int, error) {
 		// An assets-only project (assets.go): no Worker to bundle.
 		tb, err := a.packWorkerd(map[string][]byte{}, "", nil, vars)
 		return tb, 0, err
-	}
-	if err := pythonWorker(a.WranglerFile, a.Wrangler); err != nil {
-		return nil, 0, err
 	}
 	if a.Opts.builder() == "wrangler" && a.Pages.hasCode() {
 		_, err = a.pagesEntry(out) // pages.go: refuses --wrangler

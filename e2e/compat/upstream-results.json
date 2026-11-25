@@ -1,7 +1,7 @@
 {
   "dev": {
-    "date": "2026-11-24",
-    "commit": "5021fbb5d978c7b912785e53422e629980dfa81c",
+    "date": "2026-11-25",
+    "commit": "80a4c2562e735ec7a5b1dde95330d07bd618b635",
     "platform": "darwin/arm64",
     "results": {
       "ag-cross-domain": {
@@ -100,12 +100,55 @@
         "outcome": "PASS",
         "source": "vercel/mcp-handler/examples@5518e8af4386",
         "steps": 4
+      },
+      "py-assets": {
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/assets@47ec7d69f405",
+        "steps": 2
+      },
+      "py-binding": {
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/binding@47ec7d69f405",
+        "steps": 1
+      },
+      "py-chatroom": {
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/chatroom@47ec7d69f405",
+        "steps": 4
+      },
+      "py-cron": {
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/cron@47ec7d69f405",
+        "steps": 1
+      },
+      "py-durable-objects": {
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/durable-objects@47ec7d69f405",
+        "steps": 4
+      },
+      "py-hello": {
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/hello@47ec7d69f405",
+        "steps": 1
+      },
+      "py-opengraph": {
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/opengraph@47ec7d69f405",
+        "steps": 1
+      },
+      "py-url-shortener": {
+        "outcome": "XFAIL",
+        "source": "cloudflare/python-workers-examples/url-shortener@47ec7d69f405"
+      },
+      "py-workflows": {
+        "outcome": "XFAIL",
+        "source": "cloudflare/python-workers-examples/workflows@47ec7d69f405"
       }
     }
   },
   "deployed": {
-    "date": "2026-11-24",
-    "commit": "0bc7003f79dd610c4df8d2ba277c5e2ac3556702",
+    "date": "2026-11-25",
+    "commit": "80a4c2562e735ec7a5b1dde95330d07bd618b635",
     "platform": "darwin/arm64",
     "results": {
       "ag-cross-domain": {
@@ -199,6 +242,49 @@
         "outcome": "PASS",
         "source": "vercel/mcp-handler/examples@5518e8af4386",
         "steps": 4
+      },
+      "py-assets": {
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/assets@47ec7d69f405",
+        "steps": 2
+      },
+      "py-binding": {
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/binding@47ec7d69f405",
+        "steps": 1
+      },
+      "py-chatroom": {
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/chatroom@47ec7d69f405",
+        "steps": 4
+      },
+      "py-cron": {
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/cron@47ec7d69f405",
+        "steps": 2
+      },
+      "py-durable-objects": {
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/durable-objects@47ec7d69f405",
+        "steps": 4
+      },
+      "py-hello": {
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/hello@47ec7d69f405",
+        "steps": 1
+      },
+      "py-opengraph": {
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/opengraph@47ec7d69f405",
+        "steps": 1
+      },
+      "py-url-shortener": {
+        "outcome": "XFAIL",
+        "source": "cloudflare/python-workers-examples/url-shortener@47ec7d69f405"
+      },
+      "py-workflows": {
+        "outcome": "XFAIL",
+        "source": "cloudflare/python-workers-examples/workflows@47ec7d69f405"
       }
     }
   }

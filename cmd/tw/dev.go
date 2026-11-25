@@ -143,7 +143,9 @@ func cmdDev(args []string) error {
 		// The local control issues no certificates (tailnethttps.go).
 		TailnetHTTPSOff: true,
 		// --inspector-port: each workerd gets an inspector (hostd/inspector.go).
-		WorkerdInspector: *inspectorPort > 0})
+		WorkerdInspector: *inspectorPort > 0,
+		// Python Workers: the per-user Pyodide cache, fetched once (python.go).
+		PyodideDir: devPyodideDir()})
 	if err != nil {
 		return err
 	}

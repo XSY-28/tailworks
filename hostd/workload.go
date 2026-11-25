@@ -461,6 +461,10 @@ func (h *Host) undeploy(w *workload, reason string) {
 // ---- instance: one workerd process ----
 
 type instance struct {
+	// pyodide is the host's Pyodide bundle dir, for a Python Worker
+	// (pyodide.go): workerd reads it, read-only.
+	pyodide string
+
 	h       *Host
 	w       *workload
 	depID   string
@@ -541,6 +545,9 @@ func (h *Host) tierFor(app *bundle.App, t *tenant) (string, error) {
 		h.log.Info("microvm tier requested; running it in the process tier (ForceProcessTier: explicit local development)", "app", app.Name)
 		return bundle.TierProcess, nil
 	}
+	if app.Python {
+		return "", errPythonMicroVM(app.Name) // pyodide.go
+	}
 	if h.cfg.VM == nil {
 		return "", errTierUnavailable(app.Name)
 	}
@@ -565,6 +572,10 @@ func (h *Host) startInstance(w *workload, depID string, app *bundle.App, tier st
 		return h.startNodeInstance(w, depID, app, n)
 	}
 	dir := h.instanceDir(n)
+	pyDir, err := h.pyodideFor(app) // pyodide.go
+	if err != nil {
+		return nil, err
+	}
 	opts := gen.Options{
 		Dir:          dir,
 		DOStorage:    filepath.Join(h.tenantDir(w.tenantID), "workloads", w.name, "do"),
@@ -624,6 +635,7 @@ func (h *Host) startInstance(w *workload, depID string, app *bundle.App, tier st
 	}
 	inst := &instance{h: h, w: w, depID: depID, dir: dir, app: app, res: res, tier: tier, doStorage: opts.DOStorage,
 		phases: map[string]int64{"generate": time.Since(t0).Milliseconds()}}
+	inst.pyodide = pyDir
 	var vol *sandbox.Volume
 	if vmTier {
 		// The DO volume's key comes from mgmt custody, released only to the
