@@ -62,11 +62,7 @@ func tagOwnersPart() policy.Snippet {
 // section, it would be a second key and the policy would not parse
 // (issue #389).
 func snippetLines(s policy.Snippet) []string {
-	out := []string{"    // merge into your policy: put each entry inside the existing section of the same name (don't add a second one)"}
-	for _, l := range strings.Split(strings.TrimSpace(s.HuJSON()), "\n") {
-		out = append(out, "    "+l)
-	}
-	return out
+	return pasteLines(s, nil, "    ") // policysnippet.go
 }
 
 // policyMissingTagOwners is the typed error for "the control plane refused
@@ -109,8 +105,7 @@ func tagOwnersFix(pol []byte) []string {
 			}
 			owners = append(slices.Clone(cur), policy.TwTagPrefix)
 		}
-		b, _ := json.Marshal(owners)
-		lines = append(lines, fmt.Sprintf("    %q: %s,", tag, b))
+		lines = append(lines, fmt.Sprintf("    %q: %s,", tag, policy.ListHuJSON(owners)))
 	}
 	return lines
 }
@@ -128,7 +123,7 @@ func mintModeRequired() *cliErr {
 	lines = append(lines, "  4. run tw up on a terminal and paste the Client Secret when asked (saved to ~/.config/tailworks/oauth.env, 0600)",
 		"     no terminal? put TS_OAUTH_CLIENT_SECRET=tskey-client-… in ~/.config/tailworks/oauth.env, or pass tw up --oauth-client-file <file>",
 		"",
-		"Headscale instead of Tailscale: tw up --control=headscale --control-url <server_url> --tailnet <base_domain> --api-key-file <file with HEADSCALE_API_KEY=…>",
+		"Headscale instead of Tailscale: tw up --control-url <server_url> --tailnet <base_domain> (the API key in ~/.config/tailworks/headscale.env, or --api-key-file <file with HEADSCALE_API_KEY=…>)",
 		"",
 		"policy:")
 	lines = append(lines, snippetLines(operatorSnippet())...)

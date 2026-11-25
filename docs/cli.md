@@ -32,9 +32,9 @@ flags:
 
 Control plane (Tailscale or Headscale):
   -api-key-file string
-    	--control=headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied). Tailscale API keys are not a mint mode: use --oauth-client-file
+    	Headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied); with a non-default --control-url it selects the Headscale profile. Default on the default state dir with a Headscale --control-url: ~/.config/tailworks/headscale.env when it exists. Tailscale API keys are not a mint mode: use --oauth-client-file
   -control string
-    	control-plane profile: tailscale, or headscale (ADR-015: a Headscale server, tw up --control=headscale --control-url <url> --tailnet <base_domain> --api-key-file <file>; the file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain; docs/headscale.md) (default "tailscale")
+    	control-plane profile: tailscale, or headscale (ADR-015: a Headscale server; implied by --api-key-file with a non-default --control-url: tw up --control-url <url> --tailnet <base_domain> [--api-key-file <file>]; the file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain; docs/headscale.md) (default "tailscale")
   -control-url string
     	coordination server for the tailnet's nodes (default "https://controlplane.tailscale.com")
   -tailnet string
@@ -1313,44 +1313,61 @@ global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 upgrade tailworks on this machine or the fleet
 
 ```text
-tw upgrade: upgrade tailworks: on a tw up machine, back up, install a newer release and roll back if it isn't healthy; against a linked tw-mgmt (or --fleet), plan and run a fleet upgrade (status, pause, resume, abort)
+tw upgrade: upgrade tailworks: on a tw up machine, back up, install a newer release and roll back if it isn't healthy (tw upgrade rollback goes back by hand); tw upgrade fleet plans and runs a fleet upgrade through tw-mgmt (status, pause, resume, abort), from the release catalog that tw upgrade import fills and tw upgrade releases lists; on a linked machine tw upgrade is tw upgrade fleet
 
 subcommands:
-  tw upgrade [<version>] [flags]
-  tw upgrade status|pause|resume|abort [<run-id>]
+  tw upgrade [<version>] [--from <tarball|dir>] [--plan] [--yes] [--allow-unsigned]
+  tw upgrade fleet [<version>] [--plan] [--yes] [--hosts <host>,…] [--canary <host>] [--soak <d>] [--settle <d>] [--no-wait]
+  tw upgrade fleet status|pause|resume|abort [<run-id>]
+  tw upgrade import <tarball>…|<version> [--platform <os>-<arch>,…]
+  tw upgrade releases
+  tw upgrade rollback [<backup-dir>] [--restore] [--prefix <dir>] [--yes]
 
 flags:
   -allow-unsigned
-    	homelab: install a release that isn't signed by a pinned key (a build you made; TW_ALLOW_UNSIGNED=1)
-  -canary string
-    	fleet: the canary host (default: the first)
-  -fleet
-    	upgrade the fleet through tw-mgmt (an upgrade run) even on a tw up machine
+    	install a release that isn't signed by a pinned key (a build you made; TW_ALLOW_UNSIGNED=1)
   -from string
     	install this release tarball (tw-<v>-<os>-<arch>.tar.gz, with SHA256SUMS next to it) or extracted release directory instead of downloading
-  -health-timeout duration
-    	homelab: how long the upgraded tw may take to report healthy before it is rolled back (default 3m0s)
-  -hosts string
-    	fleet: only these hosts (comma-separated)
-  -no-rollback
-    	homelab: keep the new release even if the health check fails
-  -no-wait
-    	fleet: start the run and return (tw upgrade status follows it)
   -plan
     	print the plan and change nothing
-  -prefix string
-    	homelab: the install.sh prefix to upgrade (default: the one that owns --state-dir)
-  -settle duration
-    	fleet: how long a host may take to come back and settle (default 5m0s)
-  -soak duration
-    	fleet: watch the canary this long before the other hosts (default 5m0s)
   -yes
     	skip the confirmation before upgrading; needed without a terminal and with --json
+
+Advanced:
+  -health-timeout duration
+    	how long the upgraded tw may take to report healthy before it is rolled back (default 3m0s)
+  -no-rollback
+    	keep the new release even if the health check fails
+  -prefix string
+    	the install.sh prefix to upgrade (default: the one that owns --state-dir)
+
+also accepted, for one release (now tw upgrade fleet): --canary --fleet --hosts --no-wait --settle --soak
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
+```
+
+#### tw upgrade fleet
+
+```text
+flags:
+  -canary string
+    	the canary host (default: the first)
+  -hosts string
+    	only these hosts (comma-separated)
+  -no-wait
+    	start the run and return (tw upgrade fleet status follows it)
+  -plan
+    	print the plan and start nothing
+  -settle duration
+    	how long a host may take to come back and settle (default 5m0s)
+  -soak duration
+    	watch the canary this long before the other hosts (default 5m0s)
+  -yes
+    	skip the confirmation before starting the upgrade run; needed without a terminal and with --json
 
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 ```
 
-#### tw upgrade abort
+#### tw upgrade fleet abort
 
 ```text
 flags:
@@ -1359,17 +1376,47 @@ flags:
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 ```
 
-#### tw upgrade pause
+#### tw upgrade fleet pause
 
-Same flags as [tw upgrade abort](#tw-upgrade-abort).
+Same flags as [tw upgrade fleet abort](#tw-upgrade-fleet-abort).
 
-#### tw upgrade resume
+#### tw upgrade fleet resume
 
-Same flags as [tw upgrade abort](#tw-upgrade-abort).
+Same flags as [tw upgrade fleet abort](#tw-upgrade-fleet-abort).
 
-#### tw upgrade status
+#### tw upgrade fleet status
 
-Same flags as [tw upgrade abort](#tw-upgrade-abort).
+Same flags as [tw upgrade fleet abort](#tw-upgrade-fleet-abort).
+
+#### tw upgrade import
+
+```text
+flags:
+  -platform string
+    	with a version: import the tarballs for these platforms (comma-separated <os>-<arch>; default: the platforms of the hosts that upgrade themselves)
+
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
+```
+
+#### tw upgrade releases
+
+Same flags as [tw upgrade fleet abort](#tw-upgrade-fleet-abort).
+
+#### tw upgrade rollback
+
+```text
+flags:
+  -restore
+    	also put the store back from the backup tw upgrade took (default: only when the previous release can't open the store)
+  -yes
+    	skip the confirmation before rolling back; needed without a terminal and with --json
+
+Advanced:
+  -prefix string
+    	the install.sh prefix to roll back (default: the one that owns --state-dir)
+
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
+```
 
 ### tw version
 
@@ -1411,7 +1458,7 @@ tw tenant <subcommand> --help   its flags
 ```text
 flags:
   -api-key-file string
-    	--control=headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied
+    	Headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied. With a non-default --control-url it selects the Headscale profile
   -apply-policy
     	--control=headscale: write the owner tag's tagOwners entry ("tag:tw": []) when it is missing instead of printing it (additive, validated first, written with If-Match); shows the line and asks first. Without the flag it asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes. A Tailscale tenant's policy is never written
   -control string
@@ -1513,7 +1560,7 @@ tw host <subcommand> --help   its flags
 ```text
 flags:
   -out string
-    	write the join key (TS_AUTHKEY=…) and the one-time registration secret (TW_REGISTRATION_SECRET=…) here (default ./<host-id>.join.env)
+    	write the join file here (default ./<host-id>.join.env): the join key (TS_AUTHKEY=…), the one-time registration secret (TW_REGISTRATION_SECRET=…), and the host ID, mgmt URL and control URL tw-hostd -join-token-file reads
 
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · --tenant <tailnet|id> (default: the tw up tenant)
 ```
@@ -1616,31 +1663,6 @@ global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 #### tw custody migrate
 
 Same flags as [tw custody](#tw-custody).
-
-### tw release
-
-release catalog for fleet hosts that upgrade themselves
-
-```text
-tw release: tw-mgmt's release catalog: list known releases, import a release (its notes and tarball, for hosts that upgrade themselves)
-
-subcommands:
-  tw release ls
-  tw release import <tw-<v>-<os>-<arch>.tar.gz>…
-
-flags:
-  (none besides the global ones)
-
-global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
-```
-
-#### tw release import
-
-Same flags as [tw release](#tw-release).
-
-#### tw release ls
-
-Same flags as [tw release](#tw-release).
 
 ## Environment
 

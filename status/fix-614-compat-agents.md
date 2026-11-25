@@ -20,10 +20,11 @@ The 2026-11-25 nightly was the first to deploy the upstream SDK examples
      Not verified passing: needs certificate issuance to work on tailnet 1.
 - **ag-cross-domain, ag-mcp-elicitation XPASS (deployed).** Since #359 an
   agent class not in `tailnet.objects` has no node and needs no create
-  admission, so the imported env works deployed. `tw dev` still gives every
-  class a node (fakemgmt declares all), so they still fail there (#355).
-  New `Project.ExpectDev` (tw dev-only expected failure); both now expect
-  pass deployed. COMPAT.md row and tables updated (`make compat-upstream`).
+  admission, so the imported env works deployed. This branch first added
+  a `tw dev`-only expectation (they still failed under `tw dev`), but #642
+  (015f2f30) landed meanwhile and makes unlisted classes plain under
+  `tw dev` too, flipping both to expected pass. Merged master's version;
+  nothing of that left here.
 - **ag-playground FAIL (6 of 9 demos, 500s).** Not reproduced: passed in
   3 of 3 runs here (alone, with the other three, and in a full
   `make e2e-compat`). Left as is.
@@ -33,6 +34,5 @@ The 2026-11-25 nightly was the first to deploy the upstream SDK examples
 - `TW_COMPAT_ONLY='ag-(playground|mcp-worker-auth|cross-domain|mcp-elicitation)$' make e2e-compat` (master): reproduced worker-auth FAIL + 2 XPASS; playground PASS.
 - `make e2e-compat` (full, grant fix): FAIL 1 (worker-auth, cert), PASS 70, XFAIL 7, XPASS 2 (built before ExpectDev).
 - `TW_COMPAT_ONLY='ag-mcp-worker-auth$' make e2e-compat` x2: no certificate in 5 min / client node's own cert 4 min timeout.
-- `TW_COMPAT_ONLY='ag-(cross-domain|mcp-elicitation)$' make e2e-compat-dev`: 2 XFAIL (expected).
 - `TW_COMPAT_ONLY='ag-(playground|cross-domain|mcp-elicitation)$' make e2e-compat`: 3 PASS.
 - `go test -tags e2ecompat ./e2e/compat/` unit tests: pass.

@@ -49,8 +49,11 @@ The unix socket + host token (RT-03) survives **only** behind
 scheme; `tw doctor` reports `transport: tsnet` in normal operation and
 flags any local-socket use.
 
-mgmt → hostd pushes (kill, assignments) go to the host's tsnet node and are
-hostd's API, not this document's.
+mgmt → hostd pushes and calls (`POST /v1/push/*`, `GET /v1/logs`,
+`POST /v1/store-admin`, `/v1/approvals*`) and the operator's local-socket
+calls (`tw status`, `tw down --purge`, `tw host vmcheck`) are hostd's API,
+not this document's: see
+[hostd-api.md](hostd-api.md).
 
 ## Conventions
 
@@ -147,7 +150,7 @@ hostd's API, not this document's.
 | `GET` | `/v1/objects/{id}` | admin\|host\|tenant:read | no | `GetObject` | Read an object (lineage, children, kill record) |
 | `PATCH` | `/v1/objects/{id}` | host\|admin\|tenant:kill | yes | `UpdateObject` | Update an object (JSON Merge Patch) |
 | `DELETE` | `/v1/objects/{id}` | admin\|host\|tenant:kill | yes | `DeleteObject` | Kill an object |
-| `GET` | `/v1/objects/{id}/certificate` | host\|admin | no | `GetObjectCertificate` | Read the object's node certificate |
+| `GET` | `/v1/objects/{id}/certificate` | host\|admin | no | `GetObjectCertificate` | **Deprecated.** Read the object's node certificate |
 | `POST` | `/v1/objects/{id}/credentials` | host | yes | `CreateObjectCredential` | Mint a single-use auth key for the object's node |
 | `GET` | `/v1/releases` | admin | no | `ListReleases` | The release catalog |
 | `POST` | `/v1/releases` | admin | yes | `ImportReleases` | Import catalog entries (from a release's share/tailworks/catalog.json) |
@@ -1366,6 +1369,8 @@ DO instances, agents and sub-agents, each with its own tailnet node.
 | `tenant` | query | string | no |  |
 | `workload` | query | string | no |  |
 | `namespace` | query | string | no | DO class name, or `_workload`. |
+| `tag` | query | string | no | Objects carrying this tag (the full `tag:<name>`, matched exactly). |
+| `human` | query | string | no | Objects whose `actingFor` is this principal (exact match, as on `GET /v1/audit`). |
 | `state` | query | array of `ObjectStatus` | no | Repeatable. Default is every state, tombstones included. |
 | `parent` | query | string | no | Direct children of this object ID. |
 | `root` | query | string | no | The whole tree under this root object ID. |
@@ -1525,13 +1530,12 @@ A later `GET` is `410 Gone` with the kill record. Replaces
 
 `GetObjectCertificate` · role **host\|admin** · audited: no
 
-The certificate mgmt signed at `ready` (re-issued on fetch when missing
-or within 1 h of expiry). The receiving netd verifies it against the
-tenant's `oboPublicKey` and narrows the caller's caps to `cert.lim`;
-a certificate that fails verification, names another node or cannot
-be fetched makes netd withhold the caller's caps. `410 killed` for
-tombstones. Replaces `GET /v0/certs/{nodeID}`; see also
-`GET /v1/certificates/{stableNodeID}` for lookup by node.
+**Deprecated:** use `GET /v1/certificates/{stableNodeID}?tenant=`
+with the object's `stableNodeID` and `tenantID` (both on `Object`).
+This route returns the same certificate, sends a `Deprecation` header
+and a `Link` to that route (`rel="successor-version"`), and will be
+removed no earlier than two releases later. `409 not_ready` when the
+object has no node yet; `410 killed` for tombstones.
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -1633,6 +1637,17 @@ The receiver-side lookup: "is the peer that just connected a tailworks
 object, and what is its `lim`?" `404 not_found` when no live object
 of the tenant has that node (the receiver then applies the WhoIs caps
 unchanged: the peer is not a tailworks object); `410 killed` for a tombstone.
+
+The certificate is the one mgmt signed at `ready` (re-issued on fetch
+when missing or within 1 h of expiry). The receiving netd verifies it
+against the tenant's `oboPublicKey` and narrows the caller's caps to
+`cert.lim`; a certificate that fails verification, names another node
+or cannot be fetched makes netd withhold the caller's caps.
+
+To read an object's certificate, pass the object's `stableNodeID` and
+`tenantID` (the admin UI's object page does). Replaces
+`GET /v0/certs/{nodeID}` and the deprecated
+`GET /v1/objects/{id}/certificate`.
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -2548,6 +2563,7 @@ Hash-chained, append-only audit log.
 | `trace` | query | string | no |  |
 | `tenant` | query | string | no |  |
 | `chain` | query | string | no | `mgmt` or `host:<hostID>`. |
+| `workload` | query | string | no | Records about this workload: records whose object belongs to it, and mgmt records that name it in their detail (deploy, undeploy, secrets). Combine with `tenant` when several tenants use the name. |
 | `kind` | query | array of `AuditKind` | no |  |
 | `since` | query | string | no | Records at or after this time (RFC 3339 or unix ms). |
 | `until` | query | string | no |  |
@@ -2620,7 +2636,7 @@ notes, contract migrations, protocols and workerd pin. `current` is this replica
 `ImportReleases` · role **admin** · audited: yes
 
 Adds or replaces imported entries. Entries built into this tw-mgmt are never replaced.
-`tw release import <tarball>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
+`tw upgrade import <tarball>…|<version>` reads the tarball's `share/tailworks/catalog.json`, posts it here,
 then uploads the tarball (`PUT /v1/releases/{version}/artifacts/{name}`). Audited
 `release_import`.
 
@@ -3998,6 +4014,8 @@ A single-use join key for a host's `tag:tw-host` node. Never logged.
 | `expiresAt` | integer (int64) | yes | unix ms |
 | `host` | `Host` | yes |  |
 | `hostname` | string | yes | `tw-host-<hostID>` |
+| `keyTagsOnly` | boolean | no | The host's node must advertise no tags; its join key carries `tag:tw-host` (Headscale, ADR-015). `tw-hostd -tsnet-key-tags-only`. |
+| `mgmtURL` | string (uri) | no | Where the host reaches mgmt over the tailnet (`tw-hostd -mgmt`): `http://tw-mgmt.<tailnet>`. Absent when mgmt doesn't know its own node name (local-dev). |
 | `registrationSecret` | string (password) | yes | One-time secret (32 random bytes, base64url) the host presents in its first `PUT /v1/hosts/{id}`; mgmt stores only its SHA-256 and clears it once the node is bound. |
 | `tags` | array of string | yes |  |
 | `tailnet` | string | no |  |
@@ -4443,11 +4461,23 @@ Why a deployment is on its host (smart placement, ADR-033).
 | `bundle` | string | yes | The bundle, as for `POST /v1/deployments`. |
 | `namespaces` | array of `ClassConfig` | no | Override the classes read from `tailworks.jsonc` (tests). |
 
+#### `PolicySnippet`
+
+Additions to a tailnet policy, in the policy file's own shape.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `autoApprovers` | object | no |  |
+| `grants` | array of object | no |  |
+| `nodeAttrs` | array of object | no |  |
+| `tagOwners` | object | no |  |
+
 #### `PreflightMissing`
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `dst` | string | yes |  |
+| `ip` | string | no | The grant's port (`tcp:5432`). |
 | `snippet` | string | yes | The grant to add (HuJSON). |
 | `src` | string | yes |  |
 
@@ -4465,6 +4495,7 @@ Why a deployment is on its host (smart placement, ADR-033).
 | `service` | string | no | The Tailscale Service the workload node would host (`tailnet.service`). |
 | `serviceSnippet` | string | no | The `autoApprovers` entry to add (HuJSON). |
 | `serviceUnapproved` | boolean | no | The policy's `autoApprovers.services` doesn't let the workload tags host `service`: the node would advertise it but control would never route it. `ok` is false. |
+| `snippet` | `PolicySnippet` | no | Everything above that is missing, as one typed policy snippet: the string fields (`tagOwnersSnippet`, `nodeAttrsSnippet`, `serviceSnippet`, each `missing[].snippet`) are renderings of its parts. Absent when nothing is missing. Never holds the caller grant (`PolicyApply.callerGrant`). |
 | `srcTags` | array of string | no | The tags checked (workload + object tags from the bundle). |
 | `tagOwnerProblems` | array of string | no | For a tenant with its own `ownerTag`, the tags its owner tag doesn't own, or that another tenant's owner tag on the tailnet owns. Makes `ok` false. |
 | `tagOwnersSnippet` | string | no |  |

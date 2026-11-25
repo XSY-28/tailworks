@@ -40,6 +40,7 @@ Coding agents: start with the skills. `tw agent setup` installs them for Claude 
 - [Cron triggers](https://github.com/rosskukulinski/tailworks/blob/master/docs/cron-triggers.md): `triggers.crons`, `scheduled()`
 - [Workflows and approvals](https://github.com/rosskukulinski/tailworks/blob/master/docs/approvals.md): Cloudflare Workflows, `AgentWorkflow`, `waitForApproval`; approvals decided by tailnet identities under `github.com/rosskukulinski/tailworks/cap/approve`, `tw approve`
 - [Public ingress (Funnel)](https://github.com/rosskukulinski/tailworks/blob/master/docs/public-ingress.md): public routes, `tw expose`
+- [MCP for hosted assistants](https://github.com/rosskukulinski/tailworks/blob/master/docs/mcp-public.md): one MCP endpoint for claude.ai / ChatGPT connectors over public ingress, OAuth tokens from tsidp, `withTailnet` `publicOAuth`, `requester()`
 - [Tailscale Services](https://github.com/rosskukulinski/tailworks/blob/master/docs/services.md): stable names and replicas
 - [Locks and leader election](https://github.com/rosskukulinski/tailworks/blob/master/docs/locks.md): Durable Objects as locks, leases, fencing tokens, the `lock` template, failure guarantees
 - [Per-object egress](https://github.com/rosskukulinski/tailworks/blob/master/docs/egress-modes.md): facet mode vs plain-DO mode
@@ -65,7 +66,7 @@ Coding agents: start with the skills. `tw agent setup` installs them for Claude 
 
 - [Management API](https://github.com/rosskukulinski/tailworks/blob/master/docs/contracts/mgmt-api.md): the REST v1 contract, rendered from api/openapi.yaml
 - [OpenAPI spec](https://github.com/rosskukulinski/tailworks/blob/master/api/openapi.yaml): the source of truth for /v1
-- [tw-hostd additions](https://github.com/rosskukulinski/tailworks/blob/master/docs/contracts/hostd-additions.md): the host agent's contract
+- [tw-hostd API](https://github.com/rosskukulinski/tailworks/blob/master/docs/contracts/hostd-api.md): the host agent's routes, mgmt → hostd and the operator's local socket
 - [RFC](https://github.com/rosskukulinski/tailworks/blob/master/docs/design/RFC.md): the design
 - [Architecture decision records](https://github.com/rosskukulinski/tailworks/blob/master/docs/design/adr/README.md): one file per decision
 

@@ -115,10 +115,6 @@ func cmdInit(args []string) error {
 			done = true
 			return re.ReplaceAll(m, []byte(`${1}"`+wl+`"`))
 		})
-		if fn == "wrangler.jsonc" {
-			// A template var that names the app (refund-approval's approve hint).
-			b = regexp.MustCompile(`("APP_NAME"\s*:\s*)"[^"]*"`).ReplaceAll(b, []byte(`${1}"`+wl+`"`))
-		}
 		if fn == "tailworks.jsonc" {
 			if nb, _, err := appTags(b, wl); err == nil {
 				b = nb
@@ -222,7 +218,7 @@ func loadAppWith(dir, name string, o appOpts) (*app, error) {
 	}
 	if twErr != nil {
 		// A wrangler-only project: tailworks' defaults stand in for tailworks.jsonc.
-		raw = defaultTwConfig(workloadLabel(a.Name), a.Wrangler)
+		raw = defaultTwConfig(workloadLabel(a.Name))
 		a.Warnings = append(a.Warnings, fmt.Sprintf("no tailworks.jsonc: using defaults (workload node tag:tw-wl-%s; Durable Object classes internal, no node of their own); add a tailworks.jsonc to change them", workloadLabel(a.Name)))
 	}
 	a.TwRaw = raw
@@ -237,6 +233,9 @@ func loadAppWith(dir, name string, o appOpts) (*app, error) {
 		return nil, fail("bad_request", fmt.Sprintf("workload name %q is not a DNS label", a.Name)).withFix("tw deploy --name " + wl)
 	}
 	if err := a.defaultWorkloadTags(); err != nil { // defaulttags.go
+		return nil, err
+	}
+	if err := a.defaultInternalClasses(); err != nil { // defaultobjects.go
 		return nil, err
 	}
 	a.Warnings = append(a.Warnings, a.nameNotes(name, top.Name)...) // appname.go
@@ -660,7 +659,8 @@ func printPreflight(a *app, pf mgmt.PreflightResult, applying bool) {
 	}
 	if pf.Service != "" {
 		if pf.ServiceUnapproved {
-			fmt.Printf("› preflight: service %s … ✗ not in autoApprovers.services for the workload tags (control would never route it)\n    add to your tailnet policy:\n    %s\n", pf.Service, pf.ServiceSnippet)
+			fmt.Printf("› preflight: service %s … ✗ not in autoApprovers.services for the workload tags (control would never route it)\n    add to your tailnet policy:\n", pf.Service)
+			printPaste(snippetService(preflightPolicy(pf)), "    ") // policysnippet.go
 		} else {
 			fmt.Printf("✓ preflight  service %s auto-approved for the workload node\n", pf.Service)
 		}
@@ -699,17 +699,12 @@ func printPreflight(a *app, pf mgmt.PreflightResult, applying bool) {
 		}
 	}
 	if len(pf.Missing) > 0 || len(pf.MissingTagOwners) > 0 || len(pf.UndefinedConnects) > 0 {
-		if pf.TagOwnersSnippet != "" {
-			fmt.Printf("  add to your tailnet policy:\n    %s\n", pf.TagOwnersSnippet)
+		if c := snippetConnects(preflightPolicy(pf)); !c.Empty() { // policysnippet.go
+			fmt.Printf("  add to your tailnet policy:\n")
+			printPaste(c, "    ")
 		}
 		if len(pf.MissingTagOwners) > 0 && !applying { // --apply-policy: the plan that follows says what is written
 			printCallerGrant(a.Cfg.Tailnet.Tags, a.Cfg.Tailnet.HTTPS, pf.Service) // callergrant.go
-		}
-		if len(pf.Missing) > 0 {
-			fmt.Printf("  add to \"grants\" in your tailnet policy:\n")
-			for _, g := range pf.MissingGrants() {
-				fmt.Printf("    %s\n", g.Snippet)
-			}
 		}
 	}
 }

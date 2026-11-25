@@ -38,7 +38,7 @@ func TestServiceCallerGrant(t *testing.T) {
 		t.Errorf("serviceCallerGrant\n got %s\nwant %s", got, want)
 	}
 	pf := mgmt.PreflightResult{Service: "svc:support"}
-	if s := policySnippet(pf, callerGrant([]string{"tag:tw-wl-support"}, false), want); !strings.Contains(s, want+", // calls through svc:support") {
+	if s := policySnippet(pf, callerGrantEntry([]string{"tag:tw-wl-support"}, false), serviceCallerGrantEntry("svc:support")); !strings.Contains(s, want+", // calls through svc:support") {
 		t.Errorf("policy snippet lacks the Service grant:\n%s", s)
 	}
 }

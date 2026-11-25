@@ -36,9 +36,8 @@ for (let i = 0; i < args.length; i++) {
   const m = args[i].match(/^--?([a-z-]+)(?:=(.*))?$/);
   if (!m) { positional.push(args[i]); continue; }
   const [, flag, inline] = m;
-  if (flag === "keep-tags") { opts[flag] = true; continue; }
   if (!valueFlags.has(flag)) {
-    console.error(`create-tailworks: unknown flag --${flag} (want --template, --name, --tags, --object-tags, --keep-tags)`);
+    console.error(`create-tailworks: unknown flag --${flag} (want --template, --name, --tags, --object-tags)`);
     process.exit(2);
   }
   const v = inline ?? args[++i];
@@ -67,12 +66,11 @@ const twArgs = ["init", dir, "--template", template];
 if (opts.name !== undefined) twArgs.push("--name", opts.name);
 if (opts.tags !== undefined) twArgs.push("--tags", opts.tags);
 for (const v of opts["object-tags"]) twArgs.push("--object-tags", v);
-if (opts["keep-tags"]) twArgs.push("--keep-tags");
 const tw = spawnSync("tw", twArgs, { stdio: "inherit" });
 if (!tw.error) process.exit(tw.status ?? 1);
 // Tags are the grant unit: don't scaffold without the ones asked for.
-if (opts.tags !== undefined || opts["object-tags"].length || opts["keep-tags"]) {
-  console.error("create-tailworks: --tags, --object-tags and --keep-tags need the tailworks CLI (tw is not on PATH)");
+if (opts.tags !== undefined || opts["object-tags"].length) {
+  console.error("create-tailworks: --tags and --object-tags need the tailworks CLI (tw is not on PATH)");
   console.error(`  run: npx tailworks ${twArgs.map((a) => (/^[\w.:,=@/-]+$/.test(a) ? a : JSON.stringify(a))).join(" ")}`);
   process.exit(2);
 }

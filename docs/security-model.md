@@ -51,7 +51,12 @@ vulnerability, see [SECURITY.md](../SECURITY.md).
   directory that workloads' sandboxes can't read. mgmt reads the key and
   deletes the file before it joins; a failed start deletes it too, and so
   does `tw up` when it returns. A host's own join key
-  (`~/.tailworks/hostd/join.env`) is handled the same way.
+  (`~/.tailworks/hostd/join.env`) is handled the same way. The join file
+  `tw host add` writes for another machine (0600) carries that host's
+  single-use key and one-time registration secret, plus non-secret
+  settings (host ID, mgmt's URL, control URL); tw-hostd deletes it after
+  the join and keeps only the settings and the registration secret beside
+  the node state (0600).
 - **Kill is a network cut.** `tw kill` tombstones the object, its node
   stops answering (410), and with the Devices scope the device is deleted.
 
@@ -480,9 +485,11 @@ The red team's open items are tracked in
   caller (ledger H08, F5). Three more limits apply. A `cf` passed as
   plain data, rather than on a `Request`, isn't checked. A `Request` passed
   as an RPC argument is checked for facet objects but not for plain DOs
-  (`"egress": "workload"`). And plain DOs run in the same isolate as the
+  (`"egress": "workload"`, and internal classes: `"node": false` or not
+  in `tailnet.objects`). And plain DOs run in the same isolate as the
   Worker, so code that rewrites that isolate's JavaScript built-ins can
-  defeat any check made there. Facet objects (the default) each get
+  defeat any check made there. Facet objects (classes listed in
+  `tailnet.objects` with tags, in the default egress mode) each get
   their own isolate.
 - **Isolates are not a side-channel boundary inside a workload.** The
   objects of one workload and the platform wrapper that holds its key

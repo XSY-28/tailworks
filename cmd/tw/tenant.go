@@ -166,7 +166,7 @@ type tenantAddResult struct {
 func cmdTenantAdd(args []string) error {
 	f := newFlags("tenant add")
 	oauthFile := f.String("oauth-client-file", "", "this tailnet's OAuth client (mint mode \"oauth\"): 0600 file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:tw); read at use, never copied. Omitted on a terminal: asked for and saved to ~/.config/tailworks/<tenant>-oauth.env")
-	keyFile := f.String("api-key-file", "", "--control=headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied")
+	keyFile := f.String("api-key-file", "", "Headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied. With a non-default --control-url it selects the Headscale profile")
 	profile := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; the tailnet argument is its dns.base_domain)")
 	apply := f.Bool("apply-policy", false, "--control=headscale: write the owner tag's tagOwners entry (\"tag:tw\": []) when it is missing instead of printing it (additive, validated first, written with If-Match); shows the line and asks first. Without the flag it asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes. A Tailscale tenant's policy is never written")
 	yes := yesFlagBefore(f, "--apply-policy writes the policy")
@@ -181,6 +181,9 @@ func cmdTenantAdd(args []string) error {
 		return fail("bad_request", "tw tenant add needs one tailnet", "usage: tw "+usageOf("tenant"))
 	}
 	tailnet := strings.TrimSuffix(pos[0], ".")
+	if headscaleInferred(f.FlagSet, *keyFile, *control) { // up_headscale.go
+		*profile = controlHeadscale
+	}
 	if err := checkControlProfile(*profile, *control, "tenant add"); err != nil {
 		return err
 	}
@@ -188,13 +191,13 @@ func cmdTenantAdd(args []string) error {
 	switch {
 	case hs && *oauthFile != "":
 		return fail("profile_unsupported", "the Headscale profile mints with a Headscale API key: OAuth clients are a Tailscale feature").
-			withFix("tw tenant add " + tailnet + " --control=headscale --control-url <server_url> --api-key-file <file with HEADSCALE_API_KEY=…>")
+			withFix("tw tenant add " + tailnet + " --control-url <server_url> --api-key-file <file with HEADSCALE_API_KEY=…>")
 	case hs && *keyFile == "":
 		_, err := headscaleKeyFile("")
 		return err
 	case !hs && *keyFile != "":
 		return fail("mint_mode_removed", "tw no longer mints with a Tailscale API key (--api-key-file is for --control=headscale only)").
-			withFix("tw tenant add " + tailnet + " --oauth-client-file <file>   (an OAuth client of that tailnet: Auth Keys write, tag tag:tw)")
+			withFix("tw tenant add "+tailnet+" --oauth-client-file <file>   (an OAuth client of that tailnet: Auth Keys write, tag tag:tw)", headscaleOnHint)
 	case !hs && *oauthFile == "" && !tenantOAuthPromptable(f, *ownerTag, *namePrefix): // tenant_oauth.go
 		return tenantNeedsOAuthFile(tailnet)
 	}

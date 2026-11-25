@@ -216,7 +216,9 @@ with an `https://` `request.url` (as on Cloudflare) and
 ### `tailnet.objects.<Class>`
 
 `<Class>` is a class name from `wrangler.jsonc` `durable_objects.bindings`.
-A class listed here with no matching binding is an error.
+A class listed here with no matching binding is an error. A class that
+isn't listed is internal, as with `"node": false`: a plain Durable Object
+with no node of its own.
 
 | key | type | default | what it does |
 |---|---|---|---|

@@ -93,7 +93,7 @@ func TestModeChoiceAndTypedErrors(t *testing.T) {
 	}
 	pe := policyMissingTagOwners("why", nil, nil)
 	fix := strings.Join(pe.Fix, "\n")
-	if pe.Code != "policy_missing_tag_owners" || !strings.Contains(fix, `"tag:tw-mgmt": ["autogroup:admin","tag:tw"]`) || !strings.Contains(fix, `"tag:tw-host": ["autogroup:admin","tag:tw"]`) {
+	if pe.Code != "policy_missing_tag_owners" || !strings.Contains(fix, `"tag:tw-mgmt": ["autogroup:admin", "tag:tw"]`) || !strings.Contains(fix, `"tag:tw-host": ["autogroup:admin", "tag:tw"]`) {
 		t.Fatalf("policy_missing_tag_owners fix:\n%s", fix)
 	}
 }

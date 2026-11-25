@@ -24,10 +24,12 @@ an older server with `profile_unsupported`. Tested against v0.29.7 with
 | HTTPS on mgmt's node | when the tailnet has HTTPS certificates | plain HTTP on `:80` (WireGuard-encrypted, WhoIs-authenticated) |
 | `tailnet.https` (a workload on `https://`) | when the tailnet has HTTPS certificates | not available: Headscale issues no ts.net certificates, so the deploy fails with `tailnet_https_unavailable` |
 | Policy owners | `autogroup:admin`, `tag:tw` | `tag:tw` only. Headscale rejects `autogroup:admin` |
+| Caller grant (`--apply-policy` on a new app) | `autogroup:member` → the app's tag | the same: Headscale accepts `autogroup:member` as a grant source. `autogroup:admin` and other autogroups are left out |
 
 Everything else works the same way: Durable Objects with their own nodes,
-WhoIs callers (`getCaller`), on-behalf-of assertions, spawn narrowing, the
-pre-joined node pool, audit and deploy preflight.
+WhoIs callers (`getCaller`), spawn narrowing, the pre-joined node pool,
+audit and deploy preflight. (On-behalf-of assertions aren't built on either
+profile: RFC §4.6.)
 
 ## Set up Headscale
 
@@ -39,7 +41,9 @@ You need a Headscale server with:
   policy. With `policy.mode: file`, tailworks prints the snippet and you add it to
   the file yourself.
 
-Create an API key on the Headscale server and put it in a `0600` file:
+Create an API key on the Headscale server and put it in a `0600` file.
+`~/.config/tailworks/headscale.env` is where `tw up` looks for it by
+default:
 
 ```sh
 headscale apikeys create --expiration 90d
@@ -49,11 +53,15 @@ umask 077; echo 'HEADSCALE_API_KEY=<the key>' > ~/.config/tailworks/headscale.en
 ## Start tailworks
 
 ```sh
-tw up --control=headscale \
-  --control-url https://headscale.example.net \
-  --tailnet hs.example.net \
-  --api-key-file ~/.config/tailworks/headscale.env
+tw up --control-url https://headscale.example.net --tailnet hs.example.net
 ```
+
+A `--control-url` other than Tailscale's selects the Headscale profile when
+there is an API key: `--api-key-file <file>`, or, on the default state dir
+(`~/.tailworks`), `~/.config/tailworks/headscale.env` when it exists.
+`tw up` never asks for the key or creates that file. `--control=headscale`
+is also accepted. `--tailnet` is the server's `dns.base_domain`: an API key
+doesn't name it.
 
 `--control-url` is Headscale's `server_url`. Its REST API is served at the
 same URL. `tw up` checks the key against the server, then writes the
@@ -86,7 +94,7 @@ their own device with it.
 An existing tw host can also serve a Headscale tailnet as a second tenant:
 
 ```sh
-tw tenant add hs.example.net --control=headscale \
+tw tenant add hs.example.net \
   --control-url https://headscale.example.net --api-key-file ~/.config/tailworks/headscale.env
 ```
 
@@ -134,8 +142,9 @@ deploy refuses them with `profile_unsupported`.
 another with `HEADSCALE_IMAGE=headscale/headscale:<tag>`) and runs:
 
 - the policy conformance check: the profile's policy is accepted, and what
-  it leaves out (`autogroup:admin`, `funnel`, `svc:`, postures, `app` in
-  `nodeAttrs`) really is rejected by that release;
+  it leaves out (`autogroup:admin` as an owner or a source, `funnel`,
+  `svc:`, postures, `app` in `nodeAttrs`) really is rejected by that
+  release, and the caller grant from `autogroup:member` is accepted;
 - the node lifecycle: mint, join, single-use, node-side rename (the node
   pool), delete;
 - the version gate: v0.28.0 is refused before anything is minted;

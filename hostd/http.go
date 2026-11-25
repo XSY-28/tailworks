@@ -420,6 +420,8 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 			}
 			v := h.objView(o)
 			v["epoch"] = wl.epochNow() // the lease epoch: fencing tokens (docs/locks.md)
+			v["workload"] = wl.name
+			v["deploymentId"] = inst.depID
 			writeJSON(w, 200, v)
 		case "spawn":
 			c := inst.app.Classes[req.Class]
@@ -558,8 +560,10 @@ func (h *Host) hostAPI(inst *instance) http.Handler {
 
 // ---- push API (mgmt → hostd) and status ----
 
-// pushHandlers registers the pushes mgmt sends a host: kills and
-// assignment changes. They are served on both push surfaces.
+// pushHandlers registers what mgmt sends a host: the pushes (kill,
+// assignments, probe, upgrade) and its calls for logs, store admin and
+// approvals. They are served on every surface: the tsnet push port, the
+// local socket and in-process (docs/contracts/hostd-api.md).
 func (h *Host) pushHandlers(m *http.ServeMux) {
 	m.HandleFunc("POST /v1/push/kill", func(w http.ResponseWriter, r *http.Request) {
 		var k mgmtapi.KillOrder
@@ -595,19 +599,19 @@ func (h *Host) pushHandlers(m *http.ServeMux) {
 }
 
 // tsnetPushAPI is what the host's own tailnet node serves (Config.
-// PushListener): the pushes only, each authenticated as coming from mgmt's
-// node (pushAuth). Status, purge and VM checks are the operator's and stay
-// on the local socket.
+// PushListener): pushHandlers' routes only, each authenticated as coming
+// from mgmt's node (pushAuth). Status, purge, teardown and VM checks are
+// the operator's and stay on the local socket.
 func (h *Host) tsnetPushAPI() http.Handler {
 	m := http.NewServeMux()
 	h.pushHandlers(m)
 	return h.pushAuth.handler(m)
 }
 
-// PushHandler is the push API (POST /v1/push/kill, POST /v1/push/assignments)
-// for mgmt running in the same process (Config.PushInProcess): mgmt serves
-// each push through it directly, so there is no peer to authenticate. It
-// routes nothing else (status and purge stay on the local socket).
+// PushHandler is the push API (pushHandlers' routes) for mgmt running in
+// the same process (Config.PushInProcess): mgmt serves each push through
+// it directly, so there is no peer to authenticate. It routes nothing else
+// (status, purge, teardown and VM checks stay on the local socket).
 func (h *Host) PushHandler() http.Handler {
 	m := http.NewServeMux()
 	h.pushHandlers(m)

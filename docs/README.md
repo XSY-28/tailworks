@@ -69,6 +69,8 @@ design records (`design/`) don't; read them here on GitHub.
 - Wait for a person's approval: [approvals.md](approvals.md)
 - Serve a webhook or OAuth callback to the internet:
   [public-ingress.md](public-ingress.md)
+- Use your MCP server from claude.ai or ChatGPT (OAuth via tsidp):
+  [mcp-public.md](mcp-public.md)
 - Give a workload a stable name, or replicas: [services.md](services.md)
 - Run one job at a time (locks, leader election): [locks.md](locks.md)
 - Run a container or code sandbox: [containers.md](containers.md)
@@ -92,6 +94,7 @@ design records (`design/`) don't; read them here on GitHub.
 - Error codes and their fixes: [errors.md](errors.md)
 - `--json` output: [cli-json.md](cli-json.md)
 - The management API: [contracts/mgmt-api.md](contracts/mgmt-api.md)
+- The host agent's own API: [contracts/hostd-api.md](contracts/hostd-api.md)
 - Every limit, and the ones that don't exist: [limits.md](limits.md)
 - What changed in each release: [CHANGELOG.md](../CHANGELOG.md)
 - Versions and release notes: [RELEASING.md](RELEASING.md#versions),

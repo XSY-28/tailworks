@@ -264,7 +264,7 @@ func TestCLILink(t *testing.T) {
 	if up.MgmtIP == "" || up.MgmtNode == "" || up.MintMode != "oauth" {
 		t.Fatalf("tw up with a mgmt node: %+v", up)
 	}
-	if _, se, _, err := host.Tw("up", "--api-key-file", keyFile, "--yes", "--control-url", ctl.URL); err == nil || !strings.Contains(se, "mint_mode_removed") {
+	if _, se, _, err := host.Tw("up", "--control", "tailscale", "--api-key-file", keyFile, "--yes", "--control-url", ctl.URL); err == nil || !strings.Contains(se, "mint_mode_removed") {
 		t.Fatalf("tw up --api-key-file (Tailscale) should be mint_mode_removed: %v %s", err, se)
 	}
 	// A second tw up (supervisor running) must not touch the node.
@@ -649,7 +649,7 @@ func TestCLIOAuth(t *testing.T) {
 	minted := fts.n
 	fts.mu.Unlock()
 	_, se, _, err := e.Tw(up...)
-	if err == nil || !strings.Contains(se, "policy_missing_tag_owners") || !strings.Contains(se, `"tag:tw-mgmt": ["autogroup:admin","tag:tw"]`) {
+	if err == nil || !strings.Contains(se, "policy_missing_tag_owners") || !strings.Contains(se, `"tag:tw-mgmt": ["autogroup:admin", "tag:tw"]`) {
 		t.Fatalf("policy without tag:tw owners: %v %s", err, se)
 	}
 	upApplyPolicyRefusals(t, e, up, func() (int, int) { // up_policyapply_ext_test.go

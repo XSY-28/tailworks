@@ -133,10 +133,6 @@ type Project struct {
 	// than under tw dev.
 	ExpectDeployed Expect
 
-	// ExpectDev, when its Kind isn't ExpectPass, replaces Expect in the
-	// tw dev run: the example runs on a real host but not under tw dev.
-	ExpectDev Expect
-
 	// TailnetHTTPS sets tailworks.jsonc tailnet.https in the overlay
 	// (#360): the deployed run calls the workload at
 	// https://<magicDNS> and gives an OriginVar that origin. tw dev
@@ -149,9 +145,6 @@ type Project struct {
 func (p *Project) ExpectIn(mode string) Expect {
 	if mode == "deployed" && p.ExpectDeployed.Kind != ExpectPass {
 		return p.ExpectDeployed
-	}
-	if mode == "dev" && p.ExpectDev.Kind != ExpectPass {
-		return p.ExpectDev
 	}
 	return p.Expect
 }
@@ -185,7 +178,7 @@ func Validate(ps []*Project, anchors map[string]bool) error {
 		if p.What == "" || len(p.Exercises) == 0 {
 			bad("needs What and Exercises")
 		}
-		for _, a := range append(append([]string{}, p.Exercises...), p.Expect.Compat, p.ExpectDeployed.Compat, p.ExpectDev.Compat) {
+		for _, a := range append(append([]string{}, p.Exercises...), p.Expect.Compat, p.ExpectDeployed.Compat) {
 			if a != "" && anchors != nil && !anchors[a] {
 				bad("COMPAT.md has no anchor %q", a)
 			}
@@ -203,9 +196,6 @@ func Validate(ps []*Project, anchors map[string]bool) error {
 			if p.Probe == nil || p.Expect.Compat == "" {
 				bad("an expected probe failure needs a probe and Expect.Compat")
 			}
-		}
-		if p.ExpectDev.Kind != ExpectPass && (p.ExpectDev.Kind != ExpectProbeFail || p.ExpectDev.Compat == "" || p.Expect.Kind != ExpectPass) {
-			bad("ExpectDev is only for an expected probe failure (with Compat) of a project that otherwise passes")
 		}
 		if p.NoOverlay && p.Expect.Kind != ExpectRefused {
 			bad("NoOverlay is only for expected refusals")

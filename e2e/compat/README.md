@@ -120,7 +120,7 @@ What the published result means:
   entry, a scripted model). `Workarounds` are install mechanics (a
   workspace dependency pinned to its published version, `npm install`
   outside the monorepo) and don't make a pass "with change".
-- **fail**: an `Expect` (both modes), `ExpectDeployed` (deployed only) or `ExpectDev` (`tw dev` only),
+- **fail**: an `Expect` (both modes) or `ExpectDeployed` (deployed only),
   with the issue it is tied to. The run stays green while it fails the
   expected way, and reports XPASS when it starts passing.
 - **not run**: `UpstreamNotRun()`.
@@ -140,13 +140,10 @@ Responses API calls with a scripted stream. That is listed as a change.
    an object, `env.X` had only `getByName`, so `getAgentByName`'s
    `env.X.get(env.X.idFromName(name))` passed a pending RPC result to
    `get()`. All 9 pass now.
-2. **Open under `tw dev` ([#355](https://github.com/rosskukulinski/tailworks/issues/355)): agents reached through the imported env are not created.**
+2. **Open ([#355](https://github.com/rosskukulinski/tailworks/issues/355)): agents reached through the imported env are not created.**
    `cross-domain` and `mcp-elicitation` pass
    `import { env } from "cloudflare:workers"` to the Agents SDK and get
-   `create_not_admitted` under `tw dev`, which gives every class a node.
-   Deployed they pass since [#359](https://github.com/rosskukulinski/tailworks/issues/359):
-   a class not in `tailnet.objects` has no node and needs no create
-   admission (`Project.ExpectDev`).
+   `create_not_admitted`.
 3. **Fixed ([#356](https://github.com/rosskukulinski/tailworks/issues/356)): the built-in bundler and CommonJS `require()` of a Node builtin.**
    A Worker with `dotenv` in it bundled and then couldn't start. With
    `nodejs_compat` the built-in bundler now turns such a `require()` into
