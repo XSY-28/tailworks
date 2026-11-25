@@ -29,7 +29,3 @@ and `-count=3 -run TestWorkloadReplicas` passed.
 
 #429 (netd) was dropped from this branch: its cause is not settled. See
 the issue.
-
-## Tests (detail)
-
-See the PR body.
