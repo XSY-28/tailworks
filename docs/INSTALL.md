@@ -440,9 +440,13 @@ With more than one host, mgmt picks the host at deploy
 {
   "tailnet": { "tags": ["tag:api"], "connects": ["tag:db"] },
   "placement": { "mode": "smart" }   // the default when connects is set; "off" to disable
-  // "placement": { "targets": ["pg-primary"], "aggregate": "worst" }  // or "sum" over several targets
 }
 ```
+
+Advanced: `"placement": { "targets": ["pg-primary"] }` places close to other
+peers than `tailnet.connects`, and with several targets `"aggregate"` picks
+how their paths combine: `"worst"` (the default) or `"sum"`
+([tailworks-jsonc.md](tailworks-jsonc.md#placement)).
 
 ```
 $ tw deploy

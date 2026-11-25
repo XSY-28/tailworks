@@ -172,6 +172,10 @@ type app struct {
 
 	// Pages is a Cloudflare Pages project (pages.go); nil for a Worker.
 	Pages *pagesProject
+
+	// WranglerName is the wrangler config's top-level "name", before
+	// --env (appname.go compares it with tailworks.jsonc's).
+	WranglerName string
 }
 
 func loadApp(dir, name string) (*app, error) { return loadAppWith(dir, name, appOpts{}) }
@@ -235,6 +239,7 @@ func loadAppWith(dir, name string, o appOpts) (*app, error) {
 		return nil, fail("bad_request", "tailworks.jsonc has no tailnet.tags (the workload node's tags)").
 			withFix(`add "tailnet": { "tags": ["tag:tw-wl-` + a.Name + `"] }`)
 	}
+	a.Warnings = append(a.Warnings, a.nameNotes(name, top.Name)...) // appname.go
 	if a.Pages != nil {
 		secrets, _ := typesSecrets(a)
 		_, declared := genTypes(a, a.Dir, secrets)
@@ -391,7 +396,7 @@ type deployResult struct {
 
 func cmdDeploy(args []string) error {
 	f := newFlags("deploy")
-	name := f.String("name", "", "workload name (default: tailworks.jsonc name)")
+	name := f.String("name", "", "workload name (default: tailworks.jsonc name, then wrangler name, then the directory)")
 	allowMissing := f.Bool("allow-missing-grants", false, "deploy even if tailnet.connects grants are missing")
 	applyPolicy := f.Bool("apply-policy", false, "when the preflight finds tagOwners, grants, funnel nodeAttrs or Service auto-approval missing, write them to the tailnet policy first (as tw policy --apply)")
 	yes := f.Bool("yes", false, "with --apply-policy: write the policy without asking (needed without a terminal, and with --json)")

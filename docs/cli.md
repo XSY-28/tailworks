@@ -425,7 +425,7 @@ flags:
   -json
     	machine-readable output
   -name string
-    	workload name (default: tailworks.jsonc name)
+    	workload name (default: tailworks.jsonc name, then wrangler name, then the directory)
   -no-wait
     	return once mgmt accepted the deploy
   -platform string
@@ -471,7 +471,7 @@ flags:
   -json
     	machine-readable output
   -name string
-    	workload name (default: tailworks.jsonc name)
+    	workload name (default: tailworks.jsonc name, then wrangler name, then the directory)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string

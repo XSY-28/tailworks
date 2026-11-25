@@ -196,7 +196,8 @@ var (
 
 // entries reads a "containers" value: an array of entries (Cloudflare's
 // shape), or, in tailworks.jsonc, an object keyed by class ({"<Class>": {"image":
-// ref, "images": {name: ref}}}: the pins tw deploy writes).
+// ref, "images": {name: ref}}}: per-class image refs you pin; mgmt records
+// the digests it resolves in the deployment).
 func entries(src string, b []byte) ([]entry, error) {
 	var doc struct {
 		Containers json.RawMessage `json:"containers"`
@@ -274,7 +275,7 @@ func Parse(wrangler, tw []byte) ([]Class, error) {
 				if !IsBuildSource(e.Image) {
 					c.Image = e.Image
 				} else if src.name != "wrangler" {
-					return nil, fmt.Errorf("%s: containers.%s: image %q must be an image reference (tailworks.jsonc pins what tw deploy built)", src.name, name, e.Image)
+					return nil, fmt.Errorf("%s: containers.%s: image %q must be an image reference (tailworks.jsonc holds per-class image refs you pin; build sources go in wrangler.jsonc)", src.name, name, e.Image)
 				}
 			}
 			if err := c.setImages(src.name, e.Images, fromWrangler); err != nil {

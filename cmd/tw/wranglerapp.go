@@ -81,6 +81,7 @@ func (a *app) loadWrangler(twName string) (string, error) {
 	if err != nil {
 		return "", fail("bad_request", file+": "+err.Error())
 	}
+	a.WranglerName, _ = cfg["name"].(string)
 	rebaseWranglerPaths(cfg, filepath.Dir(file)) // viteredirect.go: "." unless redirected
 	w, explicit, notes, err := applyWranglerEnv(cfg, a.Opts.Env, file)
 	if err != nil {
