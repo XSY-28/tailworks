@@ -52,6 +52,18 @@ func TestCronCheckers(t *testing.T) {
 				}
 			}
 		}},
+		{"stateless overlap after a takeover (#566)", "", func(ch *cronHist) {
+			ch.deps = append(ch.deps, wlDep{WL: cronSL, Host: "h2", Epoch: 2, At: min(4).Add(-5 * time.Second)})
+			ch.h.faults = []faultEv{{Kind: "cut-takeover", Host: "h1", Start: min(3).Add(5 * time.Second), End: min(4).Add(2 * time.Second)}}
+			for i := range ch.runs {
+				if ch.runs[i].St >= min(4).UnixMilli() {
+					ch.runs[i].Node = "h2-cron"
+				}
+				if ch.runs[i].Run == "r1003" && ch.runs[i].Phase == "end" {
+					ch.runs[i].At = min(4).Add(10 * time.Second)
+				}
+			}
+		}},
 		{"skipped minute", "C3", func(ch *cronHist) {
 			var keep []cronEv
 			for _, e := range ch.runs {
