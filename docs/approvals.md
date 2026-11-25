@@ -131,6 +131,11 @@ amount, and the on-call bot may only reject:
 A refused decision is `403 cap_missing`, naming what was missing and the
 grant to add (`snippet`); the instance keeps waiting.
 
+An approval is decided once. The first decision tailworks accepts is the
+one delivered; any other, including one sent at the same moment by
+another approver, gets `409 approval_not_pending`
+(`hostd:TestDecideApprovalOnce`).
+
 The Workflow can add its own rules on top, on tailworks' verified identity. The
 template refuses an approval by the person who asked for the refund:
 
