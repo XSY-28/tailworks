@@ -29,7 +29,7 @@ if (args[0] === "build-node") {
 
 const ti = args.indexOf("--template");
 const template = ti >= 0 ? args[ti + 1] : "hello";
-const dir = args.find((a, i) => !a.startsWith("--") && i !== ti + 1) ?? template;
+const dir = args.find((a, i) => !a.startsWith("--") && (ti < 0 || i !== ti + 1)) ?? template;
 const available = readdirSync(templates);
 if (!available.includes(template)) {
   console.error(`create-tailworks: unknown template "${template}" (available: ${available.join(", ")})`);
@@ -39,19 +39,23 @@ if (existsSync(dir) && readdirSync(dir).length) {
   console.error(`create-tailworks: ${dir} exists and is not empty`);
   process.exit(2);
 }
-// `npm create tailworks`: with the tailworks CLI installed (the release
-// tarball, or npm install -g tailworks), `tw init` does it (it also names the
-// workload and its tags after the directory); without it, copy the template
-// as it is, and point at `npx tailworks`.
+// Use tw init when available; otherwise scaffold from the packaged template.
 const tw = spawnSync("tw", ["init", dir, "--template", template], { stdio: "inherit" });
 if (!tw.error) process.exit(tw.status ?? 1);
+const { renameScaffold, workloadLabel } = await import("../lib/scaffold-names.mjs");
+const workload = workloadLabel(path.basename(path.resolve(dir)));
+if (!workload) {
+  console.error(`create-tailworks: can't derive a workload name from ${dir}`);
+  process.exit(2);
+}
 cpSync(path.join(templates, template), dir, { recursive: true });
 // npm drops .gitignore from published packages: templates ship "gitignore".
 if (existsSync(path.join(dir, "gitignore"))) renameSync(path.join(dir, "gitignore"), path.join(dir, ".gitignore"));
+renameScaffold(dir, workload);
 // The same two next steps tw init prints (cmd/tw/templates.go), in their
 // npx forms.
 const cd = `cd ${dir} && ${template === "node-workflow" ? "npm install && " : ""}npx tailworks dev`;
-console.log(`created ${dir} from template ${template}`);
+console.log(`created ${dir} from template ${template} (workload "${workload}")`);
 console.log(`  ${cd.padEnd(40)} # try it here, no tailnet`);
 console.log(`  ${"npx tailworks deploy --apply-policy".padEnd(40)} # shows the policy lines, asks, writes, deploys`);
 if (template === "ai-agent") console.log(`  its tools need the mcp template deployed as workload "mcp" and a grant: see ${path.join(dir, "README.md")}`);

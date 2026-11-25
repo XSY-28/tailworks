@@ -77,9 +77,8 @@ How it differs from a tarball install:
   and `tw` then says so. Reinstall without it.
 - **Size:** about 120 MB to download and 400 MB on disk, mostly workerd.
 
-`npm create tailworks` runs `tw init` when `tw` is on your PATH, so an
-`npm install -g tailworks` makes it name the app's workload and tags after
-the directory.
+`npm create tailworks` names the workload and tags after the destination.
+It uses `tw init` on PATH or copies the packaged template locally.
 
 To remove it: `tw down --service` (if you ran `tw up`), then
 `npm uninstall -g tailworks`. Your state in `~/.tailworks` stays until you

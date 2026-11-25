@@ -8,8 +8,9 @@ npm create tailworks@latest my-app -- --template hello
 cd my-app && npm install && npx tsc --noEmit
 ```
 
-With the `tw` CLI on your PATH this runs `tw init`; otherwise it copies
-the template. The templates are in [`templates/`](templates/):
+With the `tw` CLI on your PATH this runs `tw init`. Otherwise it copies the
+packaged template locally. Both paths name the workload, package, and template
+tags after the destination directory. The templates are in [`templates/`](templates/):
 
 - `hello`: a Worker that returns its verified caller and does a private fetch.
 - `agent`: a Cloudflare Agents SDK `Agent` (state, `this.sql`, per-object node

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -52,10 +51,13 @@ func appTags(raw []byte, wl string) ([]byte, map[string]string, error) {
 			}
 		}
 	}
+	// A generated tag can equal another template tag. Replace each original
+	// occurrence once so the result does not depend on map iteration order.
+	replacements := make([]string, 0, len(rename)*2)
 	for old, nu := range rename {
-		raw = bytes.ReplaceAll(raw, []byte(`"`+old+`"`), []byte(`"`+nu+`"`))
+		replacements = append(replacements, `"`+old+`"`, `"`+nu+`"`)
 	}
-	return raw, rename, nil
+	return []byte(strings.NewReplacer(replacements...).Replace(string(raw))), rename, nil
 }
 
 // initTags lists the tags of the app in dir, for tw init's summary.

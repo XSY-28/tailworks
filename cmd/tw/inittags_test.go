@@ -57,6 +57,19 @@ func TestClassLabel(t *testing.T) {
 	}
 }
 
+func TestAppTagsDoesNotRenameGeneratedTagsAgain(t *testing.T) {
+	t.Parallel()
+	const input = `{"name":"ai-agent","tailnet":{"tags":["tag:tw-wl-ai-agent"],"objects":{"AiAgent":{"tags":["tag:tw-wl-wl"]}}}}`
+	const want = `{"name":"ai-agent","tailnet":{"tags":["tag:tw-wl-wl"],"objects":{"AiAgent":{"tags":["tag:tw-wl-ai-agent"]}}}}`
+	out, _, err := appTags([]byte(input), "wl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != want {
+		t.Errorf("got %s, want %s", out, want)
+	}
+}
+
 // TestInitNamesPackage: tw init names the npm package after the app (not
 // "tw-hello") and gives every template an `npm run dev`.
 func TestInitNamesPackage(t *testing.T) {
