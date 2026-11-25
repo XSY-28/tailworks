@@ -31,6 +31,9 @@ Last update: 2026-11-25 PT. #514 and #512: admin UI enum lists from the spec; ta
   `TestStoreAuditWorkloadAndObjectFilters/postgres` (backfill SQL on PG)
 - `make lint`: ok (after merging origin/master)
 - `make test` (mbp, after merging origin/master): ok
+- `make e2e-multimgmt`: 9 scenarios failed only from a concurrent run on
+  the same Docker (`tw-mm-pg` name conflict, shared store); rerun alone,
+  all 9 pass.
 
 ## Gaps
 
