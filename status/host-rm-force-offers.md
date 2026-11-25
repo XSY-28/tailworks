@@ -60,3 +60,10 @@ Two issues from the interface-simplification audit (#434).
   Rerun on their own, `go test ./netd -run 'TestService$'` and
   `go test ./hostd -run 'TestTelemetry$'`: both ok.
 - `make e2e-placement`: ok (36.5 s).
+- Merged origin/master again (`8cbbbd40`, #504/#506/#510; one conflict in
+  docs/tailworks-jsonc.md's `name`/`runtime` rows: took master's `name`
+  row, kept "Node runtime"). `make lint`: ok. `go test ./cmd/tw/...
+  ./mgmt/... ./schema/...`: ok. `make test`: ok except two load timeouts
+  (`mgmt TestRT3_H23_PlacementPoison`, a heartbeat that missed its 10 s
+  window; `hostd TestR2Binding/fs/worker/Multipart`, hostd's run took
+  1060 s). Rerun on their own: both ok.
