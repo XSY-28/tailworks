@@ -9,10 +9,11 @@ the `tw` CLI alone. Every prerequisite is in [one table](#prerequisites).
 The path through this page: install on [macOS](#macos) or [Linux](#linux),
 then your first deploy (the [README quick start](../README.md#quick-start),
 and [troubleshooting](troubleshooting.md) if it doesn't answer), then
-[upgrade](#upgrade) and [uninstall](#uninstall) when the time comes. Also
-here: [trying an app without a tailnet](#try-it-without-a-tailnet), how
-workloads are [isolated](#isolation), and [tuning](#tuning-how-fast-a-new-objects-own-node-comes-up).
-The words (tenant, workload, tier, …) are explained in
+[upgrade](#upgrade), [back up](#back-up-and-restore) and
+[uninstall](#uninstall) when the time comes. More than one machine (`tw
+host add`, placement, sizing): [hosts.md](hosts.md). How workloads are
+isolated: [security-model.md](security-model.md#isolation-tiers). The
+words (tenant, workload, tier, …) are explained in
 [concepts.md](concepts.md). Where each platform is tested, and what was
 measured there: [install-testing.md](install-testing.md). What `tw up` runs,
 the ports and devices it adds and the files it writes, on one page:
@@ -221,49 +222,26 @@ Funnel, no HTTPS requirement.**
 
 1. **Policy first** (admin console › Access controls). `tag:tw` must own
    mgmt's and the host's tags, so the client can mint their keys. Only the
-   `"tag:tw"` line has to be pasted by hand: with **Policy File › Write**
-   on the client (step 2), `tw up --apply-policy` (step 3) writes the
-   rest. Or paste all of it:
-   ```jsonc
-   "tagOwners": {
-     "tag:tw":      ["autogroup:admin"],
-     "tag:tw-mgmt": ["autogroup:admin", "tag:tw"],
-     "tag:tw-host": ["autogroup:admin", "tag:tw"],
-   },
-   "grants": [
-     // hosts call mgmt's API; mgmt pushes kills to the hosts
-     {"src": ["tag:tw-host"], "dst": ["tag:tw-mgmt"], "ip": ["tcp:443", "tcp:80"]},
-     {"src": ["tag:tw-mgmt"], "dst": ["tag:tw-host"], "ip": ["tcp:7474"]},
-     // admins may use tw over the tailnet (tw link)
-     {"src": ["autogroup:admin"], "dst": ["tag:tw-mgmt"], "ip": ["tcp:443", "tcp:80"], "app": {"github.com/rosskukulinski/tailworks/cap/admin": [{}]}},
-     // optional: let your Prometheus scrape /metrics (observability.md)
-     // {"src": ["tag:prometheus"], "dst": ["tag:tw-host", "tag:tw-mgmt"], "ip": ["tcp:9464"]},
-   ],
-   // no nodeAttrs: mgmt never uses Funnel
-   ```
-   `tag:tw` must exist before the console lets you tag a client with it.
+   `"tag:tw": ["autogroup:admin"]` line in `tagOwners` has to be pasted by
+   hand (the tag must exist before the console lets you tag a client with
+   it): with **Policy File › Write** on the client (step 2), `tw up
+   --apply-policy` (step 3) writes the rest. The whole snippet, to paste
+   yourself instead, is in step 2 of the
+   [README quick start](../README.md#quick-start) (offline: `tw docs show
+   ../README.md#quick-start`); `tw up` prints the lines that are missing. To let your Prometheus
+   scrape `/metrics`, add the grant in
+   [observability.md](observability.md).
 2. **Generate the client** (admin console › Settings › Trust credentials ›
-   **Credential** › **OAuth**). When a scope asks for a tag, pick **`tag:tw`**:
-   - **Auth Keys › Write**, tag **`tag:tw`** (required);
-   - optionally **Devices › Core › Write**, tag **`tag:tw`**: `tw kill`
-     then also deletes the device (without it the kill still holds, the
-     node is unreachable and tombstoned, but the device stays listed;
-     the kill result says `device_delete_unavailable` with this fix);
-   - recommended: **Policy File › Write**. `tw up --apply-policy` then
-     adds the snippet above, and `tw deploy --apply-policy` (or `tw policy
-     --apply`) each app's `tag:tw*` tagOwners, grants and Service
-     auto-approval, and for a new app the grant that lets the tailnet's
-     users call it ([tailworks-jsonc.md](tailworks-jsonc.md#tags-and-tw-init)).
-     Both show the lines and ask first, and only ever add. Pick **Policy
-     File › Read** to paste the snippets yourself instead: `tw deploy`
-     still preflights your app's grants and `spawn()` checks sub-agent
-     tags/caps against the policy. With neither, deploy says `preflight
-     skipped` and `spawn()` answers `policy_unavailable`. Scopes can't be
-     changed on an existing client;
-   - optionally **Services › Write**: workloads with `tailnet.service` get
-     a Tailscale Service, i.e. a stable name and VIP
-     ([services.md](services.md)). Without it, such a deploy fails with
-     `service_api_failed`.
+   **Credential** › **OAuth**). When a scope asks for a tag, pick **`tag:tw`**.
+   Scopes can't be changed on an existing client.
+
+   | Scope | Without it |
+   |---|---|
+   | **Auth Keys › Write** | Required: nothing can be minted. |
+   | **Devices › Core › Write** | `tw kill` still holds (the node is unreachable and tombstoned), but the device stays listed: the kill result says [`device_delete_unavailable`](errors.md#device_delete_unavailable). |
+   | **Policy File › Write** (recommended), or **Read** | With Write, `tw up --apply-policy` adds the snippet and `tw deploy --apply-policy` (or `tw policy --apply`) each app's `tag:tw*` tagOwners, grants and Service auto-approval, and for a new app the grant that lets the tailnet's users call it ([tailworks-jsonc.md](tailworks-jsonc.md#tags-and-tw-init)); both show the lines and ask first, and only ever add. With Read you paste the lines yourself, and `tw deploy` still preflights your app's grants and `spawn()` checks sub-agent tags/caps against the policy. With neither, deploy says `preflight skipped` and `spawn()` answers `policy_unavailable`. |
+   | **Services › Write** | A workload with `tailnet.service` (a Tailscale Service: a stable name and VIP, [services.md](services.md)) fails to deploy with `service_api_failed`. |
+
 3. **Start tailworks** and paste the **Client Secret** when asked:
    ```sh
    tw up --apply-policy    # or plain `tw up` if you pasted the whole snippet
@@ -395,87 +373,12 @@ is the expected answer. The policy additions `tw up` prints include the
 host ⇄ mgmt grants (`tag:tw-host → tag:tw-mgmt tcp:80,443`,
 `tag:tw-mgmt → tag:tw-host tcp:7474`).
 
-#### One process by default; scale out with `tw host add`
+#### More than one machine
 
-`tw up` runs **one process** by default: the supervisor hosts tw-mgmt
-and the host agent together, so mgmt's node `tw-mgmt` is the only
-infrastructure device tailworks adds to your tailnet (`tw.json`:
-`"mode": "single"`). The embedded host talks to mgmt in-process as the
-`host` principal (every per-host and per-lease check applies as for a
-remote host) and mgmt delivers kills in-process; no host node, no join key,
-no `tag:tw-host` grant is needed for this machine. `tw status` says
-`host <id> (embedded in the mgmt process)` and `tw doctor`'s `transport`
-row `ok tsnet: … host embedded in the mgmt process`. The policy snippet
-`tw up` prints still includes `tag:tw-host` and the host ⇄ mgmt grants:
-they are what **scale-out** needs. `tw up --separate-host` keeps the
-two-process layout (tw-hostd as its own child on its own `tag:tw-host`
-node); a state dir keeps the layout it was created with (state from before
-this option stays two-process). Object nodes are the same in both layouts.
-
-Add a second machine as a host with `tw host add <host-id>`: mgmt records
-it (pending) and writes a single-use join key file; on the new machine run
-`tw-hostd join --host-id <id> --token-file <file> --control-url …`, then
-start `tw-hostd -host-id <id> -mgmt http://tw-mgmt.<tailnet> -tsnet-control-url …`.
-`tw host ls` / `tw host rm <id> [--force]` manage hosts; `tw tenant set`
-(PATCH) and `tw tenant rm`, `tw undeploy <workload>` round out the CRUD.
-More hosts still share one mgmt; for more than one mgmt replica, see
-[When to switch to Postgres](#when-to-switch-to-postgres).
-
-#### Where a workload runs (placement, multi-host)
-
-With more than one host, mgmt picks the host at deploy
-([ADR-033](design/adr/033-smart-placement.md)):
-
-1. **Eligible hosts** are live (a heartbeat in the last 10 s), in the tenant's
-   pool (`tw tenant set --pool`), offer the workload's tier (`"tier":
-   "microvm"` in `tailworks.jsonc`, or the tenant's: only hosts with KVM and the
-   helper, `tw host ls` TIERS) and have free capacity.
-2. `tw deploy --host <id>` pins one (it must still be eligible).
-3. Otherwise a workload that is **already running stays where it is**. A
-   better host appearing never moves it.
-4. Otherwise (first deploy, or its host died) **smart placement**: if the
-   app declares `tailnet.connects` (or `placement.targets`), the host with
-   the best measured path to those peers wins: direct WireGuard, then a peer
-   relay, then DERP, then unmeasured; then the lowest RTT. Ties go to the
-   host with more free capacity. Without targets it's the most free capacity.
-
-```jsonc
-// tailworks.jsonc
-{
-  "tailnet": { "tags": ["tag:api"], "connects": ["tag:db"] },
-  "placement": { "mode": "smart" }   // the default when connects is set; "off" to disable
-}
-```
-
-Advanced: `"placement": { "targets": ["pg-primary"] }` places close to other
-peers than `tailnet.connects`, and with several targets `"aggregate"` picks
-how their paths combine: `"worst"` (the default) or `"sum"`
-([tailworks-jsonc.md](tailworks-jsonc.md#placement)).
-
-```
-$ tw deploy
-✓ placed     placed on h2: tag:db direct 1.8 ms (h1: relayed via DERP nyc 24 ms, h3: unmeasured)
-✓ deployed   api@h2 · …
-```
-
-**Where the measurements come from:** each host measures, every 60 s
-(`tw-hostd -path-every`), the targets of the workloads it runs, from that
-tenant's own nodes on the host. It resolves the tag or name in the node's
-netmap and sends WireGuard disco pings; no keys are minted to measure. At
-deploy, mgmt asks hosts without a fresh measurement to probe (≤ 2 s). A
-host that runs nothing of the tenant has no vantage point and stays
-"unmeasured", so in a new tenant the first workload goes by capacity. Pin
-it (`--host`) next to the database once, and later deploys can measure.
-Measurements expire after 5 min and live in mgmt's store, so every replica
-places alike.
-
-**Moving a running workload:** `tw deploy --replace` re-places it. It moves
-only if another eligible host is clearly better: a better path class, or
-≥ 2 ms and ≥ 20 % lower RTT. The lease moves at the next epoch in one
-conditional write, the new host starts it, and the old host stops at its
-next heartbeat. A stateful workload (Durable Objects without `"fence":
-"never"`) also needs `--force-takeover`: its DO storage stays on the old
-host's disk. `tw ls` shows each workload's placement reason.
+`tw up` runs **one process** by default: the supervisor hosts tw-mgmt and
+the host agent together, so `tw-mgmt` is the only infrastructure device
+tailworks adds to your tailnet. To add hosts (`tw host add`), see how mgmt
+places a workload on them, or size them: [hosts.md](hosts.md).
 
 `tw up --local-dev` keeps the old unix socket + per-host token for
 `tw dev` and hermetic tests only; `tw doctor` flags it.
@@ -537,149 +440,26 @@ Installed with `get.sh`? It doesn't keep the release directory; see
 
 ### Troubleshooting
 
-- `workerd does not run on this machine`: re-sign it (`codesign -f -s -
-  ~/.tailworks/bin/workerd`) and clear quarantine (`xattr -d com.apple.quarantine
-  ~/.tailworks/bin/workerd`), then `tw doctor`.
-- `mint_mode_required` from `tw up`: pass `--oauth-client-file`; the
-  error prints how to create the client.
-- `mint_mode_removed`: this state dir (or tenant) is in the API-key or WIF
-  mode an older tailworks used; switch it to an OAuth client
-  ([Upgrading from API-key or WIF mode](#upgrading-from-api-key-or-wif-mode)).
-- `policy_missing_tag_owners`: `tag:tw` must own `tag:tw-mgmt` and
-  `tag:tw-host`; add the printed tagOwners and re-run, or run `tw up
-  --apply-policy` (the OAuth client needs Policy File › Write). Nothing
-  was minted.
-- `credential_file_insecure`: `chmod 600` the OAuth client file.
-- `sandbox_layout_unsafe` (Linux): the state dir, run dir, a credential
-  file or the home dir is under `/usr`, `/lib*`, `/bin`, `/sbin`, `/etc`,
-  `/opt`, `/nix/store` or `/run/current-system`, which the process sandbox
-  lets every workload read; move it (`--state-dir /var/lib/tailworks`,
-  `~/.config/tailworks/oauth.env`) and run the command again
-  ([errors.md](errors.md#sandbox_layout_unsafe)).
-- `oauth_exchange_failed`: the client secret is wrong or the client was
-  revoked; generate a new one (Settings › Trust credentials).
-- `device_delete_unavailable` on `tw kill`: the kill held, but the OAuth
-  client has no Devices › Core scope; generate one with it, overwrite the
-  file, `tw up`, revoke the old client; remove leftover devices in the
-  console (Machines).
-- `bootstrap_failed … without the tag:tw-mgmt tag`: control dropped the
-  tag because `tag:tw` doesn't own `tag:tw-mgmt`; add the tagOwners
-  snippet, remove the node in the console, `tw up` again.
-- `not_admin` from `tw link`: you need `github.com/rosskukulinski/tailworks/cap/admin` from a grant
-  to `tag:tw-mgmt`; the error prints the grant.
-- `mgmt_unreachable` from a linked machine: is your Tailscale connected to
-  the tailnet that runs tailworks, and does a grant let you reach
-  `tag:tw-mgmt` on tcp:443?
-- `tailnet_required`: tailworks couldn't name the tailnet (the OAuth client can't
-  list devices and mgmt's node hasn't joined yet); pass `--tailnet`. Tailworks
-  won't bootstrap from your Mac's Tailscale login.
-- `acl_denied` on deploy: add the printed grant to your tailnet policy, or
-  deploy with `--allow-missing-grants`. `preflight skipped` means the
-  OAuth client has no Policy File › Read scope, so mgmt can't read the
-  policy.
-- `tw doctor` says `sandbox` failed: Seatbelt (`/usr/bin/sandbox-exec`)
-  or Landlock didn't start workerd or didn't enforce a deny on this OS
-  version. Report it; tenants are not confined until it is fixed.
-- `tw doctor` warns `NO PROCESS SANDBOX` on Linux: the kernel has no
-  Landlock (older than 5.13, or `landlock` missing from the `lsm=` boot
-  parameter; check `cat /sys/kernel/security/lsm`). Add it to the boot
-  parameters, use a newer kernel, or deploy with tier `microvm`.
-- A Node app on Linux gets `EACCES` from `net.connect` or its own
-  dispatcher: that's the sandbox; send egress through `HTTP(S)_PROXY` /
-  `@tailworks/node`'s `fetch`.
-- The supervisor (`tw __supervise`, which runs mgmt and the host) exits 0
-  only on a clean stop (`tw down`, `systemctl --user stop tw`, `launchctl
-  bootout`). When mgmt or the host stops on its own (mgmt's listener
-  failed, or a component kept exiting), it logs why to
-  `~/.tailworks/logs/supervisor.log` (`tw logs --component supervisor`)
-  and exits 1 with `mgmt_failed` or `host_failed`. Under `tw up --service`
-  that non-zero exit makes systemd (`Restart=on-failure`) or launchd
-  (`KeepAlive` on an unsuccessful exit) start it again within a few
-  seconds; without a service, run `tw up` again.
-- Logs: `tw logs <workload>` (on the host or a linked machine; `-f` to
-  follow), `tw logs --component mgmt|hostd|supervisor` (on the host only).
-  From a linked machine, `host_unavailable` means mgmt could not reach the
-  workload's host on its push port (the policy grant `tag:tw-mgmt` →
-  `tag:tw-host` `tcp:7474`, or the host is down).
-- `tw deploy` worked but the app doesn't answer, `identity_pending`,
-  `peer_not_visible`, or a deployment `failed` in `tw ls`: see
-  [troubleshooting.md](troubleshooting.md).
+When `tw up` fails, a first deploy doesn't answer, `tw link` can't reach
+mgmt or `tw doctor` warns: [troubleshooting.md](troubleshooting.md)
+(offline: `tw docs show troubleshooting.md`). Every error code is in
+[errors.md](errors.md).
 
 ## Try it without a tailnet
 
-You don't need a tailnet, a credential or `tw up` to run an app. `tw dev`
-runs it on your machine with the same host agent (tw-hostd, netd) and
-workerd as production. In place of your tailnet, it starts a test control
-plane and relay on 127.0.0.1, with an in-memory mgmt. A local port reaches
-the app through a dev client node, so `getCaller()` sees a real (dev)
-caller.
-
-```sh
-tw init hello --template agent && cd hello
-tw dev                      # ready on http://127.0.0.1:8787 · edits reload · Ctrl-C to stop
-tw dev --once --json        # start, make one request, print it, exit (a smoke test)
-```
-
-`tw dev --help` lists the flags (`--port`, `--once`, `--test-scheduled`, and under Advanced `--workerd`, which defaults to `$TW_WORKERD`, and `-v`).
-The `mcp` template serves on `/mcp` (its `/` answers 404); `tw dev` says
-so and its smoke test sends an MCP `initialize` there. Not in dev yet: a
-policy evaluator. Every dev node sees every other and gets the same test
-capabilities, so a call that works in dev can still need a grant on a
-tailnet.
+`tw dev` runs an app on your machine with no tailnet, no credential and no
+`tw up`: [dev-debugging.md](dev-debugging.md#try-it-without-a-tailnet)
+(offline: `tw docs show dev-debugging.md#try-it-without-a-tailnet`).
 
 ## Isolation
 
-tailworks' default is the **process tier**: every app runs in a workerd (or
-Node) process on your machine, and each Durable Object gets its own tailnet
-node and identity. V8 isolates and tailworks' egress guard are real boundaries,
-but this is **dev-grade isolation**: there is no VM between tenants and
-your user account. On top of that, tw-hostd runs every tenant's workerd
-**and Node app** in a per-workload **process sandbox**, on by default
-(`tw-hostd -sandbox auto`):
-
-- **macOS: Seatbelt** (`sandbox-exec`, generated profile).
-- **Linux: Landlock + seccomp** (no root and no user namespaces needed;
-  kernel 5.13+ with Landlock enabled, e.g. Ubuntu 22.04+/24.04, Debian 12,
-  Fedora). A small launcher in tw-hostd applies the rules, then execs
-  workerd or node in place.
-
-Either way a workload can't read your home dir (including `~/.tailworks`),
-tailworks' state (node keys, mgmt custody, other tenants' storage) or any
-tenant's API key file, and can't use mgmt's or hostd's sockets. **On
-macOS** a workload can also write only its own dirs, open no network
-except its own unix sockets and the TCP ports hostd gives it (a Node app:
-its egress proxy and its own port), signal only itself and its children,
-and exec only its runtime, its own dirs and the OS dirs; it can still
-read what the user can outside the denied paths
-([security-model.md](security-model.md#what-the-process-tier-sandbox-confines)).
-`tw-hostd -sandbox seatbelt-legacy` brings back the previous files-only
-profile for one release.
-**Linux adds more:** a workload can write only its own instance and data
-dirs and read only the OS, its runtime binary and its install prefix;
-with Landlock ABI ≥ 4 (kernel 6.7+; Ubuntu 24.04's 6.8 has ABI 4) it may
-open TCP only to its own app port and egress proxy, so a malicious Node
-app can't bypass netd's proxy (below ABI 4, TCP is unrestricted); a seccomp filter refuses ptrace and
-`process_vm_readv/writev` (so no reading a sibling's memory), kexec,
-mount, bpf, perf_event_open, keyctl, new namespaces, io_uring, and
-UDP/ICMP/raw/MPTCP sockets; and other processes' `/proc` entries (their
-environment, cmdline) are unreadable. Workloads get **no unix sockets**
-(seccomp; workerd's listener is inherited and its services are
-token-checked loopback TCP), so the host's tailscaled or docker socket is
-out of reach, and they may signal only themselves. Tailworks' own sockets
-refuse sandboxed peers too. As defence in depth, if *your user* can reach
-the system tailscaled's socket or a container engine (or is in the
-docker/podman/lxd groups), `tw doctor` warns (`host_sockets`) and tailworks
-serves one tenant only unless `tw up --insecure-shared-host`: run tailworks as
-a dedicated user to share a host.
-
-`tw doctor` checks that the sandbox enforces on your machine (Linux: the
-Landlock ABI too), and while tailworks runs, that every workload is under it.
-**Without a sandbox** (Linux without Landlock) `tw doctor` warns loudly,
-and tailworks refuses to run a second tenant's process-tier workloads unless you
-pass `tw up --insecure-shared-host`. **microVM isolation needs Linux with
-KVM (Firecracker) or macOS (Virtualization.framework)**; see
-[COMPAT.md](COMPAT.md#containers) and [the Linux microVM tier](#linux-the-microvm-tier-firecracker-kvm).
-Don't run code you don't trust on the process tier.
+The default **process tier** is **dev-grade isolation**: every app runs in
+a workerd (or Node) process on your machine, under a per-workload process
+sandbox (Seatbelt on macOS, Landlock + seccomp on Linux), with no VM
+between tenants and your user account. Don't run code you don't trust on
+the process tier; use the [microVM tier](#linux-the-microvm-tier-firecracker-kvm).
+What each sandbox confines, and when a host may be shared between tenants:
+[security-model.md](security-model.md#isolation-tiers).
 
 ## Upgrade
 
@@ -870,72 +650,6 @@ tags and grants from your tailnet policy, and remove the `PATH` line from
 your shell profile. What uninstall removes and what it keeps, entry by
 entry: [What is in ~/.tailworks](#what-is-in-tailworks).
 
-## Disk, storage quotas and retention
-
-Everything tailworks keeps is under the state dir (`~/.tailworks`): mgmt's
-database (`mgmt/mgmt.db`, the only copy of every tenant's KV, D1, R2 index
-and queue data), Durable Object storage, R2 objects and logs. `tw doctor`
-checks the free space on that volume (`data_disk`: a warning under 5 GiB or
-10% free, a failure under 1 GiB) and how full each tenant's stores and
-queues are (`store_sizes`: a warning at 80% of a limit or quota).
-`tw tenant ls` shows each tenant's usage.
-
-Each KV namespace, D1 database, R2 bucket index and queue is capped at
-1 GiB. To bound a tenant as a whole, for example on a host several teams
-share, set its storage quotas. They are unlimited unless you set them:
-
-```sh
-tw tenant set <tenant> --max-store-bytes 20GiB --max-queue-bytes 2GiB --max-stores 50
-tw tenant set <tenant> --max-store-bytes -     # back to unlimited
-```
-
-A write past a quota fails with
-[`storage_quota_exceeded`](errors.md#storage_quota_exceeded); deletes and
-overwrites that don't grow a store still work.
-
-Retention is off by default: audit records are kept forever, request
-records until their log rotates (8 MiB per workload, one previous file).
-`tw up --audit-max-age 2160h` (or `--audit-max-records N`) deletes older
-audit records and keeps a checkpoint, so the rest still verify;
-`tw up --request-log-max-age 168h` drops older request records. `tw up`
-remembers them. `mgmt.log` and `hostd.log` rotate at 32 MiB. See
-[limits.md](limits.md#tenant-storage).
-
-## Tuning: how fast a new object's own node comes up
-
-A new Durable Object answers through its workload in milliseconds. Its
-**own** tailnet node (its MagicDNS name, tags and grants) normally needs a
-key minted, a registration at the coordination server and a first network
-check. `tw up` keeps that off the critical path with three settings. The
-defaults are on, and each `tw up` stores them for the service:
-
-| flag | default | what it does | what it costs |
-|---|---|---|---|
-| `--warm-keys N` | 5 | keeps up to N pre-minted, single-use keys per tag set, so a new object skips the key-API call (145 ms normally, seconds when the API is slow) | unused keys sit in tailworks' custody for up to 30 min (`tw status` shows how many, when any); `tw down` revokes them |
-| `--pool-nodes N` | 1 | keeps N pre-joined nodes per class that had a new object on this host in the last hour; the next new object of that class is renamed onto one (~0.2 s) instead of joining a new node (1.5 s typical, 4–6 s when control is slow) | each pool node is a device on your tailnet (listed under `_pool` in `tw ls`); idle ones are deleted after an hour without new objects |
-| `--port-mapping` | off | asks your router for port mappings (UPnP / NAT-PMP / PCP) for tailworks' nodes | off saves ~250 ms on every new node and keeps tailworks' nodes from each asking the router for a mapping; turn it on only if this host is behind a NAT that needs router-assisted direct connections (otherwise traffic goes direct or over DERP as usual) |
-
-Measured on a production tailnet, with all three at their defaults: a new
-object's first request on its own node arrives **~0.23 s** after it is
-created (p95 ~0.3 s), down from ~7 s
-([how it was measured](install-testing.md#fast-identity)).
-`--warm-keys 0 --pool-nodes 0` turns both pools off.
-
-## Sizing: how many objects a host holds
-
-Each object with its own node costs the host about **2.5 MB idle and 4 MB
-under request load** (measured on Linux and macOS at 100 and 500 nodes,
-when objects can't see one another), on top of its workload's own memory.
-A host advertises a node capacity to placement and takes no more objects
-than that. By default the capacity comes from RAM: a quarter of it at 8 MiB
-per node, between 50 and 1000. So an 8 GiB host takes 256 objects, a 16 GiB
-host 512, and 32 GiB or more 1000. Set `tw-hostd -capacity-nodes N` to
-override it. Lower it if your policy lets objects see one another: then
-every node holds every other in its netmap, and at 100 nodes each costs
-5–12 MB. Don't give hundreds of objects on one host that visibility. The
-measurements, and the command that reproduces them, are in
-[limits.md](limits.md#per-node-memory-measured).
-
 ## Linux
 
 The same flow on a Linux host: one tarball per architecture, `install.sh`
@@ -945,7 +659,8 @@ tested on, and the measured timings, are in
 
 > **Isolation on Linux.** The **process tier** runs every tenant's workerd
 > and Node app under **Landlock + seccomp** (unprivileged; no user
-> namespaces needed), with the guarantees listed under [Isolation](#isolation).
+> namespaces needed), with the guarantees listed in
+> [security-model.md](security-model.md#what-the-process-tier-sandbox-confines).
 > `tw doctor` reports the kernel's Landlock ABI and that the sandbox
 > enforces; without Landlock it warns loudly and tailworks refuses to host a
 > second tenant on the process tier. The **microVM tier** (Firecracker,

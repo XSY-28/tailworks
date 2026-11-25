@@ -1,13 +1,14 @@
 # tw docs map
 
-Every tailworks doc, by who you are and by what you need. The same files ship
-in the CLI: `tw docs ls`, `tw docs search <words>`,
-`tw docs show <doc>[#<anchor>]`.
+Every tailworks doc, by who you are and by what you need. The guides in this
+directory ship in the CLI: `tw docs ls`, `tw docs search <words>`,
+`tw docs show <doc>[#<anchor>]`. The API contract (`contracts/`) and the
+design records (`design/`) don't; read them here on GitHub.
 
 ## Start here by role
 
 - **You write Cloudflare Workers.** Run the app locally first, with no
-  tailnet: [Try it without a tailnet](INSTALL.md#try-it-without-a-tailnet).
+  tailnet: [Try it without a tailnet](dev-debugging.md#try-it-without-a-tailnet).
   Then the [quick start](../README.md#quick-start).
   Bringing a wrangler project? Read
   [What's different from Cloudflare, in short](wrangler.md#whats-different-from-cloudflare-in-short),
@@ -15,13 +16,14 @@ in the CLI: `tw docs ls`, `tw docs search <words>`,
 - **You run the machines.** [INSTALL.md](INSTALL.md): [macOS](INSTALL.md#macos)
   or [Linux](INSTALL.md#linux), then [upgrading.md](upgrading.md),
   [back up and restore](INSTALL.md#back-up-and-restore) and
-  [troubleshooting](INSTALL.md#troubleshooting). Where each platform is
+  [troubleshooting](troubleshooting.md). More than one machine:
+  [hosts.md](hosts.md). Where each platform is
   tested: [install-testing.md](install-testing.md). Everything `tw up` runs,
   listens on and writes, on one page: [footprint.md](footprint.md).
 - **You review security.** Start with the one-page [security model](security-model.md); report a vulnerability through [SECURITY.md](../SECURITY.md).
   How callers are identified:
   [COMPAT.md#identity](COMPAT.md#identity). How isolated an app is:
-  [Isolation](INSTALL.md#isolation) in INSTALL.md and
+  [Isolation tiers](security-model.md#isolation-tiers) and
   [containers.md](containers.md) (the microVM tier). The attacker's view:
   [THREAT-MODEL.md](../security/THREAT-MODEL.md) and
   [RED-TEAM.md](../security/RED-TEAM.md). The design:
@@ -40,7 +42,7 @@ in the CLI: `tw docs ls`, `tw docs search <words>`,
   install, start tailworks, deploy an app, call it.
 - [Concepts](concepts.md): the words tailworks uses (tenant, workload, object,
   tiers, facet mode, pool nodes, warm keys).
-- [Try it without a tailnet](INSTALL.md#try-it-without-a-tailnet): `tw dev`.
+- [Try it without a tailnet](dev-debugging.md#try-it-without-a-tailnet): `tw dev`.
 - Templates: `tw init <dir> --template <name>`. Four starting points:
   `hello` (the default), `agent`, `mcp`, `static-site` (wrangler `assets`: a
   folder of files next to a Worker). `tw init --list` shows them all; the
@@ -58,7 +60,8 @@ in the CLI: `tw docs ls`, `tw docs search <words>`,
 ## Do: how-to guides
 
 - Bring a wrangler project: [wrangler.md](wrangler.md)
-- Fix a first deploy that doesn't answer: [troubleshooting.md](troubleshooting.md)
+- Fix `tw up`, a first deploy that doesn't answer, `tw link` or a `tw doctor`
+  warning: [troubleshooting.md](troubleshooting.md)
 - Store secrets: [secrets.md](secrets.md)
 - Use KV, R2, D1: [kv.md](kv.md), [r2.md](r2.md), [d1.md](d1.md)
 - Send and consume messages: [queues.md](queues.md)
@@ -75,6 +78,7 @@ in the CLI: `tw docs ls`, `tw docs search <words>`,
 - Use the admin console: [ADMIN-UI.md](ADMIN-UI.md)
 - Let a team manage only its own tenant: [teams.md](teams.md)
 - Upgrade tailworks: [upgrading.md](upgrading.md)
+- Add hosts, place workloads, size a host: [hosts.md](hosts.md)
 - Move mgmt to Postgres, run mgmt replicas: [postgres.md](postgres.md)
 - Run on Headscale: [headscale.md](headscale.md)
 

@@ -90,6 +90,17 @@ func scanVerb(args []string, register func(*flags), words func(first string) int
 	return strings.Join(ws, " "), rest, len(ws) == want
 }
 
+// scanVerbOr is scanVerb for a command whose subcommand is one word and
+// may be left out: def when none is given (tw notify and tw telemetry
+// show).
+func scanVerbOr(args []string, register func(*flags), def string) (verb string, rest []string) {
+	verb, rest, given := scanVerb(args, register, func(string) int { return 1 })
+	if !given {
+		verb = def
+	}
+	return verb, rest
+}
+
 // takesValue reports whether a is a flag of fs, spelled without =value,
 // that reads the next argument as its value (not a bool flag).
 func takesValue(fs *flag.FlagSet, a string) bool {
