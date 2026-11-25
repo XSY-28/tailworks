@@ -113,10 +113,16 @@ spec.
   killed object's. The console tab links to the workload's console
   output.
 - **`/ui/hosts/{id}`**: heartbeat, nodes, tiers, pool, push transport,
-  node, the leases it holds, its assignments, the live objects it runs, and
-  **Drain & remove** (drain checked by default; without it the API refuses
-  with `host_holds_leases` while leases are held). This is the scale-out
-  view: every host registered with this mgmt, live or not.
+  node, the leases it holds, its assignments, the live objects it runs,
+  **Cordon** / **Uncordon** with who cordoned it and when (`cordonedAt`,
+  `cordonedBy`; a host an upgrade run cordoned, `cordonedBy` `upgrade:…`,
+  shows a warning instead of Uncordon, since the run uncordons it), and
+  **Remove host** (force checked by default: its objects are killed and
+  its leases released; without it the API refuses with
+  `host_holds_leases` while leases are held). Removing does not move
+  anything: moving workloads off a host is `tw host drain` in the CLI.
+  This is the scale-out view: every host registered with this mgmt, live
+  or not.
 - **`/ui/tenants/{id}`**: the configuration as the API returns it (mint
   mode, client IDs and file paths, quotas, OBO public key; secrets are
   never returned by the API and so never shown), object counts by status,
@@ -124,7 +130,7 @@ spec.
 - **`/ui/objects`**: every object, newest first, 50 a page (Newer / Older
   links). Filters: tenant, app (workload) and status go to
   `GET /v1/objects` (`tenant`, `workload`, `state`); tag and acting-for
-  are filtered by the UI, over the first 5000 matches (the page says when
+  (`human`, as on the audit page) are filtered by the UI, over the first 5000 matches (the page says when
   that limit was reached).
 - **`/ui/approvals`**: the Workflow approvals waiting, oldest first (the
   longest wait on top). By default: every tenant for an admin; for anyone
@@ -163,6 +169,10 @@ abbreviated. Light and dark follow `prefers-color-scheme`.
 
 ## Mutations
 
+The UI's actions stop things and decide approvals. Configuration,
+placement and moves (`tw tenant set`, `tw deploy`, `tw host drain`, …)
+stay in the CLI.
+
 Each action is a plain HTML form that POSTs to the UI (for example
 `/ui/objects/{id}/kill`). With JavaScript, `app.js` asks for confirmation
 first. The UI then makes the same `/v1` call the CLI makes and redirects
@@ -173,7 +183,8 @@ back to the page with the outcome as a banner. A refusal shows
 |---|---|
 | Kill | `DELETE /v1/objects/{id}?cascade=true&reason=…` (202) |
 | Undeploy | `DELETE /v1/deployments/{id}?reason=…` (202) |
-| Drain & remove | `DELETE /v1/hosts/{id}?drain=true` (202 / 204) |
+| Cordon / Uncordon | `PUT` / `DELETE /v1/hosts/{id}/cordon` (200) |
+| Remove host (force) | `DELETE /v1/hosts/{id}?drain=true` (202 / 204) |
 | Delete tenant | `DELETE /v1/tenants/{id}?force=true` (202 / 204) |
 | Approve / Reject | `POST /v1/tenants/{id}/workloads/{w}/approvals/{workflow}/{instance}` with JSON `{decision, comment}` (200) |
 
