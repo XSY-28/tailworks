@@ -24,7 +24,9 @@ class Base extends DurableObject {
     const u = new URL(req.url);
     if (u.pathname === "/abort") {
       this.ctx.storage.kv.put("n", (this.ctx.storage.kv.get("n") ?? 0) + 1);
-      if (u.searchParams.get("alarm")) await this.ctx.storage.setAlarm(Date.now() + 300);
+      // Well after the abort below (50 ms), even on a loaded runner: an alarm
+      // that beat the abort would run on the old instance.
+      if (u.searchParams.get("alarm")) await this.ctx.storage.setAlarm(Date.now() + 1500);
       await this.ctx.storage.sync(); // abort drops writes not yet committed
       if (u.searchParams.get("later")) {
         // As the Agents SDK lifecycle example does: abort after answering.

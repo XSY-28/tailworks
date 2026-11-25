@@ -13,8 +13,11 @@ between tags decide who can call whom.
 
 **You draft policy; the user applies it.** Show the user the exact lines
 and ask them to add them in the Tailscale admin console (Access
-controls). Tailworks never changes the policy during a deploy, and you
-shouldn't either.
+controls). Tailworks writes the policy only when the user passes
+`--apply-policy` (`tw up`, `tw deploy`, `tw tenant add`) or runs `tw
+policy --apply`, and confirms the lines it shows. Don't pass those flags,
+or `--yes` with them, on the user's behalf, and don't edit the policy
+yourself.
 
 ## 1. Let tailworks own the app's tags
 

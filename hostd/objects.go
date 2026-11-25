@@ -453,8 +453,8 @@ func (h *Host) awaitNode(t *tenant, o *object, no *netd.Object, gen uint64) {
 			go h.killLocal(o.ID, "killed during join")
 			return
 		}
-		if e, ok := mgmtapi.AsError(err); ok && e.Code == mgmtapi.CodeLeaseLost {
-			go h.retryReady(o, req, gen) // readyretry.go (#210)
+		if retryableReady(err) {
+			go h.retryReady(o, req, gen) // readyretry.go (#210, #604)
 		}
 	}
 	rcancel()

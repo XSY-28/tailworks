@@ -1051,6 +1051,8 @@ func (m *Mgmt) Deploy(ctx context.Context, r DeployRequest) (DeployResponse, err
 	}
 	m.recordIntent(ctx, ai, nil)
 	m.afterDeploy(ctx, d, r.rollbackOf) // deployhistory.go: bundle hash, retention
+	// Another host's pool nodes can't be used here (poolstale.go, #567).
+	go m.killStalePoolNodes(context.WithoutCancel(ctx), t.ID, r.Workload, host, r.By)
 	if pub != nil {
 		m.purgeDeadPublicNode(ctx, t.ID, r.Workload)
 	}

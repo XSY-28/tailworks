@@ -87,6 +87,7 @@ func cmdDev(args []string) error {
 		dir = pos[0]
 	}
 	ao.SourceMap = devSourceMapMode(*inspectorPort) // sourcemap.go
+	ao.DevBuild = true                              // buildcmd.go: devBuild runs build.command
 	a, err := loadAppWith(dir, "", *ao)
 	if err != nil {
 		return err
@@ -213,6 +214,10 @@ func cmdDev(args []string) error {
 			time.Sleep(20 * time.Millisecond)
 		}
 		return hostd.ObjectStatus{}, fail("identity_pending", "dev deploy not ready after 60s")
+	}
+	var db devBuild // buildcmd.go: build.command, at start and on build.watch_dir changes
+	if _, err := db.run(a); err != nil {
+		return err
 	}
 	wl, err := deploy()
 	if err != nil {
@@ -346,6 +351,13 @@ func cmdDev(args []string) error {
 			rs := time.Now()
 			if na, err := loadAppWith(a.Dir, a.Name, a.Opts); err == nil {
 				a = na
+			}
+			if ran, err := db.run(a); ran {
+				last = snapshot(a.Dir, a.assetsDir()) // the build's own output is not an edit
+				if err != nil {
+					printDevErr(ev, err)
+					continue
+				}
 			}
 			o, err := deploy()
 			if err != nil {

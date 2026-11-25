@@ -40,7 +40,7 @@ vulnerability, see [SECURITY.md](../SECURITY.md).
   Each object's key is single use, pre-authorized, tagged and expires
   within 5 minutes (`KeyExpiry` in `mgmt/types.go`). Warm keys, minted
   ahead of time so new objects start faster, wait in mgmt's custody for up
-  to 30 minutes ([INSTALL.md](INSTALL.md#tuning-how-fast-a-new-objects-own-node-comes-up)).
+  to 30 minutes ([concepts.md](concepts.md#tuning-how-fast-a-new-objects-own-node-comes-up)).
   `tw status` shows how many each tenant has, when any; `tw down` and `tw tenant rm`
   revoke them. Revoking the credential
   stops all future minting.
@@ -64,6 +64,14 @@ vulnerability, see [SECURITY.md](../SECURITY.md).
 
 The process tier is not a VM boundary. Don't run code you don't trust on
 it.
+
+The process sandbox is on by default. On Linux it needs no root and no
+user namespaces, only a kernel with Landlock (5.13+ with Landlock enabled,
+for example Ubuntu 22.04+, Debian 12, Fedora): a small launcher in
+tw-hostd applies the rules, then execs workerd or node in place. `tw
+doctor` checks that the sandbox enforces on your machine (on Linux, the
+Landlock ABI too) and, while tailworks runs, that every workload is under
+it. Without a sandbox (Linux without Landlock) `tw doctor` warns loudly.
 
 ### Side channels inside a workload
 
@@ -196,6 +204,11 @@ other). The flag is saved in tw.json and kept by every later `tw up`, so
   refuses every unix socket outside the workload's own dirs; under
   `-sandbox seatbelt-legacy` it refuses only those under the deny list,
   and hostd doesn't check for the tailscaled socket.)
+
+`tw doctor` reports the last two as `host_sockets`: it warns if *your
+user* can reach the system tailscaled's socket or a container engine, or
+is in the docker/podman/lxd groups. To share a host, run tailworks as a
+dedicated user without them.
 
 A host whose sandbox works but doesn't confine TCP (Landlock ABI 1–3, or
 macOS with `-sandbox seatbelt-legacy`) **is admitted** as a shared host.
@@ -417,6 +430,15 @@ limit is `429 rate_limited` ([limits.md](limits.md#management-api)).
 On a single-machine install all three are usually you. When you run
 tailworks for other people, they trust the operators of mgmt and of every
 host their workloads are placed on.
+
+The CLI also runs some of your project's own code on the machine you
+deploy from. When the wrangler config has a custom build
+(`"build": {"command": "…"}`), `tw deploy`, `tw policy` and `tw dev` run
+that command in a shell before bundling, as wrangler does, and print it
+(`› build      <command>`); `--wrangler` runs the project's own wrangler,
+which runs it too. This is the same trust as `npm run build` in that
+directory: deploy only projects whose code you would run yourself
+([wrangler.md](wrangler.md#custom-builds)).
 
 ## Telemetry and the update check
 

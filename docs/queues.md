@@ -89,6 +89,14 @@ Delivery is at least once.
   concurrency reorder messages, as on Cloudflare.
 - **Time limit:** one `queue()` run gets 15 minutes of wall time.
 
+Measured by `e2e/queues` and the data-plane chaos loop
+(`e2e/dataplane:TestDataplane`, invariant D3), which kills hosts, hostd and
+workerd, stalls and cuts off the consumer's host, moves the workload, takes
+it over and restarts mgmt under a steady producer: every acknowledged send
+was delivered, no two deliveries of a message had the same `attempts`,
+retried messages came back, and poison stopped at `max_retries + 1` and
+reached the dead-letter queue.
+
 ## Identity and security
 
 - A queue belongs to the **tenant** (your tailnet), as a Cloudflare queue

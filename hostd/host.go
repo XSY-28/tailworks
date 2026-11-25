@@ -339,6 +339,9 @@ type Host struct {
 	// next run can reap any a crash left behind (childreap.go, #432).
 	children *childLedger
 
+	// cronLasts: each workload's last cron minute, kept across restarts (cronlast.go, #594).
+	cronLasts *cronLastStore
+
 	// consume: queue consumers' context, cancelled on self-fence (queuefence.go).
 	consume consumeGate
 
@@ -489,6 +492,7 @@ func New(cfg Config) (*Host, error) {
 		return nil, err
 	}
 	h.children = openChildLedger(cfg.DataDir, h.log) // childreap.go: before anything is spawned
+	h.cronLasts = openCronLast(cfg.DataDir, h.log)
 	h.pubCreates = newPublicCreates(h.publicCreatesPath())
 	h.admits = map[string]time.Time{}
 	os.Chmod(cfg.DataDir, 0o700)
@@ -699,6 +703,9 @@ func (h *Host) tick() {
 	defer h.maintainPools()
 	ctx, cancel := context.WithTimeout(h.ctx, 10*time.Second)
 	defer cancel()
+	// Freshness counts from when the heartbeat left, not when its answer came
+	// back: an answer that waited out a stall says nothing about now (#501).
+	sent := time.Now()
 	if err := h.heartbeat(ctx); err != nil {
 		if h.ctx.Err() != nil {
 			return
@@ -721,7 +728,7 @@ func (h *Host) tick() {
 		return
 	}
 	h.mu.Lock()
-	h.lastHB, h.fenced = time.Now(), false
+	h.lastHB, h.fenced = sent, false
 	h.mu.Unlock()
 	if err := h.syncAssignments(ctx); err != nil && h.ctx.Err() == nil {
 		h.log.Warn("assignment sync failed", "err", err)

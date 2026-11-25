@@ -10,6 +10,12 @@ surfaces:
   `TailnetError` with `.code`, `.status`, `.missing`, `.snippet`, `.docUrl`.
 - **From the mgmt REST API** (`/v1`, `docs/contracts/mgmt-api.md`): the same
   body; `trace_id` correlates with `tw audit --trace <id>`.
+- **From mgmt to a browser** opening `/` or the admin UI (`/ui/...`): when
+  a `GET` or `HEAD` there prefers `text/html` to JSON (`*/*` alone or a tie
+  stays JSON), the refusal is an HTML page with the same status and
+  `tw-error` header, the code, the message, the `snippet`, a fix and the
+  link here ([ADMIN-UI.md](ADMIN-UI.md#url-and-who-gets-in)). `/v1`,
+  `/mcp` and the CLI always get JSON.
 - **From the `tw` CLI**: `error [code]: message`, detail lines, `fix:` and a
   link to this page. With `--json`, one line on stderr:
   `{"error": {code, message, hint, doc_url, detail?, fix?, trace_id?}}`
@@ -41,7 +47,7 @@ printed anywhere.
 400 · cli. **When:** `--tenant` named a tailnet that has more than one tenant (several teams on one tailnet, [teams.md](teams.md)). **Fix:** name the tenant by its ID; the error lists them (`tw tenant ls`).
 
 ### approval_not_pending
-409 · hostd, mgmt, cli. **When:** a decision (`tw approve`, the admin UI, `POST /_tw/approvals/<workflow>/<instance>`) names a Workflow instance that is not waiting for an approval: already approved or rejected, timed out, or it never asked. **Fix:** `tw approvals [workload] --all` shows what is waiting and what was decided ([approvals](approvals.md)).
+409 · hostd, mgmt, cli. **When:** a decision (`tw approve`, the admin UI, `POST /_tw/approvals/<workflow>/<instance>`) names a Workflow instance that is not waiting for an approval: already approved or rejected, being decided by another request right now, timed out, or it never asked. **Fix:** `tw approvals [workload] --all` shows what is waiting and what was decided ([approvals](approvals.md)).
 
 ### approval_requires_identity
 Thrown in the Worker · platform. **When:** app code sent an event of type `approval` or `approval-*` to a Workflow instance (for example the Agents SDK's `approveWorkflow()`). On tailworks an approval is a decision by a tailnet identity, so only tailworks delivers it. **Fix:** approve with `tw approve <workload> <instance>`, the admin UI, or a same-origin `POST /_tw/approvals/<workflow>/<instance>` from the app's page on the workload's node ([approvals](approvals.md)).
@@ -68,7 +74,10 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 403 · hostd. **When:** a request named a service binding entrypoint or RPC method (the `Tailworks-Binding` header) but did not come from a tailworks workload or object of the target's tenant (its node has no certificate from the tenant), or it reached an object's node or a public route rather than a workload's entry node. Plain requests are not affected. **Fix:** call named entrypoints and RPC methods through a wrangler `services` binding of a workload in the same tenant ([wrangler.md](wrangler.md#service-bindings)); from anywhere else, call the target's default `fetch()` over the tailnet.
 
 ### bootstrap_failed
-502 · netd, mgmt, cli. **When:** an object's node could not be created: the control plane refused the mint (tag not owned, key invalid), the token exchange failed, or the node never joined. From `tw up`, mgmt's or the host's own node failed to join. From `tw deploy`, "the workload node for <workload> is killed": the workload's entry node was killed (`tw kill`) while it was deployed. **Fix:** check the tagOwners snippet (`policy_missing_tag_owners`), the credential (`tw doctor`), then `tw logs --component mgmt`. For a killed workload node: `tw undeploy <workload>`, then deploy it again (see `killed`).
+502 · netd, mgmt, cli. **When:** an object's node could not be created: the control plane refused the mint (tag not owned, key invalid), the token exchange failed, or the node never joined. From `tw up`, mgmt's or the host's own node failed to join. From `tw deploy`, "the workload node for <workload> is killed": the workload's entry node was killed (`tw kill`) while it was deployed. **Fix:** check the tagOwners snippet (`policy_missing_tag_owners`), the credential (`tw doctor`), then `tw logs --component mgmt`. From `tw up`, "… without the tag:tw-mgmt tag" means control dropped the tag because `tag:tw` doesn't own `tag:tw-mgmt`: add the tagOwners snippet, remove the half-joined node in the admin console (Machines), then `tw up` again. For a killed workload node: `tw undeploy <workload>`, then deploy it again (see `killed`).
+
+### build_command_failed
+1 · cli. **When:** the wrangler config's custom build (`build.command`) exited non-zero; `tw deploy`, `tw dev` and `tw policy` run it before bundling ([wrangler.md](wrangler.md#custom-builds)). Nothing is deployed. **Fix:** its output is printed above the error; fix the build and re-run, or run it yourself and remove `build` from the wrangler config.
 
 ### build_failed
 500 · cli. **When:** esbuild (workerd apps) or `create-tailworks build-node` (Node apps) could not bundle the app. **Fix:** the compiler output is in the detail; fix the source and re-run. `Could not resolve "@tailworks/…"` means tailworks' own JS packages are missing next to its bundler: in a source checkout run `make deps` (a plain `make build` doesn't install them), otherwise reinstall tailworks; `tw doctor` checks it.
@@ -116,7 +125,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 502 · netd (SDK). **When:** no direct path to the peer and no reachable DERP relay. **Fix:** check the host's outbound connectivity (UDP 3478, TCP 443 to DERP).
 
 ### device_delete_unavailable
-403 · mgmt, cli. **When:** a kill held (node closed, tombstoned) but the device could not be deleted: the tenant's OAuth client lacks the `devices:core` scope. **Fix:** generate an OAuth client with Auth Keys (write) and Devices › Core (write), overwrite the file, `tw up`; remove leftover devices in the admin console.
+403 · mgmt, cli. **When:** a kill held (node closed, tombstoned) but the device could not be deleted: the tenant's OAuth client lacks the `devices:core` scope. **Fix:** generate an OAuth client with Auth Keys (write) and Devices › Core (write), overwrite the file, `tw up`, then revoke the old client; remove leftover devices in the admin console (Machines).
 
 ### dial_failed
 502 · netd, hostd. **When:** the tailnet dial to a visible peer failed (connection refused, timeout), or the TLS handshake of `ctx.tailnet.connect(addr, { tls: "netd" })` failed. **Fix:** is the destination up and listening on that port, with a certificate for that name? Try again; check `tw logs`.
@@ -173,7 +182,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 503 · mgmt. **When:** mgmt in local-dev mode was started without a host token; it fails closed. **Fix:** `tw down`, then `tw up` (or `tw up --local-dev`) again.
 
 ### host_unavailable
-503 · cli. **When:** tw-hostd is not answering, or did not register with tw-mgmt after `tw up`. **Fix:** `tw logs --component hostd`.
+503 · cli. **When:** tw-hostd is not answering, or did not register with tw-mgmt after `tw up`. From a linked machine (`tw logs`), mgmt could not reach the workload's host on its push port. **Fix:** `tw logs --component hostd`. From a linked machine: check the policy grant `tag:tw-mgmt` → `tag:tw-host` `tcp:7474`, and that the host is up.
 
 ### hostd_unavailable
 503 · hostd, netd (SDK). **When:** the host agent could not be reached from the platform wrapper (hostapi socket down). **Fix:** `tw status`; the host is restarting or dead.
@@ -233,7 +242,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 400 · cli. **When:** `tw up` was given no credential. **Fix:** `tw up --oauth-client-file <file>` with an OAuth client of your tailnet (the error prints how to create one; INSTALL.md); on Headscale, `--control=headscale … --api-key-file <file>`.
 
 ### misdirected_request
-421 · mgmt. **When:** a request on mgmt's tailnet listeners (`:80`, `:443`, the `-tsnet-service` VIP, the operator console) whose `Host` header is neither one of mgmt's own names (its MagicDNS FQDN or short name, `-tsnet-hostname`, `-tsnet-service`) nor an IP literal. This is the DNS-rebinding guard: a web page on a domain rebound to mgmt's IP sends its own domain as `Host` (docs/ADMIN-UI.md). Refused before WhoIs, for every method. **Fix:** address mgmt by its tailnet name (`http(s)://tw-mgmt.<tailnet>/`, `tw whoami` prints it) or its tailnet IP; not through a CNAME or another DNS name that points at it. If you renamed the mgmt node, restart tw-mgmt so it learns the new name.
+421 · mgmt. **When:** a request on mgmt's tailnet listeners (`:80`, `:443`, the `-tsnet-service` VIP, the operator console) whose `Host` header is neither one of mgmt's own names (its MagicDNS FQDN or short name, `-tsnet-hostname`, `-tsnet-service`) nor an IP literal. This is the DNS-rebinding guard: a web page on a domain rebound to mgmt's IP sends its own domain as `Host` (docs/ADMIN-UI.md). Refused before WhoIs, for every method. **Fix:** address mgmt by its tailnet name (`http(s)://tw-mgmt.<tailnet>/`, `tw whoami` prints it) or its tailnet IP; not through a CNAME or another DNS name that points at it. If you renamed the mgmt node, restart tw-mgmt so it learns the new name. A browser opening the admin UI by the wrong name gets an HTML page listing mgmt's own names.
 
 ### missing_tools
 1 · cli. **When:** `tw host setup --microvm` needs `ip`, `cryptsetup`, `losetup`, `mkfs.ext4` and one is missing. **Fix:** `apt-get install iproute2 cryptsetup-bin util-linux e2fsprogs` (Debian/Ubuntu) or `dnf install iproute cryptsetup util-linux e2fsprogs` (Fedora).
@@ -254,7 +263,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 503 · mgmt. **When:** a deployment has no live host to run on (none registered, none in the tenant's pool, or all stale). **Fix:** `tw status` on the host; `tw host ls`.
 
 ### no_identity
-401 · netd, mgmt, hostd. **When:** WhoIs failed for the connection: the request carries no verified tailnet caller (a non-tailnet source, or the egress proxy's credentials are stale). **Fix:** call over the tailnet; from a developer machine use `tw link`.
+401 · netd, mgmt, hostd. **When:** WhoIs failed for the connection: the request carries no verified tailnet caller (a non-tailnet source, or the egress proxy's credentials are stale). **Fix:** call over the tailnet; from a developer machine use `tw link`. In a browser (the admin UI), open it from a device on the tailnet.
 
 ### no_kvm
 1 · cli. **When:** `/dev/kvm` does not exist, so this machine cannot run microVMs. **Fix:** bare metal or a VM with nested virtualization; the process tier works without it.
@@ -275,7 +284,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 1 · cli. **When:** building a `"runtime": "node"` app needs Node.js on this machine. **Fix:** install Node.js ≥ 24 (and run `npm install` in the app), or deploy from a machine that has it.
 
 ### not_admin
-403 · mgmt, cli. **When:** a tailnet caller without the `github.com/rosskukulinski/tailworks/cap/admin` capability called an admin endpoint (`tw link`), or `/mcp` without `github.com/rosskukulinski/tailworks/cap/admin` or `github.com/rosskukulinski/tailworks/cap/mcp`. **Fix:** add the printed grant (`snippet`) from your user/group/tag to `tag:tw-mgmt`.
+403 · mgmt, cli. **When:** a tailnet caller without the `github.com/rosskukulinski/tailworks/cap/admin` capability called an admin endpoint (`tw link`), or `/mcp` without `github.com/rosskukulinski/tailworks/cap/admin` or `github.com/rosskukulinski/tailworks/cap/mcp`. **Fix:** add the printed grant (`snippet`) from your user/group/tag to `tag:tw-mgmt`. Opening the admin UI in a browser shows the same grant on an HTML page: ask your tailnet admin to add it (members of `autogroup:admin` already have it), or use `tw` on the host.
 
 ### not_found
 404 · mgmt. **When:** no such record (deployment, host, object, volume). **Fix:** check the ID (`tw ls --all`, `tw host ls`).
@@ -467,7 +476,7 @@ Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<bi
 412 · hostd, netd. **When:** a deploy of an app with tailworks.jsonc `"tailnet": {"https": true}` ([tailworks-jsonc.md](tailworks-jsonc.md#tailnethttps)), and the tailnet issues no HTTPS certificates to the workload's node: HTTPS Certificates (or MagicDNS) is off for the tailnet, or the control server is Headscale, which issues none. `tw deploy` shows it as the detail of `deploy_failed`; the deployment that was active keeps serving. **Fix:** turn on MagicDNS and HTTPS Certificates in the admin console (DNS page) and deploy again, or remove `tailnet.https` and serve `http://` only.
 
 ### tailnet_required
-400 · cli. **When:** the tailnet could not be determined from the OAuth client, or the Headscale profile was used without `--tailnet` (its `dns.base_domain`). Tailworks never bootstraps from the machine's own Tailscale login. **Fix:** `tw up --tailnet <name> …`.
+400 · cli. **When:** the tailnet could not be determined from the OAuth client (it can't list devices, and mgmt's node hasn't joined yet), or the Headscale profile was used without `--tailnet` (its `dns.base_domain`). Tailworks never bootstraps from the machine's own Tailscale login. **Fix:** `tw up --tailnet <name> …`.
 
 ### tenant_forbidden
 403 · mgmt, cli. **When:** a tenant admin (`github.com/rosskukulinski/tailworks/cap/tenant-admin`) asked for a tenant or action that no single grant value names, called an admin-only route (hosts, tenant settings, releases, upgrades, status), or holds the capability but every value is invalid (missing `tenants` or `actions`, a wildcard, an unknown action or field). **Fix:** add the printed grant (`snippet`) to the tailnet policy, or ask an admin; `tw whoami` lists what your values allow and why any grant nothing ([teams.md](teams.md)).
@@ -515,13 +524,16 @@ Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<bi
 409 · mgmt, cli. **When:** `tw upgrade pause|resume|abort` on a run that isn't running (pause), paused (resume) or active (abort). **Fix:** `tw upgrade status` shows the run's state.
 
 ### upstream_unavailable
-503 · netd. **When:** the platform upstream (workerd or node behind netd) is not answering. **Fix:** it is restarting or crashed; `tw logs <workload>`.
+503 · netd, hostd. **When:** the platform upstream (workerd or node behind netd) is not answering; or the host has had no successful heartbeat to mgmt within the fence window (30 s) after a stall or a cut-off, so a workload with Durable Objects refuses requests and egress until mgmt confirms its lease ([locks.md](locks.md)). **Fix:** it is restarting or crashed; `tw logs <workload>`. After a stall, retry: the host serves again after its next heartbeat, or the workload has moved to another host.
 
 ### usermod_failed
 1 · cli. **When:** `tw host setup --microvm` could not add the user to the `kvm` group. **Fix:** `sudo usermod -aG kvm <user>` and log in again.
 
 ### version_skew
 409 · mgmt, cli. **When:** two tailworks components are outside the supported version window: a host newer than tw-mgmt, or more than one release line behind it; a CLI more than one line behind mgmt (in `--json` mode); mgmt replicas more than one line apart; or a tw-mgmt older than the store's minimum (a newer tw-mgmt ran a contract migration). **Fix:** upgrade in order, mgmt first, then hosts ([upgrading.md](upgrading.md)); a store contracted by a newer tw-mgmt needs that version or newer, or the pre-upgrade backup restored.
+
+### workerd_broken
+1 · cli. **When:** `tw up` found workerd, but `workerd --version` does not run (a missing glibc on Linux; an unsigned or quarantined binary on macOS). `tw up` checks this before it mints mgmt's node key, since the host agent could not start any workload. **Fix:** the fix line names the cause; `tw doctor` runs the full check. Reinstall tailworks (`install.sh`), or point `--workerd <path>` / `$TW_WORKERD` at a workerd that runs.
 
 ### wrangler_required
 1 · cli. **When:** `tw deploy --wrangler` / `tw dev --wrangler` found no wrangler CLI (`$TW_WRANGLER`, the project's `node_modules/.bin/wrangler`, or `wrangler` on PATH). **Fix:** `npm install --save-dev wrangler`, or drop `--wrangler` to bundle with tailworks' built-in esbuild ([wrangler.md](wrangler.md)).
