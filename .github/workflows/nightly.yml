@@ -74,6 +74,11 @@ jobs:
           - target: e2e-dataplane
             timeout: 30
             allow_failure: ""
+          # Deploys, rollbacks, previews and secrets through 3 tw-mgmt
+          # replicas on the runner's Docker Postgres (#421).
+          - target: e2e-dataplane-deploys
+            timeout: 30
+            allow_failure: ""
           - target: e2e-headscale
             timeout: 45
             allow_failure: ""

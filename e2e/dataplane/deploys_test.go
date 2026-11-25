@@ -50,7 +50,10 @@ var previewAliases = []string{"pa", "pb"}
 
 func previewWL(alias string) string { return dpdWL + "--preview-" + alias }
 
-type dBundle struct{ label, b64, sha string }
+type dBundle struct {
+	label, b64, sha string
+	files           map[string][]byte // the base bundles (b1…b4) only
+}
 
 // depView is a deployment as deploys, rollbacks and promotions answer it.
 type depView struct {
@@ -211,15 +214,47 @@ type deploysRun struct {
 	eps     map[string]endpoint  // MagicDNS → workload, host
 	recs    map[string]depRec    // deployment ID → latest record seen
 	rr      int
+	seq     int // bundles made
 }
 
-func (d *deploysRun) bundle(label string) dBundle {
+// bundle makes a new bundle from base (b1…b4, or a label made from one):
+// its BUILD var is unique ("b2.17"), so every deploy has its own SHA-256
+// and every answer names the deploy (or the rollback target) it came from.
+func (d *deploysRun) bundle(base string) dBundle {
+	base, _, _ = strings.Cut(base, ".")
+	var src dBundle
 	for _, b := range d.bundles {
-		if b.label == label {
-			return b
+		if b.label == base {
+			src = b
 		}
 	}
-	panic("no bundle " + label)
+	if src.files == nil {
+		panic("no bundle " + base)
+	}
+	d.mu.Lock()
+	d.seq++
+	label := fmt.Sprintf("%s.%d", base, d.seq)
+	d.mu.Unlock()
+	files := map[string][]byte{}
+	for k, v := range src.files {
+		files[k] = v
+	}
+	var w map[string]any
+	if err := json.Unmarshal(files["wrangler.jsonc"], &w); err != nil {
+		panic(err)
+	}
+	w["vars"].(map[string]any)["BUILD"] = label
+	files["wrangler.jsonc"], _ = json.MarshalIndent(w, "", "  ")
+	tar := hostdtest.MustTar(files)
+	sum := sha256.Sum256(tar)
+	b := dBundle{label: label, b64: base64.StdEncoding.EncodeToString(tar), sha: hex.EncodeToString(sum[:])}
+	d.mu.Lock()
+	d.labelOf[b.sha] = label
+	d.mu.Unlock()
+	d.dh.h.mu.Lock()
+	d.dh.h.log("bundle", map[string]string{"label": label, "sha": b.sha})
+	d.dh.h.mu.Unlock()
+	return b
 }
 
 // replica is the next replica, round-robin from the client's own.
@@ -260,8 +295,9 @@ func trunc(b []byte) string {
 // deploy posts a deployment of dpd (or, with alias, a preview of it)
 // through replica rep and records the op.
 func (d *deploysRun) deploy(client string, rep int, label, alias, host string, replace, force bool) depOp {
-	o := depOp{Client: client, Kind: "deploy", Replica: rep, Build: label, Alias: alias, Host: host, Replace: replace, Force: force}
-	body := map[string]any{"tenantID": d.c.tenantID, "workload": dpdWL, "bundle": d.bundle(label).b64,
+	bn := d.bundle(label)
+	o := depOp{Client: client, Kind: "deploy", Replica: rep, Build: bn.label, Alias: alias, Host: host, Replace: replace, Force: force}
+	body := map[string]any{"tenantID": d.c.tenantID, "workload": dpdWL, "bundle": bn.b64,
 		"host": host, "replace": replace, "forceTakeover": force}
 	if alias != "" {
 		o.Kind = "preview"
@@ -933,12 +969,7 @@ func testDeploys(t *testing.T, scenario string, names []string, seed int64, dur 
 		if err != nil {
 			t.Fatal(err)
 		}
-		tar := hostdtest.MustTar(files)
-		sum := sha256.Sum256(tar)
-		b := dBundle{label, base64.StdEncoding.EncodeToString(tar), hex.EncodeToString(sum[:])}
-		d.bundles = append(d.bundles, b)
-		d.labelOf[b.sha] = label
-		h.log("bundle", map[string]string{"label": label, "sha": b.sha})
+		d.bundles = append(d.bundles, dBundle{label: label, files: files}) // each deploy makes its own from these (bundle)
 	}
 
 	// The workload's secrets before the first deploy, then b1 on h1.

@@ -104,6 +104,15 @@ e2e-placement: deps
 e2e-dataplane: deps
 	$(GO) test -tags e2edataplane -count=1 -v -timeout 25m -run TestDataplane ./e2e/dataplane/...
 
+## e2e-dataplane-deploys: the data-plane loop's deploys scenario (issue #421, e2e/dataplane/LOOP.md "Deploys"):
+## concurrent deploys, rollbacks, previews, promotions and secret puts/deletes through 3 tw-mgmt replicas on
+## Postgres (docker context PG_CTX), under host, mgmt-replica and Postgres faults; checks V1-V6.
+## TW_DP_SEED defaults to today's date; TW_DP_SCENARIO=deploys-hosts|deploys-mgmt|deploys-mixed.
+.PHONY: e2e-dataplane-deploys
+e2e-dataplane-deploys: deps
+	PG_CTX="$(PG_CTX)" TW_DP_SCENARIO="$${TW_DP_SCENARIO:-deploys-mixed}" \
+		$(GO) test -tags e2edataplane -count=1 -v -timeout 25m -run TestDataplane ./e2e/dataplane/...
+
 ## e2e-locks: locks and leader election on DO leases (docs/locks.md), hermetic: real tw-mgmt + two
 ## tw-hostd processes, default timings; one host cut off from mgmt while still on the tailnet.
 .PHONY: e2e-locks

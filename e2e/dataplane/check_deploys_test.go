@@ -140,14 +140,17 @@ func checkV2(d *deploysRun) result {
 type copyInfo struct {
 	wl, host, build string
 	first           time.Time // first answer received
-	dep             depRec    // DeploymentID "" if none fits
+	minEpoch        int64     // the lowest epoch it answered at
+	dep             depRec    // the newest that fits (DeploymentID "" if none)
+	deps            []depRec  // every deployment that fits (a rollback reuses its target's bundle)
 }
 
 // copies assigns every copy that answered to its deployment: the newest
 // record of its workload on its host, created before the copy first
-// answered, that runs the copy's bundle. The reported epoch can't say: it
-// is the workload's current one, so the previous copy answers at the new
-// epoch while a redeploy on the same host starts the new one.
+// answered, that runs the copy's bundle, at or below the lowest epoch the
+// copy answered at. The reported epoch alone can't say: it is the
+// workload's current one on the host, so the previous copy answers at the
+// new epoch while a redeploy on the same host starts the new one.
 func copies(d *deploysRun) map[string]*copyInfo {
 	out := map[string]*copyInfo{}
 	for _, o := range d.dh.obs {
@@ -156,17 +159,22 @@ func copies(d *deploysRun) map[string]*copyInfo {
 		}
 		c := out[o.Inst]
 		if c == nil {
-			c = &copyInfo{wl: o.Workload, host: o.Host, build: o.Build, first: o.Recv}
+			c = &copyInfo{wl: o.Workload, host: o.Host, build: o.Build, first: o.Recv, minEpoch: o.Epoch}
 			out[o.Inst] = c
 		}
+		c.minEpoch = min(c.minEpoch, o.Epoch)
 		if o.Recv.Before(c.first) {
 			c.first = o.Recv
 		}
 	}
 	for _, c := range out {
 		for _, x := range d.recs {
-			if x.Workload == c.wl && x.Host == c.host && d.labelOf[x.BundleSHA256] == c.build &&
-				x.CreatedAt <= c.first.UnixMilli() && x.Epoch > c.dep.Epoch {
+			if x.Workload != c.wl || x.Host != c.host || d.labelOf[x.BundleSHA256] != c.build ||
+				x.CreatedAt > c.first.UnixMilli() || x.Epoch > c.minEpoch {
+				continue
+			}
+			c.deps = append(c.deps, x)
+			if x.Epoch > c.dep.Epoch {
 				c.dep = x
 			}
 		}
@@ -186,8 +194,8 @@ func checkV3(d *deploysRun) result {
 	r := result{ID: "V3", Pass: true}
 	recs := recIndex(d)
 	known := map[string]bool{}
-	for _, b := range d.bundles {
-		known[b.label] = true
+	for _, l := range d.labelOf {
+		known[l] = true
 	}
 	cs := copies(d)
 	bad, handovers, n, overlap := 0, 0, 0, 0
@@ -336,7 +344,13 @@ func checkV4(d *deploysRun, final infoObs, scan []string) result {
 				bad++
 				r.fail("%s epoch %d: the Worker sees %s, the Durable Object %s", o.Workload, o.Epoch, what(n, o.WSec[n]), what(n, dg))
 			}
-			if why := justified(ws[n], dg, start, o.Recv); why != "" {
+			why := justified(ws[n], dg, start, o.Recv)
+			for _, y := range c.deps { // a rollback's copy: any deployment of its bundle there
+				if why != "" && justified(ws[n], dg, time.UnixMilli(y.CreatedAt), o.Recv) == "" {
+					why = ""
+				}
+			}
+			if why != "" {
 				bad++
 				l := lastAcked(ws[n], start)
 				r.fail("%s on %s, copy of %s epoch %d (created %s, answered %s): %s is %s; last acknowledged before it was created: %s at %s",

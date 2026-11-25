@@ -46,7 +46,15 @@ export default {
     if (u.pathname !== "/info") return new Response("not found", { status: 404 });
     try {
       const r = await env.INFO.getByName("i").fetch(req);
-      const j = await r.json();
+      const txt = await r.text();
+      let j = null;
+      try {
+        j = JSON.parse(txt);
+      } catch {}
+      if (!r.ok || !j || !j.build) {
+        const err = "the Durable Object answered " + r.status + ": " + txt.slice(0, 300);
+        return Response.json({ error: err, wbuild: env.BUILD }, { status: 502 });
+      }
       j.wbuild = env.BUILD;
       j.wsec = await secrets(env);
       return Response.json(j);
