@@ -382,6 +382,9 @@ type deployResult struct {
 	// Replicas (tailworks.jsonc "replicas" > 1): every copy and its host.
 	Replicas []mgmt.ReplicaRef `json:"replicas,omitempty"`
 
+	// Images: what each container image was pinned to (deploypins.go).
+	Images []deployImage `json:"images,omitempty"`
+
 	// Warnings: wrangler config tailworks ignores, one line per key.
 	Warnings []string `json:"warnings,omitempty"`
 
@@ -400,17 +403,13 @@ type deployResult struct {
 func cmdDeploy(args []string) error {
 	f := newFlags("deploy")
 	name := f.String("name", "", "workload name (default: tailworks.jsonc name, then wrangler name, then the directory)")
-	allowMissing := f.Bool("allow-missing-grants", false, "deploy even if the preflight finds policy lines missing (the app runs without them; on Tailscale a tag with no tagOwners entry still fails to mint)")
+	po := addPlacementFlags(f, "deploy") // placementflags.go
+	allowMissing, noWait, wait := po.allowMissing, po.noWait, po.wait
 	applyPolicy := f.Bool("apply-policy", false, "when the preflight finds tagOwners, grants, funnel nodeAttrs or Service auto-approval missing, write them to the tailnet policy first (as tw policy --apply; shows the lines and asks, --yes to skip). Without the flag tw deploy asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes")
 	yes := yesFlagBefore(f, "--apply-policy writes the policy")
-	noWait := f.Bool("no-wait", false, "return once mgmt accepted the deploy")
-	forceTakeover := f.Bool("force-takeover", false, "the workload's current host is gone for good: move its Durable Objects anyway (audited; see takeover_unconfirmed); with --replace, confirms moving a stateful workload off a live host")
 	platform := f.String("platform", "", "containers: arches to build Dockerfile images for (linux/amd64,linux/arm64; default: the arches of the tenant pool's container hosts)")
-	hostF := f.String("host", "", "pin the workload to this host (it must be live, in the tenant's pool and offer the tier)")
-	replace := f.Bool("replace", false, "re-place the workload: move it to a clearly better host (smart placement: the best measured path to tailnet.connects) instead of keeping it where it runs")
 	preview := f.Bool("preview", false, "deploy as a preview next to the workload (<workload>--preview-<alias>), leaving the workload as it is; tw promote makes it the workload")
 	previewAlias := f.String("preview-alias", "", "--preview's alias, the <alias> in <workload>--preview-<alias> (implies --preview; default: the start of the bundle's SHA-256)")
-	wait := f.Duration("wait", 3*time.Minute, "how long to wait for ready")
 	waitPublic := f.Duration("wait-public", 0, "also wait (up to this long) until the public URL answers from the public internet (tailworks.jsonc \"public\")")
 	tenantF := tenantFlag(f)
 	vars := varFlags{}
@@ -418,12 +417,7 @@ func cmdDeploy(args []string) error {
 	ao := addAppFlags(f) // wranglerapp.go: --env, --wrangler, --from-wrangler-out
 	// --help lists these under Advanced (helpflags.go).
 	f.group(advancedFlags,
-		"host",
-		"replace",
-		"force-takeover",
-		"allow-missing-grants",
 		"platform",
-		"wait",
 		"wait-public",
 		"wrangler",
 		"from-wrangler-out",
@@ -542,15 +536,7 @@ func cmdDeploy(args []string) error {
 	if len(builtImages) > 0 {
 		body["containerImages"] = builtImages
 	}
-	if *forceTakeover {
-		body["forceTakeover"] = true
-	}
-	if *hostF != "" {
-		body["host"] = *hostF
-	}
-	if *replace {
-		body["replace"] = true
-	}
+	po.apply(body)
 	res.Preview = addPreview(body, a.Name, *preview, *previewAlias, tb) // preview.go
 	if err := mc.Do(ctx, "POST", "/v1/deployments", body, &dr); err != nil {
 		return err
@@ -604,11 +590,17 @@ func cmdDeploy(args []string) error {
 		return err
 	}
 	res.Replicas = dr.Replicas
+	res.Images = deployImages(v) // deploypins.go
 	res.Status, res.Endpoint, res.Public = v.Status, v.Endpoint, v.Public
 	res.Timings["ready"] = ms(time.Since(ds))
 	wurl := workloadURL(a.TwRaw, v.Endpoint.MagicDNS) // tailnethttps.go
-	ev.emit("ready", map[string]any{"deploymentID": dr.DeploymentID, "host": v.Host, "magicDNS": v.Endpoint.MagicDNS, "url": wurl})
+	ready := map[string]any{"deploymentID": dr.DeploymentID, "host": v.Host, "magicDNS": v.Endpoint.MagicDNS, "url": wurl}
+	if len(res.Images) > 0 {
+		ready["images"] = res.Images
+	}
+	ev.emit("ready", ready)
 	if !*f.json {
+		printDeployImages(os.Stdout, res.Images, builtImages)
 		fmt.Printf("✓ deployed   %s@%s · node %s · %s  (deploy → ready %.1fs)\n", orName(res.Preview, a.Name), v.Host, v.Endpoint.Node, wurl, res.Timings["ready"]/1000)
 		if res.Preview != "" {
 			fmt.Print(previewNotice(a.Name, res.Preview, wurl))

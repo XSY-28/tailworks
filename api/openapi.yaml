@@ -1632,6 +1632,48 @@ paths:
         "409": { $ref: "#/components/responses/StoreConflict" }
         default: { $ref: "#/components/responses/Error" }
 
+  /v1/tenants/{id}/workloads/{workload}/stores/r2/{name}/objects:
+    parameters:
+      - $ref: "#/components/parameters/tenantID"
+      - $ref: "#/components/parameters/workloadName"
+      - $ref: "#/components/parameters/storeName"
+    get:
+      tags: [stores]
+      operationId: ListR2Objects
+      summary: List an R2 bucket's objects
+      description: |
+        `tw r2 object ls` (ADR-036 §8): the bucket's live objects in key
+        order (UTF-8 bytes), with their size, etag, upload time and content
+        type. mgmt folds the bucket's index journal (its own copy, written
+        by the workload's R2 binding), so the answer includes every
+        acknowledged write; object bytes stay in the hosts' R2 backend.
+        `404 unknown_store` if the bucket does not exist. `409
+        version_skew` if the index has entries written by a newer
+        tailworks; `409 store_conflict` if the bucket was deleted or
+        recreated during the read.
+      x-tw-role: admin|tenant:data
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: prefix
+          in: query
+          description: Only objects whose keys start with this.
+          schema: { type: string, maxLength: 1024 }
+      responses:
+        "200":
+          description: One page of objects.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/R2ObjectPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        default: { $ref: "#/components/responses/Error" }
+
   /v1/tenants/{id}/workloads/{workload}/d1/{name}/query:
     parameters:
       - $ref: "#/components/parameters/tenantID"
@@ -2535,7 +2577,7 @@ paths:
         is not enough: a workload started before another tenant's first
         deploy would otherwise be able to read that tenant's key file. A
         host may read only its own `{id}`.
-      x-tw-role: host|admin
+      x-tw-role: admin|host
       responses:
         "200":
           description: The paths.
@@ -2559,7 +2601,7 @@ paths:
       tags: [hosts, deployments]
       operationId: ListHostAssignments
       summary: List the deployments assigned to a host
-      x-tw-role: host|admin
+      x-tw-role: admin|host
       parameters:
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/cursor"
@@ -2792,7 +2834,7 @@ paths:
       operationId: GetDeploymentBundle
       summary: Download the raw bundle
       description: Hosts fetch the bundle named by `Assignment.bundleURL`. Only the lease holder (or an admin) may read it.
-      x-tw-role: host|admin|tenant:read
+      x-tw-role: admin|host|tenant:read
       responses:
         "200":
           description: The bundle bytes (tar, optionally gzipped) exactly as uploaded.
@@ -3031,7 +3073,7 @@ paths:
 
         Any other field, or a host sending admin fields (and vice versa), is
         `400 immutable_field`.
-      x-tw-role: host|admin|tenant:kill
+      x-tw-role: admin|host|tenant:kill
       x-tw-audit: true
       parameters:
         - $ref: "#/components/parameters/ifMatch"
@@ -3204,7 +3246,7 @@ paths:
         and a `Link` to that route (`rel="successor-version"`), and will be
         removed no earlier than two releases later. `409 not_ready` when the
         object has no node yet; `410 killed` for tombstones.
-      x-tw-role: host|admin
+      x-tw-role: admin|host
       responses:
         "200":
           description: The certificate.
@@ -3244,7 +3286,7 @@ paths:
         `tenantID` (the admin UI's object page does). Replaces
         `GET /v0/certs/{nodeID}` and the deprecated
         `GET /v1/objects/{id}/certificate`.
-      x-tw-role: host|admin
+      x-tw-role: admin|host
       parameters:
         - name: stableNodeID
           in: path
@@ -3544,7 +3586,7 @@ paths:
         Only the holding host (or an admin) may release it (`403 forbidden`).
         Idempotent from the host's side: `404` means it is already gone.
         Audited (`kind: container_release`).
-      x-tw-role: host|admin
+      x-tw-role: admin|host
       x-tw-audit: true
       responses:
         "204":
@@ -6715,6 +6757,24 @@ components:
         metadata: { description: "Any JSON, at most 1024 bytes serialized." }
       additionalProperties: false
 
+    R2Object:
+      type: object
+      description: One live object of an R2 bucket, as its index describes it.
+      required: [key, version, size, etag, uploaded]
+      properties:
+        key: { type: string }
+        version: { type: string, description: "The object's version (R2's `R2Object.version`): new on every put." }
+        size: { type: integer, format: int64, description: Bytes. }
+        etag: { type: string }
+        uploaded: { type: integer, format: int64, description: Upload time (unix ms). }
+        contentType: { type: string, description: "The object's `httpMetadata.contentType`, if set." }
+    R2ObjectPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/R2Object" } }
+
     D1Query:
       type: object
       required: [queries]
@@ -7000,6 +7060,12 @@ components:
         from: { type: string }
         to: { type: string }
         arch: { type: string, description: '"" = every arch.' }
+        source:
+          type: string
+          description: >-
+            A digest-pinned external image (`ghcr.io/…:<tag>@sha256:…`) that fills `to` when it is not in
+            tailworks' registry yet: mgmt copies it into `public/` at deploy (unless `-no-mirror`), and
+            `tw deploy` builds from it. Absent: `to` must be pushed (`tw image push`).
     ImageAliasList:
       type: object
       required: [items]

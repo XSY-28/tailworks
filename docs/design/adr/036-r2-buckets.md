@@ -158,7 +158,15 @@
    delete <workload> [<bucket>]` call `GET|PUT|DELETE
    …/workloads/{w}/stores/r2/{bucket}`, and `tw r2 object list` reads the
    bucket's journal (admin) and folds it into the live keys. No new mgmt
-   endpoint. Object bodies (`tw r2 object get|put`) need the blob
+   endpoint. (Amended 2026-11-25, #493: superseded by `GET
+   …/stores/r2/{bucket}/objects` (`admin|tenant:data`, like KV's
+   `…/keys`). mgmt folds the index journal itself (`internal/r2wire`,
+   streaming over journal pages and holding only the requested prefix),
+   so the CLI no longer pages the raw journal or carries a copy of
+   store-r2.js's fold and its entry-version check. An index entry from a
+   newer tailworks is `409 version_skew`, never skipped. Against an older
+   mgmt, `tw r2 object ls` fails with `not_found` and says to upgrade
+   mgmt, as ADR-041 §7 allows.) Object bodies (`tw r2 object get|put`) need the blob
    backend, which only hosts have; they need an mgmt endpoint proxied to
    the lease holder (as `tw logs` is) and are a follow-up.
 

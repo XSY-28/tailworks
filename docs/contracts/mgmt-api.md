@@ -113,45 +113,42 @@ not this document's: see
 
 ## Route table
 
+### Operator API
+
+What `tw`, the admin UI, tenant admins and agents call.
+
 | Method | Path | Role | Audited | Operation | Summary |
 |---|---|---|---|---|---|
 | `GET` | `/v1/audit` | admin\|tenant:read | no | `ListAudit` | Query audit records |
-| `POST` | `/v1/audit` | host | yes | `AppendAudit` | Append a batch of host audit records |
 | `GET` | `/v1/audit/verification` | admin | no | `GetAuditVerification` | Verify every audit chain |
-| `GET` | `/v1/certificates/{stableNodeID}` | host\|admin | no | `GetCertificate` | Look up a node certificate by stable node ID |
+| `GET` | `/v1/certificates/{stableNodeID}` | admin\|host | no | `GetCertificate` | Look up a node certificate by stable node ID |
 | `GET` | `/v1/container-reservations` | admin\|host | no | `ListContainerReservations` | List container reservations |
-| `POST` | `/v1/container-reservations` | host | yes | `CreateContainerReservation` | Reserve quota for a container before it starts |
-| `DELETE` | `/v1/container-reservations/{id}` | host\|admin | yes | `DeleteContainerReservation` | Release a container reservation (the container stopped) |
+| `DELETE` | `/v1/container-reservations/{id}` | admin\|host | yes | `DeleteContainerReservation` | Release a container reservation (the container stopped) |
 | `GET` | `/v1/deployments` | admin\|tenant:read | no | `ListDeployments` | List deployments |
 | `POST` | `/v1/deployments` | admin\|tenant:deploy | yes | `CreateDeployment` | Deploy a workload (async), or preflight it with dryRun |
 | `GET` | `/v1/deployments/{id}` | admin\|host\|tenant:read | no | `GetDeployment` | Read a deployment and its status |
 | `DELETE` | `/v1/deployments/{id}` | admin\|tenant:deploy | yes | `DeleteDeployment` | Undeploy |
-| `GET` | `/v1/deployments/{id}/bundle` | host\|admin\|tenant:read | no | `GetDeploymentBundle` | Download the raw bundle |
+| `GET` | `/v1/deployments/{id}/bundle` | admin\|host\|tenant:read | no | `GetDeploymentBundle` | Download the raw bundle |
 | `POST` | `/v1/device-delete-runs` | admin | yes | `CreateDeviceDeleteRun` | Run the scheduled device deletes now |
 | `GET` | `/v1/healthz` | any | no | `GetHealthz` | Liveness |
 | `GET` | `/v1/hosts` | admin | no | `ListHosts` | List hosts |
 | `POST` | `/v1/hosts` | admin | yes | `CreateHost` | Add a host and mint its single-use join key |
 | `GET` | `/v1/hosts/{id}` | admin\|host | no | `GetHost` | Read a host |
-| `PUT` | `/v1/hosts/{id}` | host | yes | `RegisterHost` | Register or re-register a host (idempotent) |
 | `DELETE` | `/v1/hosts/{id}` | admin | yes | `DeleteHost` | Drain and remove a host |
-| `GET` | `/v1/hosts/{id}/assignments` | host\|admin | no | `ListHostAssignments` | List the deployments assigned to a host |
+| `GET` | `/v1/hosts/{id}/assignments` | admin\|host | no | `ListHostAssignments` | List the deployments assigned to a host |
 | `PUT` | `/v1/hosts/{id}/cordon` | admin | yes | `CordonHost` | Cordon a host (no new placements) |
 | `DELETE` | `/v1/hosts/{id}/cordon` | admin | yes | `UncordonHost` | Uncordon a host |
 | `POST` | `/v1/hosts/{id}/drain` | admin | yes | `DrainHost` | Cordon a host and move its workloads to other hosts |
-| `PUT` | `/v1/hosts/{id}/paths` | host | no | `ReportHostPaths` | Report measured tailnet paths (smart placement) |
-| `GET` | `/v1/hosts/{id}/sandbox-deny` | host\|admin | no | `GetHostSandboxDeny` | Every tenant's credential file paths, for the host's sandbox deny list |
-| `PUT` | `/v1/hosts/{id}/status` | host | no | `ReportHostStatus` | Heartbeat (replace the host's reported status) |
+| `GET` | `/v1/hosts/{id}/sandbox-deny` | admin\|host | no | `GetHostSandboxDeny` | Every tenant's credential file paths, for the host's sandbox deny list |
 | `GET` | `/v1/images/aliases` | admin\|host\|tenant:read | no | `ListImageAliases` | The image alias map |
 | `GET` | `/v1/images/public` | admin\|host\|tenant:read | no | `ListPublicImages` | List public base images |
 | `POST` | `/v1/images/public` | admin | yes | `CreatePublicImage` | Mark an image as a public base (mirrors it now) |
 | `DELETE` | `/v1/images/public/{id}` | admin | yes | `DeletePublicImage` | Unmark a public base image |
 | `GET` | `/v1/objects` | admin\|host\|tenant:read | no | `ListObjects` | List objects (with lineage) |
-| `POST` | `/v1/objects` | host | yes | `CreateObject` | Create an object (async mint) |
 | `GET` | `/v1/objects/{id}` | admin\|host\|tenant:read | no | `GetObject` | Read an object (lineage, children, kill record) |
-| `PATCH` | `/v1/objects/{id}` | host\|admin\|tenant:kill | yes | `UpdateObject` | Update an object (JSON Merge Patch) |
+| `PATCH` | `/v1/objects/{id}` | admin\|host\|tenant:kill | yes | `UpdateObject` | Update an object (JSON Merge Patch) |
 | `DELETE` | `/v1/objects/{id}` | admin\|host\|tenant:kill | yes | `DeleteObject` | Kill an object |
-| `GET` | `/v1/objects/{id}/certificate` | host\|admin | no | `GetObjectCertificate` | **Deprecated.** Read the object's node certificate |
-| `POST` | `/v1/objects/{id}/credentials` | host | yes | `CreateObjectCredential` | Mint a single-use auth key for the object's node |
+| `GET` | `/v1/objects/{id}/certificate` | admin\|host | no | `GetObjectCertificate` | **Deprecated.** Read the object's node certificate |
 | `GET` | `/v1/releases` | admin | no | `ListReleases` | The release catalog |
 | `POST` | `/v1/releases` | admin | yes | `ImportReleases` | Import catalog entries (from a release's share/tailworks/catalog.json) |
 | `GET` | `/v1/releases/{version}/artifacts/{name}` | admin\|host | no | `GetReleaseArtifact` | Download a release tarball (hosts upgrading themselves) |
@@ -195,16 +192,15 @@ not this document's: see
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/public` | admin\|tenant:read | no | `GetWorkloadPublic` | Read a workload's public-ingress exposure (`tw expose`) |
 | `PATCH` | `/v1/tenants/{id}/workloads/{workload}/public` | admin\|tenant:deploy | yes | `UpdateWorkloadPublic` | Expose or unexpose a workload's public routes (JSON Merge Patch) |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/rollbacks` | admin\|tenant:deploy | yes | `CreateRollback` | Roll a workload back to a stored bundle (`tw rollback`), or preflight it with dryRun |
-| `POST` | `/v1/tenants/{id}/workloads/{workload}/secret-grants` | host | yes | `CreateWorkloadSecretGrant` | Release a workload's secret values to the lease holder |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/secrets` | admin\|tenant:read | no | `ListWorkloadSecrets` | List a workload's secrets (names and times, never values) |
 | `PUT` | `/v1/tenants/{id}/workloads/{workload}/secrets/{name}` | admin\|tenant:secrets | yes | `PutWorkloadSecret` | Create or replace a workload secret (`tw secret put`) |
 | `DELETE` | `/v1/tenants/{id}/workloads/{workload}/secrets/{name}` | admin\|tenant:secrets | yes | `DeleteWorkloadSecret` | Delete a workload secret (`tw secret rm`) |
-| `GET` | `/v1/tenants/{id}/workloads/{workload}/service-bindings/{binding}` | host | no | `GetServiceBindingTarget` | Resolve a workload's service binding to its target's entry node |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/stores` | admin\|tenant:read | no | `ListWorkloadStores` | List a workload's stores |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/keys` | admin\|tenant:data | no | `ListKVKeys` | List a KV namespace's keys |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` | admin\|tenant:data | no | `GetKVValue` | Get one KV value |
 | `PUT` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` | admin\|tenant:data | yes | `PutKVValue` | Write one KV value |
 | `DELETE` | `/v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value` | admin\|tenant:data | yes | `DeleteKVValue` | Delete one KV value |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/r2/{name}/objects` | admin\|tenant:data | no | `ListR2Objects` | List an R2 bucket's objects |
 | `GET` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` | admin\|tenant:read | no | `GetWorkloadStore` | Get one store |
 | `PUT` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` | admin\|tenant:data | yes | `PutWorkloadStore` | Create a store (idempotent) |
 | `DELETE` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` | admin\|tenant:data | yes | `DeleteWorkloadStore` | Delete a store and its data |
@@ -212,12 +208,10 @@ not this document's: see
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/journal` | admin\|host\|tenant:data | no | `AppendStoreJournal` | Append entries to a store's journal (conditional on its head) |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/repair` | admin\|tenant:data | yes | `RepairStore` | Skip the journal entry a degraded store stopped at |
 | `POST` | `/v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}/status` | admin\|host | yes | `ReportStoreStatus` | Report that a store object is degraded, or healthy again |
-| `POST` | `/v1/tenants/{id}/workloads/{workload}/telemetry-grants` | host | yes | `CreateTelemetryGrant` | Release the tenant's OTLP export config to a workload's lease holder |
 | `GET` | `/v1/upgrades` | admin | no | `ListUpgrades` | Upgrade runs, newest first |
 | `POST` | `/v1/upgrades` | admin | yes | `CreateUpgrade` | Plan an upgrade, or start an upgrade run |
 | `GET` | `/v1/upgrades/{id}` | admin | no | `GetUpgrade` | One upgrade run |
 | `POST` | `/v1/upgrades/{id}/actions` | admin | yes | `ActOnUpgrade` | Pause, resume or abort an upgrade run |
-| `POST` | `/v1/volumes/{id}/keys` | host | yes | `CreateVolumeKeyGrant` | Release a volume's dm-crypt data key to the lease holder |
 | `GET` | `/v1/whoami` | any | no | `WhoAmI` | Who the caller is, as mgmt sees it |
 | `GET` | `/mcp` | admin\|mcp | no | `MCPStream` | Not supported (stateless server; no server-to-client stream) |
 | `POST` | `/mcp` | admin\|mcp | yes | `MCPRequest` | One MCP JSON-RPC request (initialize, ping, tools/list, tools/call) or notification |
@@ -231,6 +225,24 @@ not this document's: see
 | `GET` | `/v2/{name}/manifests/{reference}` | admin\|host\|tenant:read | no | `RegistryGetManifest` | Pull a manifest or index (by tag or digest) |
 | `PUT` | `/v2/{name}/manifests/{reference}` | admin\|tenant:deploy | yes | `RegistryPutManifest` | Push a manifest or index (by tag or digest) |
 | `GET` | `/v2/{name}/tags/list` | admin\|host\|tenant:read | no | `RegistryListTags` | List a repository's tags (`?n=` / `?last=` paging) |
+
+### Host protocol
+
+What the host agent (tw-hostd) calls: role `host` only, refused to every user. The other direction, mgmt → hostd, is hostd's API ([hostd-api.md](hostd-api.md)).
+
+| Method | Path | Role | Audited | Operation | Summary |
+|---|---|---|---|---|---|
+| `POST` | `/v1/audit` | host | yes | `AppendAudit` | Append a batch of host audit records |
+| `POST` | `/v1/container-reservations` | host | yes | `CreateContainerReservation` | Reserve quota for a container before it starts |
+| `PUT` | `/v1/hosts/{id}` | host | yes | `RegisterHost` | Register or re-register a host (idempotent) |
+| `PUT` | `/v1/hosts/{id}/paths` | host | no | `ReportHostPaths` | Report measured tailnet paths (smart placement) |
+| `PUT` | `/v1/hosts/{id}/status` | host | no | `ReportHostStatus` | Heartbeat (replace the host's reported status) |
+| `POST` | `/v1/objects` | host | yes | `CreateObject` | Create an object (async mint) |
+| `POST` | `/v1/objects/{id}/credentials` | host | yes | `CreateObjectCredential` | Mint a single-use auth key for the object's node |
+| `POST` | `/v1/tenants/{id}/workloads/{workload}/secret-grants` | host | yes | `CreateWorkloadSecretGrant` | Release a workload's secret values to the lease holder |
+| `GET` | `/v1/tenants/{id}/workloads/{workload}/service-bindings/{binding}` | host | no | `GetServiceBindingTarget` | Resolve a workload's service binding to its target's entry node |
+| `POST` | `/v1/tenants/{id}/workloads/{workload}/telemetry-grants` | host | yes | `CreateTelemetryGrant` | Release the tenant's OTLP export config to a workload's lease holder |
+| `POST` | `/v1/volumes/{id}/keys` | host | yes | `CreateVolumeKeyGrant` | Release a volume's dm-crypt data key to the lease holder |
 
 ## Tenants
 
@@ -827,7 +839,7 @@ node yet mints a fresh key (`200`); a bound host is `409 exists`
 | 404 | `Error` | No such resource (or none the caller may see). |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `PUT /v1/hosts/{id}` — Register or re-register a host (idempotent)
+### `PUT /v1/hosts/{id}` — Register or re-register a host (idempotent) (host protocol)
 
 `RegisterHost` · role **host** · audited: yes
 
@@ -891,7 +903,7 @@ operator credential when mgmt has one; otherwise it is reported in
 
 ### `GET /v1/hosts/{id}/assignments` — List the deployments assigned to a host
 
-`ListHostAssignments` · role **host\|admin** · audited: no
+`ListHostAssignments` · role **admin\|host** · audited: no
 
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
@@ -972,7 +984,7 @@ Audited `host_drain`. The host record is kept: `tw host uncordon` takes it back,
 | 404 | `Error` | No such resource (or none the caller may see). |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `PUT /v1/hosts/{id}/paths` — Report measured tailnet paths (smart placement)
+### `PUT /v1/hosts/{id}/paths` — Report measured tailnet paths (smart placement) (host protocol)
 
 `ReportHostPaths` · role **host** · audited: no
 
@@ -1005,7 +1017,7 @@ recorded with the deploy.
 
 ### `GET /v1/hosts/{id}/sandbox-deny` — Every tenant's credential file paths, for the host's sandbox deny list
 
-`GetHostSandboxDeny` · role **host\|admin** · audited: no
+`GetHostSandboxDeny` · role **admin\|host** · audited: no
 
 The paths of every tenant's `apiKeyFile` and `oauthClientFile`
 (sorted, deduplicated), and nothing else: no tenant ID, tailnet or
@@ -1027,7 +1039,7 @@ host may read only its own `{id}`.
 | 404 | `Error` | No such resource (or none the caller may see). |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `PUT /v1/hosts/{id}/status` — Heartbeat (replace the host's reported status)
+### `PUT /v1/hosts/{id}/status` — Heartbeat (replace the host's reported status) (host protocol)
 
 `ReportHostStatus` · role **host** · audited: no
 
@@ -1196,7 +1208,7 @@ undeployed (`409 superseded` otherwise).
 
 ### `GET /v1/deployments/{id}/bundle` — Download the raw bundle
 
-`GetDeploymentBundle` · role **host\|admin\|tenant:read** · audited: no
+`GetDeploymentBundle` · role **admin\|host\|tenant:read** · audited: no
 
 Hosts fetch the bundle named by `Assignment.bundleURL`. Only the lease holder (or an admin) may read it.
 
@@ -1382,7 +1394,7 @@ DO instances, agents and sub-agents, each with its own tailnet node.
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `POST /v1/objects` — Create an object (async mint)
+### `POST /v1/objects` — Create an object (async mint) (host protocol)
 
 `CreateObject` · role **host** · audited: yes
 
@@ -1453,7 +1465,7 @@ A host may read only objects whose lease it holds (`403 forbidden` otherwise); p
 
 ### `PATCH /v1/objects/{id}` — Update an object (JSON Merge Patch)
 
-`UpdateObject` · role **host\|admin\|tenant:kill** · audited: yes
+`UpdateObject` · role **admin\|host\|tenant:kill** · audited: yes
 
 Two callers, two subsets:
 
@@ -1528,7 +1540,7 @@ A later `GET` is `410 Gone` with the kill record. Replaces
 
 ### `GET /v1/objects/{id}/certificate` — Read the object's node certificate
 
-`GetObjectCertificate` · role **host\|admin** · audited: no
+`GetObjectCertificate` · role **admin\|host** · audited: no
 
 **Deprecated:** use `GET /v1/certificates/{stableNodeID}?tenant=`
 with the object's `stableNodeID` and `tenantID` (both on `Object`).
@@ -1550,7 +1562,7 @@ object has no node yet; `410 killed` for tombstones.
 | 410 | `TombstoneError` | The object was killed. The body is the typed error plus the kill record; it stays until purged. |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `POST /v1/objects/{id}/credentials` — Mint a single-use auth key for the object's node
+### `POST /v1/objects/{id}/credentials` — Mint a single-use auth key for the object's node (host protocol)
 
 `CreateObjectCredential` · role **host** · audited: yes
 
@@ -1586,7 +1598,7 @@ certificate and mints again under the same hostname. Replaces
 | 503 | `Error` | Still minting (`identity_pending`). |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `GET /v1/tenants/{id}/workloads/{workload}/service-bindings/{binding}` — Resolve a workload's service binding to its target's entry node
+### `GET /v1/tenants/{id}/workloads/{workload}/service-bindings/{binding}` — Resolve a workload's service binding to its target's entry node (host protocol)
 
 `GetServiceBindingTarget` · role **host** · audited: no
 
@@ -1631,7 +1643,7 @@ Single-use auth keys and node certificates.
 
 ### `GET /v1/certificates/{stableNodeID}` — Look up a node certificate by stable node ID
 
-`GetCertificate` · role **host\|admin** · audited: no
+`GetCertificate` · role **admin\|host** · audited: no
 
 The receiver-side lookup: "is the peer that just connected a tailworks
 object, and what is its `lim`?" `404 not_found` when no live object
@@ -1667,7 +1679,7 @@ To read an object's certificate, pass the object's `stableNodeID` and
 
 Worker secrets (Cloudflare-compatible `env.NAME`), encrypted in mgmt custody and released only to the workload's lease holder.
 
-### `POST /v1/tenants/{id}/workloads/{workload}/secret-grants` — Release a workload's secret values to the lease holder
+### `POST /v1/tenants/{id}/workloads/{workload}/secret-grants` — Release a workload's secret values to the lease holder (host protocol)
 
 `CreateWorkloadSecretGrant` · role **host** · audited: yes
 
@@ -1992,6 +2004,38 @@ can be sensitive, and mgmt keeps them only sealed and HMACed.
 | 409 | `Error` | `lease_lost`: the host does not hold the workload's lease at this epoch. `store_conflict`: the journal's head (or incarnation) is not the one the writer gave; catch up and retry. |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
+### `GET /v1/tenants/{id}/workloads/{workload}/stores/r2/{name}/objects` — List an R2 bucket's objects
+
+`ListR2Objects` · role **admin\|tenant:data** · audited: no
+
+`tw r2 object ls` (ADR-036 §8): the bucket's live objects in key
+order (UTF-8 bytes), with their size, etag, upload time and content
+type. mgmt folds the bucket's index journal (its own copy, written
+by the workload's R2 binding), so the answer includes every
+acknowledged write; object bytes stay in the hosts' R2 backend.
+`404 unknown_store` if the bucket does not exist. `409
+version_skew` if the index has entries written by a newer
+tailworks; `409 store_conflict` if the bucket was deleted or
+recreated during the read.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Tenant ID (`tn_…` when generated; one safe path element). |
+| `workload` | path | string | yes | Workload name (a DNS label). |
+| `name` | path | string | yes | The store's name within the workload and kind: for KV, the binding's `id` (or the binding name when it has none). |
+| `limit` | query | integer | no | Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`. |
+| `cursor` | query | string | no | Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged. |
+| `prefix` | query | string | no | Only objects whose keys start with this. |
+
+| Status | Body | Description |
+|---|---|---|
+| 200 | `R2ObjectPage` | One page of objects. |
+| 400 | `Error` | Malformed request, body, filter or cursor. |
+| 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
+| 404 | `Error` | No such resource (or none the caller may see). |
+| 409 | `Error` | The request conflicts with the resource's current state. |
+| default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
+
 ### `GET /v1/tenants/{id}/workloads/{workload}/stores/{kind}/{name}` — Get one store
 
 `GetWorkloadStore` · role **admin\|tenant:read** · audited: no
@@ -2279,7 +2323,7 @@ Hosts stop exporting within a minute. Records stay on the hosts
 | 404 | `Error` | No such resource (or none the caller may see). |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants` — Release the tenant's OTLP export config to a workload's lease holder
+### `POST /v1/tenants/{id}/workloads/{workload}/telemetry-grants` — Release the tenant's OTLP export config to a workload's lease holder (host protocol)
 
 `CreateTelemetryGrant` · role **host** · audited: yes
 
@@ -2576,7 +2620,7 @@ Hash-chained, append-only audit log.
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `POST /v1/audit` — Append a batch of host audit records
+### `POST /v1/audit` — Append a batch of host audit records (host protocol)
 
 `AppendAudit` · role **host** · audited: yes
 
@@ -2762,7 +2806,7 @@ host in progress is uncordoned). Audited `upgrade_pause`, `upgrade_resume`, `upg
 
 dm-crypt data keys for DO volumes (microVM tier).
 
-### `POST /v1/volumes/{id}/keys` — Release a volume's dm-crypt data key to the lease holder
+### `POST /v1/volumes/{id}/keys` — Release a volume's dm-crypt data key to the lease holder (host protocol)
 
 `CreateVolumeKeyGrant` · role **host** · audited: yes
 
@@ -2811,7 +2855,7 @@ Hosts see their own reservations only.
 | 403 | `Error` | The caller is authenticated but lacks the role, or a host acts outside its own records/namespaces. |
 | default | `Error` | Unexpected error. The body is always the typed catalog shape; `Tw-Error` carries the code. |
 
-### `POST /v1/container-reservations` — Reserve quota for a container before it starts
+### `POST /v1/container-reservations` — Reserve quota for a container before it starts (host protocol)
 
 `CreateContainerReservation` · role **host** · audited: yes
 
@@ -2856,7 +2900,7 @@ longer counts, both on the store clock. Audited
 
 ### `DELETE /v1/container-reservations/{id}` — Release a container reservation (the container stopped)
 
-`DeleteContainerReservation` · role **host\|admin** · audited: yes
+`DeleteContainerReservation` · role **admin\|host** · audited: yes
 
 Only the holding host (or an admin) may release it (`403 forbidden`).
 Idempotent from the host's side: `404` means it is already gone.
@@ -4117,6 +4161,7 @@ Live usage against `HostCapacity`, reported with every heartbeat. `containers` i
 |---|---|---|---|
 | `arch` | string | no | "" = every arch. |
 | `from` | string | yes |  |
+| `source` | string | no | A digest-pinned external image (`ghcr.io/…:<tag>@sha256:…`) that fills `to` when it is not in tailworks' registry yet: mgmt copies it into `public/` at deploy (unless `-no-mirror`), and `tw deploy` builds from it. Absent: `to` must be pushed (`tw image push`). |
 | `to` | string | yes |  |
 
 #### `ImageAliasList`
@@ -4776,6 +4821,27 @@ Extends `Page`.
 | `bytes` | integer (int64) | yes |  |
 | `ids` | array of string | yes | The new messages' IDs, in order. |
 | `oldestAt` | integer (int64) | no |  |
+
+#### `R2Object`
+
+One live object of an R2 bucket, as its index describes it.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `contentType` | string | no | The object's `httpMetadata.contentType`, if set. |
+| `etag` | string | yes |  |
+| `key` | string | yes |  |
+| `size` | integer (int64) | yes | Bytes. |
+| `uploaded` | integer (int64) | yes | Upload time (unix ms). |
+| `version` | string | yes | The object's version (R2's `R2Object.version`): new on every put. |
+
+#### `R2ObjectPage`
+
+Extends `Page`.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `items` | array of `R2Object` | no |  |
 
 #### `ReleaseArtifact`
 

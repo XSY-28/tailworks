@@ -57,6 +57,12 @@ export default {
     if (r?.retryBatch?.retry) batch.retryAll(r.retryBatch.delaySeconds === undefined ? undefined : { delaySeconds: r.retryBatch.delaySeconds });
     if (r?.outcome !== "ok") throw new Error("the Python queue() handler failed (" + String(r?.outcome) + "); its exception is in the workload's logs");
   },
+  // An RPC call over a service binding, after the binding dispatcher has
+  // sealed its caller (runtime.ts): TailworksRpc.call() in tenant-py
+  // (pyrpc.go) runs the method on the entrypoint's class.
+  [Symbol.for("tailworks.pyRpc")](env, entrypoint, method, args, cf) {
+    return env.__TW_PY_RPC.call(entrypoint, method, args, JSON.stringify(cf));
+  },
 };
 `
 
@@ -103,7 +109,7 @@ func pythonFrontBinding(py *bundle.App) string {
 	if !py.Python {
 		return ""
 	}
-	return "    (name = \"__TW_PY\", service = \"tenant-py\"),\n"
+	return "    (name = \"__TW_PY\", service = \"tenant-py\"),\n" + pythonFrontRPCBinding() // pyrpc.go
 }
 
 // pythonModuleKind is p's workerd module type in tenant-py.
@@ -136,7 +142,11 @@ func writePython(py *bundle.App, workload string, write func(string, []byte) err
 		}
 	}
 	sort.Strings(mods)
-	mods = append([]string{py.Main}, mods...) // workerd: the first module is the main one
+	mods = append([]string{py.Main}, mods...)
+	main, err := pyMain(py) // pyrpc.go: workerd's main module (the first) re-exports py.Main
+	if err != nil {
+		return "", err
+	}
 	var c strings.Builder
 	fmt.Fprintf(&c, "const tenantPy :Workerd.Worker = (\n  compatibilityDate = %s,\n  compatibilityFlags = [", cq(py.CompatDate))
 	for i, f := range py.CompatFlags {
@@ -146,6 +156,10 @@ func writePython(py *bundle.App, workload string, write func(string, []byte) err
 		c.WriteString(cq(f))
 	}
 	c.WriteString("],\n  modules = [\n")
+	if err := write("py/"+pyMainModule, main); err != nil {
+		return "", err
+	}
+	fmt.Fprintf(&c, "    (name = %s, pythonModule = embed %s),\n", cq(pyMainModule), cq("py/"+pyMainModule))
 	for _, p := range mods {
 		name := py.PythonModuleName(p)
 		if name == "" {

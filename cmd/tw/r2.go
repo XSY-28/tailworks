@@ -2,22 +2,19 @@ package main
 
 // R2 buckets (ADR-036), CLI side: `tw r2 bucket ls|create|rm` and
 // `tw r2 object ls`. A bucket is a platform store of kind "r2", so these
-// use mgmt's stores API (ADR-044); object ls reads the
-// bucket's journal (its index) and folds it into the live keys. Object
+// use mgmt's stores API (ADR-044); object ls is mgmt's
+// GET …/stores/r2/{name}/objects, which folds the bucket's index. Object
 // bytes live in the hosts' R2 backend, which mgmt can't reach: object
 // get/put from the CLI is not built yet.
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/rosskukulinski/tailworks/hostd/bundle"
-	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
 	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
@@ -202,9 +199,17 @@ func cmdR2(args []string) error {
 			fmt.Printf("  its index is gone now; the workload drops its blobs the next time it uses the bucket\n")
 		})
 	case "object ls":
-		objs, err := r2ListObjects(ctx, s.mgmt(), base+"/r2/"+url.PathEscape(bucket)+"/journal", *o.prefix)
+		objs, err := listAll[r2Object](ctx, s.mgmt(), base+"/r2/"+url.PathEscape(bucket)+"/objects?prefix="+url.QueryEscape(*o.prefix), 0)
 		if err != nil {
-			return err
+			switch ce := asCLIErr(err); ce.Code {
+			case "unknown_store": // a bucket appears on its first write
+				objs = []r2Object{}
+			case "not_found": // a tw-mgmt without GET …/r2/{name}/objects
+				ce.Fix = append(ce.Fix, "upgrade tw-mgmt: listing R2 objects needs this release's mgmt (tw upgrade)")
+				return ce
+			default:
+				return ce
+			}
 		}
 		res.Objects = objs
 		emit(f, res, func() {
@@ -219,56 +224,6 @@ func cmdR2(args []string) error {
 		})
 	}
 	return nil
-}
-
-// r2ListObjects reads a bucket's journal (admin) and folds its entries
-// (hostd/gen/js/store-r2.js: put and del by key) into the live keys.
-func r2ListObjects(ctx context.Context, c *mgmtapi.Client, journal, prefix string) ([]r2Object, error) {
-	live := map[string]r2Object{}
-	after := int64(0)
-	for {
-		var p mgmtapi.StoreJournalPage
-		if err := c.Do(ctx, "GET", fmt.Sprintf("%s?after=%d", journal, after), nil, &p); err != nil {
-			return nil, err
-		}
-		for _, e := range p.Entries {
-			var en struct {
-				V   int    `json:"v"` // index entry format (0 = v1 written before versioning)
-				O   string `json:"o"`
-				K   string `json:"k"`
-				Row struct {
-					Size     int64             `json:"size"`
-					ETag     string            `json:"etag"`
-					Uploaded int64             `json:"uploaded"`
-					HTTP     map[string]string `json:"http"`
-				} `json:"row"`
-			}
-			if json.Unmarshal(e.Data, &en) != nil {
-				continue
-			}
-			if en.V > 1 {
-				return nil, fail("version_skew", fmt.Sprintf("this bucket's index has entries written by a newer tailworks (format v%d); upgrade this tailworks", en.V))
-			}
-			switch en.O {
-			case "put":
-				live[en.K] = r2Object{Key: en.K, Size: en.Row.Size, ETag: en.Row.ETag, Uploaded: en.Row.Uploaded, ContentType: en.Row.HTTP["contentType"]}
-			case "del":
-				delete(live, en.K)
-			}
-			after = e.Seq
-		}
-		if !p.More || len(p.Entries) == 0 {
-			break
-		}
-	}
-	out := make([]r2Object, 0, len(live))
-	for k, o := range live {
-		if strings.HasPrefix(k, prefix) {
-			out = append(out, o)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
-	return out, nil
 }
 
 func humanBytes(n int64) string {

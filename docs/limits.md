@@ -62,7 +62,7 @@ tenants sharing a host is in
 | `_headers` rules | 100 | no | `hostd/bundle/assetrules.go:MaxHeaderRules` |
 | `_headers` line | 2000 characters | no | `hostd/bundle/assetrules.go:MaxHeaderLine` |
 | Bundle sent into a microVM guest | 256 MiB | no | `guest/tw-guestd/main_linux.go:maxBundle` |
-| `tw deploy` wait for ready | 3 min | `tw deploy --wait` | `cmd/tw/app.go:-wait` |
+| `tw deploy` wait for ready | 3 min | `tw deploy --wait` | `cmd/tw/placementflags.go:-wait` |
 | One host bringing up a deployment | 2 min | no | `hostd/workload.go:#deploy-bringup` |
 | In-flight requests on the old instance at a redeploy (then it stops) | 10 s | no | `hostd/host.go:DrainTimeout` |
 | Replicas of a stateless workload | 16 | `tailworks.jsonc` `replicas` | `mgmt/workload_replicas.go:MaxReplicas` |

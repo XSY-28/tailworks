@@ -314,6 +314,7 @@ func wranglerWarnings(file string, cfg map[string]any, builder string) []string 
 			out = append(out, fmt.Sprintf("%s: %s: %s", file, k, n))
 		}
 	}
+	out = append(out, containerKeyWarnings(file, cfg)...) // containerbuild.go
 	if dos, ok := cfg["durable_objects"].(map[string]any); ok {
 		bs, _ := dos["bindings"].([]any)
 		for _, b := range bs {

@@ -5,12 +5,15 @@ is there only when hostd's seal over it verified (docs/python.md).
 """
 
 
-def get_caller(request):
+def get_caller(request_or_ctx):
     """The verified tailnet caller as a dict with getCaller's fields
     (nodeId, tags, hostname, node, addrs, user {"login"} or None, capMap,
     objectId, traceId), or None: a public (Funnel) request, or a request
-    tailworks didn't deliver."""
-    cf = getattr(request.js_object, "cf", None)
+    tailworks didn't deliver.
+
+    Pass the request in fetch(), or self.ctx in an RPC method (a call over
+    a service binding), as getCaller(this.ctx) in JavaScript."""
+    cf = getattr(getattr(request_or_ctx, "js_object", request_or_ctx), "cf", None)
     ts = getattr(cf, "tailscale", None) if cf else None
     if not ts:
         return None

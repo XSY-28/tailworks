@@ -981,6 +981,17 @@ export interface BindingDispatcher {
   call(ctx: any, env: any, entrypoint: string, method: string, args: unknown[], cf: any): Promise<unknown>;
 }
 
+// PY_RPC marks a Python Worker's generated front (hostd/gen/python.go,
+// ADR-055): its default export forwards an RPC call, to any entrypoint, to
+// the Python worker, which has the entrypoint classes the front can't see.
+const PY_RPC = Symbol.for("tailworks.pyRpc");
+
+/** pyCallCf is the part of a call's sealed cf a Python method sees as self.ctx.cf (no ticket). */
+function pyCallCf(scf: any): Record<string, unknown> {
+  const { tw: _tw, ...rest } = scf ?? {};
+  return rest;
+}
+
 export function bindingDispatcher(T: Record<string, any>, bindings: BindingMap): BindingDispatcher {
   const target = (ep: string) => {
     const H = ep ? T[ep] : T.default;
@@ -997,6 +1008,9 @@ export function bindingDispatcher(T: Record<string, any>, bindings: BindingMap):
   return {
     async fetch(ctx, env, req) {
       const ep = String((req as any)?.cf?.tw?.binding?.entrypoint ?? "");
+      if (ep && typeof T.default?.[PY_RPC] === "function" && !(ep in T)) {
+        return new TailnetError("service_not_found", `entrypoint ${ep} of a Python Worker answers RPC calls, not fetch(); bind the default entrypoint for fetch()`).toResponse();
+      }
       let t;
       try {
         t = target(ep);
@@ -1015,6 +1029,17 @@ export function bindingDispatcher(T: Record<string, any>, bindings: BindingMap):
       const tw: TailnetApiStub | undefined = env?.__TW;
       const sealed: any = await sealedRequest(tw, { cf });
       const scf = sealed?.cf ?? {};
+      const py = T.default?.[PY_RPC];
+      if (typeof py === "function") {
+        // A Python Worker: the same refusals, then the call goes to the
+        // Python worker, which checks the entrypoint and method itself.
+        if (typeof method !== "string" || method in Object.prototype || HANDLER_METHODS.includes(method) || method === "constructor") {
+          throw new TypeError(`The RPC receiver does not implement the method "${method}".`);
+        }
+        const ticket = typeof scf?.tw?.ticket === "string" && scf.tw.ticket ? scf.tw.ticket : undefined;
+        const genv = guardEnv(env, bindings, "tailnet", admitter(tw, { ticket }));
+        return await py(genv, ep || "", method, args, pyCallCf(scf));
+      }
       const t = target(ep);
       if (typeof t.H !== "function") throw new TypeError(`entrypoint ${t.name} is not a WorkerEntrypoint class; RPC needs one`);
       const cctx = callCtx(ctx, scf);

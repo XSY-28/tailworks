@@ -543,6 +543,8 @@ const n = await env.ADMIN.countUsers();       // RPC to the Admin entrypoint
   stubs, streams, `Request`, `Response`) is refused with
   [`rpc_not_forwardable`](errors.md#rpc_not_forwardable); send a body
   with `fetch()` instead. A thrown error keeps its name and message.
+- **The target can be a Python Worker**: RPC reaches its `Default` or
+  named `WorkerEntrypoint` class's methods ([python.md](python.md#rpc-from-other-workers)).
 - **Errors:** a target that isn't deployed in the tenant, or an
   `entrypoint` it doesn't export, is
   [`service_not_found`](errors.md#service_not_found); a killed one is

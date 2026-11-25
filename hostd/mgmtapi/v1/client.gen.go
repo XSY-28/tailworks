@@ -2895,7 +2895,10 @@ type ImageAlias struct {
 	// Arch "" = every arch.
 	Arch *string `json:"arch,omitempty"`
 	From string  `json:"from"`
-	To   string  `json:"to"`
+
+	// Source A digest-pinned external image (`ghcr.io/…:<tag>@sha256:…`) that fills `to` when it is not in tailworks' registry yet: mgmt copies it into `public/` at deploy (unless `-no-mirror`), and `tw deploy` builds from it. Absent: `to` must be pushed (`tw image push`).
+	Source *string `json:"source,omitempty"`
+	To     string  `json:"to"`
 }
 
 // ImageAliasList defines model for ImageAliasList.
@@ -3772,6 +3775,31 @@ type QueueSendResult struct {
 	// Ids The new messages' IDs, in order.
 	Ids      []string `json:"ids"`
 	OldestAt *int64   `json:"oldestAt,omitempty"`
+}
+
+// R2Object One live object of an R2 bucket, as its index describes it.
+type R2Object struct {
+	// ContentType The object's `httpMetadata.contentType`, if set.
+	ContentType *string `json:"contentType,omitempty"`
+	Etag        string  `json:"etag"`
+	Key         string  `json:"key"`
+
+	// Size Bytes.
+	Size int64 `json:"size"`
+
+	// Uploaded Upload time (unix ms).
+	Uploaded int64 `json:"uploaded"`
+
+	// Version The object's version (R2's `R2Object.version`): new on every put.
+	Version string `json:"version"`
+}
+
+// R2ObjectPage defines model for R2ObjectPage.
+type R2ObjectPage struct {
+	Items []R2Object `json:"items"`
+
+	// NextCursor Pass as `?cursor=` for the next page; `null` when there is none.
+	NextCursor nullable.Nullable[string] `json:"nextCursor"`
 }
 
 // ReleaseArtifact defines model for ReleaseArtifact.
@@ -5414,6 +5442,18 @@ type GetKVValueParams struct {
 type PutKVValueParams struct {
 	// Key The KV key (any UTF-8, 1 to 512 bytes; not `.` or `..`).
 	Key string `form:"key" json:"key"`
+}
+
+// ListR2ObjectsParams defines parameters for ListR2Objects.
+type ListR2ObjectsParams struct {
+	// Limit Page size, 1–500 (default 50). Out-of-range values are `400 bad_request`.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque page cursor from the previous page's `nextCursor`. Filters must be repeated unchanged.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Prefix Only objects whose keys start with this.
+	Prefix *string `form:"prefix,omitempty" json:"prefix,omitempty"`
 }
 
 // ReadStoreJournalParams defines parameters for ReadStoreJournal.
@@ -7711,6 +7751,21 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `PutKVValue` operationId).
 	PutKVValue(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *PutKVValueParams, body PutKVValueJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListR2Objects List an R2 bucket's objects
+	//
+	// `tw r2 object ls` (ADR-036 §8): the bucket's live objects in key
+	// order (UTF-8 bytes), with their size, etag, upload time and content
+	// type. mgmt folds the bucket's index journal (its own copy, written
+	// by the workload's R2 binding), so the answer includes every
+	// acknowledged write; object bytes stay in the hosts' R2 backend.
+	// `404 unknown_store` if the bucket does not exist. `409
+	// version_skew` if the index has entries written by a newer
+	// tailworks; `409 store_conflict` if the bucket was deleted or
+	// recreated during the read.
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/r2/{name}/objects (the `ListR2Objects` operationId).
+	ListR2Objects(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *ListR2ObjectsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteWorkloadStore Delete a store and its data
 	//
@@ -11127,6 +11182,31 @@ func (c *Client) PutKVValueWithBody(ctx context.Context, id TenantID, workload W
 // Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `PutKVValue` operationId).
 func (c *Client) PutKVValue(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *PutKVValueParams, body PutKVValueJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutKVValueRequest(c.Server, id, workload, name, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListR2Objects List an R2 bucket's objects
+//
+// `tw r2 object ls` (ADR-036 §8): the bucket's live objects in key
+// order (UTF-8 bytes), with their size, etag, upload time and content
+// type. mgmt folds the bucket's index journal (its own copy, written
+// by the workload's R2 binding), so the answer includes every
+// acknowledged write; object bytes stay in the hosts' R2 backend.
+// `404 unknown_store` if the bucket does not exist. `409
+// version_skew` if the index has entries written by a newer
+// tailworks; `409 store_conflict` if the bucket was deleted or
+// recreated during the read.
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/r2/{name}/objects (the `ListR2Objects` operationId).
+func (c *Client) ListR2Objects(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *ListR2ObjectsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListR2ObjectsRequest(c.Server, id, workload, name, params)
 	if err != nil {
 		return nil, err
 	}
@@ -17053,6 +17133,105 @@ func NewPutKVValueRequestWithBody(server string, id TenantID, workload WorkloadN
 	return req, nil
 }
 
+// NewListR2ObjectsRequest constructs an http.Request for the ListR2Objects method
+func NewListR2ObjectsRequest(server string, id TenantID, workload WorkloadName, name StoreName, params *ListR2ObjectsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "workload", workload, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tenants/%s/workloads/%s/stores/r2/%s/objects", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Prefix != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "prefix", *params.Prefix, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewDeleteWorkloadStoreRequest constructs an http.Request for the DeleteWorkloadStore method
 func NewDeleteWorkloadStoreRequest(server string, id TenantID, workload WorkloadName, kind StoreKind, name StoreName) (*http.Request, error) {
 	var err error
@@ -19994,6 +20173,23 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /v1/tenants/{id}/workloads/{workload}/stores/kv/{name}/value (the `PutKVValue` operationId).
 	PutKVValueWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *PutKVValueParams, body PutKVValueJSONRequestBody, reqEditors ...RequestEditorFn) (*PutKVValueResponse, error)
+
+	// ListR2ObjectsWithResponse List an R2 bucket's objects
+	//
+	// `tw r2 object ls` (ADR-036 §8): the bucket's live objects in key
+	// order (UTF-8 bytes), with their size, etag, upload time and content
+	// type. mgmt folds the bucket's index journal (its own copy, written
+	// by the workload's R2 binding), so the answer includes every
+	// acknowledged write; object bytes stay in the hosts' R2 backend.
+	// `404 unknown_store` if the bucket does not exist. `409
+	// version_skew` if the index has entries written by a newer
+	// tailworks; `409 store_conflict` if the bucket was deleted or
+	// recreated during the read.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/r2/{name}/objects (the `ListR2Objects` operationId).
+	ListR2ObjectsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *ListR2ObjectsParams, reqEditors ...RequestEditorFn) (*ListR2ObjectsResponse, error)
 
 	// DeleteWorkloadStoreWithResponse Delete a store and its data
 	//
@@ -28960,6 +29156,124 @@ func (r PutKVValueResponse) ContentType() string {
 	return ""
 }
 
+// ListR2ObjectsResponse200Headers the declared response headers of an HTTP 200 response for ListR2Objects
+type ListR2ObjectsResponse200Headers struct {
+	CacheControl *string
+}
+
+// ListR2ObjectsResponse400Headers the declared response headers of an HTTP 400 response for ListR2Objects
+type ListR2ObjectsResponse400Headers struct {
+	TwError *string
+}
+
+// ListR2ObjectsResponse403Headers the declared response headers of an HTTP 403 response for ListR2Objects
+type ListR2ObjectsResponse403Headers struct {
+	TwError *string
+}
+
+// ListR2ObjectsResponse404Headers the declared response headers of an HTTP 404 response for ListR2Objects
+type ListR2ObjectsResponse404Headers struct {
+	TwError *string
+}
+
+// ListR2ObjectsResponse409Headers the declared response headers of an HTTP 409 response for ListR2Objects
+type ListR2ObjectsResponse409Headers struct {
+	TwError *string
+}
+
+// ListR2ObjectsResponseDefaultHeaders the declared response headers of an HTTP default response for ListR2Objects
+type ListR2ObjectsResponseDefaultHeaders struct {
+	TwError *string
+}
+
+type ListR2ObjectsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *R2ObjectPage
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ListR2ObjectsResponse200Headers
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ListR2ObjectsResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ListR2ObjectsResponse403Headers
+	// Headers404 the parsed response headers for an HTTP 404 response
+	Headers404 *ListR2ObjectsResponse404Headers
+	// Headers409 the parsed response headers for an HTTP 409 response
+	Headers409 *ListR2ObjectsResponse409Headers
+	// HeadersDefault the parsed response headers for an HTTP default response
+	HeadersDefault *ListR2ObjectsResponseDefaultHeaders
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListR2ObjectsResponse) GetJSON200() *R2ObjectPage {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListR2ObjectsResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListR2ObjectsResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListR2ObjectsResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r ListR2ObjectsResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListR2ObjectsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListR2ObjectsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListR2ObjectsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListR2ObjectsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListR2ObjectsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // DeleteWorkloadStoreResponse403Headers the declared response headers of an HTTP 403 response for DeleteWorkloadStore
 type DeleteWorkloadStoreResponse403Headers struct {
 	TwError *string
@@ -33122,6 +33436,29 @@ func (c *ClientWithResponses) PutKVValueWithResponse(ctx context.Context, id Ten
 		return nil, err
 	}
 	return ParsePutKVValueResponse(rsp)
+}
+
+// ListR2ObjectsWithResponse List an R2 bucket's objects
+//
+// `tw r2 object ls` (ADR-036 §8): the bucket's live objects in key
+// order (UTF-8 bytes), with their size, etag, upload time and content
+// type. mgmt folds the bucket's index journal (its own copy, written
+// by the workload's R2 binding), so the answer includes every
+// acknowledged write; object bytes stay in the hosts' R2 backend.
+// `404 unknown_store` if the bucket does not exist. `409
+// version_skew` if the index has entries written by a newer
+// tailworks; `409 store_conflict` if the bucket was deleted or
+// recreated during the read.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tenants/{id}/workloads/{workload}/stores/r2/{name}/objects (the `ListR2Objects` operationId).
+func (c *ClientWithResponses) ListR2ObjectsWithResponse(ctx context.Context, id TenantID, workload WorkloadName, name StoreName, params *ListR2ObjectsParams, reqEditors ...RequestEditorFn) (*ListR2ObjectsResponse, error) {
+	rsp, err := c.ListR2Objects(ctx, id, workload, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListR2ObjectsResponse(rsp)
 }
 
 // DeleteWorkloadStoreWithResponse Delete a store and its data
@@ -42283,6 +42620,130 @@ func ParsePutKVValueResponse(rsp *http.Response) (*PutKVValueResponse, error) {
 		response.Headers409 = &headers
 	case true:
 		var headers PutKVValueResponseDefaultHeaders
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.HeadersDefault = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListR2ObjectsResponse parses an HTTP response from a ListR2ObjectsWithResponse call
+func ParseListR2ObjectsResponse(rsp *http.Response) (*ListR2ObjectsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListR2ObjectsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest R2ObjectPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ListR2ObjectsResponse200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 400:
+		var headers ListR2ObjectsResponse400Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ListR2ObjectsResponse403Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 404:
+		var headers ListR2ObjectsResponse404Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers404 = &headers
+	case rsp.StatusCode == 409:
+		var headers ListR2ObjectsResponse409Headers
+		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.TwError = &value
+		}
+		response.Headers409 = &headers
+	case true:
+		var headers ListR2ObjectsResponseDefaultHeaders
 		if values := rsp.Header.Values("Tw-Error"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Tw-Error", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {

@@ -29,6 +29,15 @@ and the class bound as a Durable Object.
   `docker buildx`, pushes them to tailworks' registry, and pins every image by
   digest (see [Images](#images-build-registry-pinning-host-pull-adr-032-d3)).
   The host never builds and never runs a container engine.
+  `image_build_context` sets the build context (default: the Dockerfile's
+  directory) and `image_vars` the build args (`--build-arg`), as on
+  Cloudflare; a named image takes `build_context` and `build_vars`. Build
+  vars are not secrets: they end up in the image and in the bundle's
+  wrangler config.
+- Other keys of a `containers` entry (`rollout_*`, `constraints`, …) are
+  ignored, with one warning line each. `name` and `scheduling_policy`
+  `"default"` or `"durable_object"` (one container per Durable Object, what
+  tailworks does) get none.
 - `instance_type` is one of Cloudflare's types or custom resources (below).
   `max_instances` caps the running containers of that class for the tenant.
 - tailworks.jsonc can add `"containers"` too: the same array form, or
@@ -158,7 +167,7 @@ a per-container proxy on the host:
 
 | Host | Containers | Notes |
 |---|---|---|
-| Linux arm64, KVM (Firecracker) | ✅ verified (Lima, nested KVM) | the stock `cloudflare/sandbox` images are amd64 only, so tailworks swaps in its arm64 rebuilds through the alias map; app code is unchanged |
+| Linux arm64, KVM (Firecracker) | ✅ verified (Lima, nested KVM) | the stock `cloudflare/sandbox` images are amd64 only, so tailworks swaps in its arm64 rebuilds through the alias map; app code is unchanged. **Prerequisite:** the rebuilds are not published yet, so the operator builds them once (`guest/images/build-sandbox-images.sh`, Docker) and pushes each with `tw image push` (see "Public bases" below); until then an arm64 deploy of `cloudflare/sandbox` fails with `image_unavailable`. Once an alias has a published `source`, mgmt fetches it on first use instead |
 | Linux amd64, KVM (Firecracker) | ⚠ built, not verified | stock images run as published (no alias). The amd64 microVM tier passed `make e2e-vm` on a nested KVM test host (2026-11-22), but `make e2e-container` has not run on amd64 yet |
 | macOS, Apple silicon (vz) | ✅ verified | needs `mkfs.erofs` (`brew install erofs-utils`). With `tw-hostd -vm-rosetta` the stock amd64 images run under Rosetta; without it, the arm64 rebuilds |
 | no KVM / NAS / process-only hosts | ❌ | they don't offer `containers`; a container bundle is not placed there and `start()` throws `tier_unavailable` (no fallback) |
@@ -382,9 +391,11 @@ tw deploy                    /v2/  OCI registry                            no co
   → tailworks' arm64 rebuilds on arm64) becomes BuildKit named contexts
   (`--build-context docker.io/cloudflare/sandbox:0.12.14=oci-layout://…`) for
   every form the Dockerfile writes the ref in (FROM, `COPY --from=`, an ARG
-  default), fetched from tailworks' registry (`public/`) or else from the local
-  Docker store. (A `docker-image://` context naming a `tw.local` ref makes
-  BuildKit try the network first: 100 s of timeouts, measured.)
+  default), fetched from tailworks' registry (`public/`), else the alias's
+  digest-pinned `source` (`docker-image://ghcr.io/…@sha256:…`, which BuildKit
+  pulls itself), else from the local Docker store. (A `docker-image://`
+  context naming a `tw.local` ref makes BuildKit try the network first: 100 s
+  of timeouts, measured.)
 - **Registry (`internal/registry`, served by tw-mgmt at `/v2/`).** The OCI
   distribution push/pull subset on mgmt's own listeners (tsnet `:80`/`:443`,
   and the local-dev socket), behind the `/v1` WhoIs gate: admins push and pull
@@ -414,13 +425,29 @@ tw deploy                    /v2/  OCI registry                            no co
   upstreams for tests), unless it is a public base. The alias map applies per
   arch. Retagging the upstream after the deploy changes nothing that runs; the
   next deploy picks the new digest. Audited (`image_pin`, with every pin).
+  `tw deploy` prints a `✓ image` line per pin of a ref it did not build
+  (`<Class> <ref> linux/<arch> → <repository>@<digest> (<from>)`) once the
+  deployment is ready, and lists every pin in `--json`'s `images`.
 - **Public bases.** `tw image public add <ref> [--arch …]` mirrors an
   upstream image into `public/<registry>/<repo>` (or names a `tw.local` ref
   already in `public/`) and marks its per-arch digests public; deploys of every
-  tenant then pin those, so hosts cache it once. `tw image push <layout|tar>
-  tw.local/<name>:<tag>` is how the operator puts tailworks' arm64 rebuilds (the
-  alias targets) into `public/`. Unmarking (`rm`) leaves pinned deployments as
-  they are.
+  tenant then pin those, so hosts cache it once. Unmarking (`rm`) leaves
+  pinned deployments as they are. The **alias targets** (tailworks' arm64
+  rebuilds, `tw.local/cloudflare-sandbox:<v>-arm64`) live in `public/` too. An
+  alias may carry a `source`: the rebuild as published
+  (`ghcr.io/rosskukulinski/cloudflare-sandbox:<v>-arm64@sha256:…`, by
+  `.github/workflows/publish-sandbox-images.yml`). When a deploy pins an alias
+  target that isn't in `public/` yet, mgmt copies the `source` there through
+  its own egress, verified against the digest, tagged as the target, once for
+  every tenant; the pin's `from` still reads `alias <target>`, so `image_pin`
+  audits show the substitution. **Until the rebuilds are published, the default
+  aliases have no `source`** and the operator fills the targets by hand: build
+  them with `guest/images/build-sandbox-images.sh OUT_DIR` (Docker), then
+  `tw image push OUT_DIR/cloudflare-sandbox-<v>-arm64.tar
+  tw.local/cloudflare-sandbox:<v>-arm64`. With `-no-mirror` mgmt never fetches
+  a `source`, so the push is always how the targets get there; the
+  `image_unavailable` message says so. `tw-mgmt -image-aliases <file>` replaces
+  the map (`[{from, to, arch, source}]`; a `source` must be pinned by digest).
 - **Host pull (`hostd/image`).** hostd starts a container only from the pin
   for its own arch, pulled as a host from tailworks' registry over the API's own
   connection (`mgmtapi.Client.OCI`: never Docker Hub, no container engine),
@@ -494,3 +521,11 @@ A host offers `containers` (and mgmt places container bundles
 on it) only when containers can actually run there: a microVM backend whose
 helper (Firecracker) or kernel (vz) supports container guests, a guest
 kernel with erofs, and `mkfs.erofs`.
+
+`tw doctor`'s `containers` row says whether this host offers them, and
+if not, why (the reason tw-hostd found when it started; never a failure).
+`tw up`'s tier line ends `, containers` when it does, and `; containers
+off: see tw doctor` when the microVM tier is on but containers are not.
+When `tw deploy` finds no live host offering containers to build for, its
+`no_host` fix lists the live hosts and their tiers; `--platform` builds
+anyway. `tw deploy` checks `docker buildx version` before it builds.

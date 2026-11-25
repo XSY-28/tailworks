@@ -141,6 +141,11 @@
    audited (`d1_write`, with the statement count, never the SQL); a read
    is logged. Export is the backup: the journal in mgmt is the off-host
    durable copy and is backed up with mgmt's database (sealed).
+   The two routes stay under `…/d1/{name}` rather than moving under
+   `…/stores/d1/{name}` next to KV's and R2's data routes: `/v1` is
+   additive-only with a two-release deprecation (ADR-041 §2), and unlike
+   those, they are not a fold of the journal in mgmt but a call to the
+   lease holder's running workerd.
 
 6. **Sessions.** A bookmark is the store's journal position, zero-padded,
    plus its incarnation (`0000000000000042.si_…`), so upstream's
