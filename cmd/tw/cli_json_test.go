@@ -53,6 +53,7 @@ var cliSurface = []struct {
 	{"undeploy", []string{"undeploy", "app"}},
 	{"expose", []string{"expose", "off", "app"}},
 	{"secret put", []string{"secret", "put", "API_TOKEN", "--workload", "app"}},
+	{"secret bulk", []string{"secret", "bulk", "/nonexistent/secrets.env", "--workload", "app"}},
 	{"secret ls", []string{"secret", "ls", "--workload", "app"}},
 	{"secret rm", []string{"secret", "rm", "API_TOKEN", "--workload", "app"}},
 	{"kv namespace create", []string{"kv", "namespace", "create", "sessions", "--workload", "app"}},

@@ -121,20 +121,6 @@ func parseSemver(s string) semver {
 // as in internal/version).
 func (a semver) newerThan(b semver) bool { return a.v.Compare(b.v) > 0 }
 
-// upgradeCommand is how to install a newer release: `tw upgrade` where
-// this tailworks has it, else get.sh (docs/INSTALL.md).
-func upgradeCommand() string {
-	if c := npmUpgradeCommand(); c != "" { // npm_install.go
-		return c
-	}
-	for _, c := range commands {
-		if c.name == "upgrade" && !c.hidden {
-			return "tw upgrade"
-		}
-	}
-	return "curl -fsSLO https://raw.githubusercontent.com/" + releaseRepo() + "/master/scripts/get.sh && sh get.sh"
-}
-
 // restartCommand is how to restart the daemons tw up started.
 func restartCommand(s *state) string {
 	if serviceIsFor(s) { // service.go
@@ -179,7 +165,7 @@ func cmdVersionCheck(f *flags) error {
 	release := cur.ok && cur.pre == ""
 	res.UpdateAvailable = release && lv.ok && lv.newerThan(cur)
 	if res.UpdateAvailable {
-		res.Upgrade = upgradeCommand()
+		res.Upgrade = upgradeCommand(latest) // install_channel.go
 	}
 	s, _ := openState(*f.stateDir)
 	res.Daemons = runningDaemons(ctx, s)
@@ -320,5 +306,5 @@ func updateNoticeLine(c updateCache, now time.Time) string {
 	if !lv.ok || !cur.ok || !lv.newerThan(cur) || now.Sub(c.NotifiedAt) < updateEvery {
 		return ""
 	}
-	return fmt.Sprintf("› tw %s is out (this is %s)%s: %s · details: tw version --check · TW_NO_UPDATE_CHECK=1 turns this notice off", c.Latest, version, securityReleaseTag(c.Security), upgradeCommand())
+	return fmt.Sprintf("› tw %s is out (this is %s)%s: %s · details: tw version --check · TW_NO_UPDATE_CHECK=1 turns this notice off", c.Latest, version, securityReleaseTag(c.Security), upgradeCommand(c.Latest))
 }

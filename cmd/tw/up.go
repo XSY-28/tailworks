@@ -120,20 +120,18 @@ func cmdUp(args []string) error {
 	insecureSH := f.Bool("insecure-shared-host", false, "on a host without a process sandbox (Linux without Landlock), still serve process-tier workloads of more than one tenant; tenants are then NOT isolated from each other")
 	allowExp := f.Bool("allow-experimental-flags", false, "let deployments on this host set compatibility flags workerd marks experimental (unsafe_module, rtti_api, precise_timers, …); refused by default (docs/COMPAT.md#experimental-flags)")
 	workerdFlag := f.String("workerd", "", "workerd binary (default: $TW_WORKERD, the install's, or PATH)")
-	hb := f.Duration("heartbeat", time.Second, "host heartbeat period")
-	tomb := f.Duration("kill-tombstone", 12*time.Second, "keep a killed node answering object_killed this long")
-	delDelay := f.Duration("device-delete-delay", 8*time.Second, "delete a killed object's device this long after the kill (< --kill-tombstone)")
+	// up_tuning.go: --heartbeat, --kill-tombstone, --device-delete-delay, --push-port
+	addRemovedUpFlags(f)
 	retention := addRetentionFlags(f) // up_retention.go
 	workerInet := addWorkerInternetFlag(f)
 	siblings := f.Bool("allow-sibling-egress", false, "dial other objects on this host over WireGuard (a hairpin) instead of netd's in-process hop (tests)")
-	warmKeys := f.Int("warm-keys", 5, "pre-minted single-use keys kept per (tenant, tag set), so a new object skips the key-API call; sized from the recent create rate, capped here (0 = off)")
-	poolNodes := f.Int("pool-nodes", 1, "pre-joined nodes kept per hot class (a create here in the last hour), so a new object is renamed onto one (~0.2 s) instead of joining a new node; each is a device (0 = off)")
+	warmKeys := f.Int("warm-keys", mgmtd.DefaultWarmKeys, "pre-minted single-use keys kept per (tenant, tag set), so a new object skips the key-API call; sized from the recent create rate, capped here (0 = off)")
+	poolNodes := f.Int("pool-nodes", hostdrun.DefaultPoolNodes, "pre-joined nodes kept per hot class (a create here in the last hour), so a new object is renamed onto one (~0.2 s) instead of joining a new node; each is a device (0 = off)")
 	portMapping := f.Bool("port-mapping", false, "use UPnP/NAT-PMP/PCP for this host's nodes (off by default: it adds ~250 ms to every new node's join and has every node ask the router for a mapping; turn on behind hard NATs that need router-assisted direct paths)")
 	service := f.Bool("service", false, "run the supervisor as a service that starts at login: Linux systemd user unit (~/.config/systemd/user/tw.service), macOS LaunchAgent (~/Library/LaunchAgents/dev.tailworks.up.plist). Default: on for a new default state dir where available; an existing state dir keeps how it runs (--service=false runs it in the background without a service)")
 	mgmtHost := f.String("mgmt-hostname", "", "mgmt's own tailnet node name (default "+defaultMgmtHostname+")")
 	mgmtKey := f.String("mgmt-authkey-file", "", "TS_AUTHKEY=… file for mgmt's node (unattended join: tests, automation); default: the tenant's credential mints it")
 	localDev := f.Bool("local-dev", false, "DEVELOPMENT ONLY: hostd and the CLI use mgmt's unix socket with the per-host token instead of the tailnet (hermetic tests). Normal operation is tsnet only")
-	pushPort := f.Int("push-port", defaultPushPort, "port on this host's own tailnet node where mgmt pushes kills (--separate-host)")
 	storeF := addStoreFlags(f) // up_store.go: --db, --db-file, --custody, --setec-url
 	separate := f.Bool("separate-host", false, "run tw-hostd as its own process on its own tag:tw-host tailnet node (the scale-out layout; default: ONE process, the host agent embedded in tw-mgmt, mgmt's node the only infrastructure device). --local-dev implies it")
 	pos, err := f.parse(args)
@@ -143,15 +141,12 @@ func cmdUp(args []string) error {
 	if len(pos) > 0 {
 		return fail("bad_request", "tw up takes no arguments", "usage: tw "+usageOf("up"))
 	}
+	warnRemovedUpFlags(f.FlagSet, os.Stderr)
 	if _, err := storeF.validate(); err != nil {
 		return err
 	}
 	t0 := time.Now()
 	timings := map[string]float64{}
-	if *delDelay >= *tomb {
-		return fail("bad_request", "--device-delete-delay must be shorter than --kill-tombstone",
-			"the tombstone answers object_killed only while the device still exists in peers' netmaps")
-	}
 	s, err := openState(*f.stateDir)
 	if err != nil {
 		return err
@@ -359,6 +354,9 @@ func cmdUp(args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := upPreflight(wd, out); err != nil { // up_preflight.go (#480)
+		return err
+	}
 	res := upResult{StateDir: s.Dir, HostID: *hostID, Timings: timings}
 
 	// mgmt's own tailnet node carries the API (WhoIs auth, and the local
@@ -461,7 +459,7 @@ func cmdUp(args []string) error {
 	s.Cfg.HostnamePrefix, s.Cfg.Ephemeral, s.Cfg.Workerd = *prefix, *ephemeral, wd
 	s.Cfg.InsecureSharedHost = *insecureSH
 	s.Cfg.AllowExperimentalFlags = *allowExp
-	s.Cfg.Heartbeat, s.Cfg.KillTombstone, s.Cfg.DeviceDeleteDelay = hb.String(), tomb.String(), delDelay.String()
+	s.Cfg.defaultTuning() // up_tuning.go
 	s.Cfg.AllowSiblingEgress = *siblings
 	if *warmKeys < 0 || *poolNodes < 0 {
 		return fail("bad_request", "--warm-keys and --pool-nodes must be ≥ 0")
@@ -473,7 +471,7 @@ func cmdUp(args []string) error {
 	if err := saveWorkerInternet(&s.Cfg, *workerInet); err != nil {
 		return err
 	}
-	s.Cfg.LocalDev, s.Cfg.PushPort, s.Cfg.Mode = *localDev, *pushPort, layout
+	s.Cfg.LocalDev, s.Cfg.Mode = *localDev, layout
 	if err := storeF.apply(s); err != nil {
 		return err
 	}
@@ -1118,13 +1116,17 @@ func superviseSingle(s *state, logf func(string, ...any)) error {
 	mo := mgmtd.Options{StateDir: filepath.Join(s.Dir, "mgmt"), DeviceDeleteDelay: delDelay, Version: version, TSAPIURL: s.Cfg.TSAPIURL,
 		TSNetHostname: s.Cfg.MgmtHostname, TSNetControlURL: s.Cfg.ControlURL, TSNetTags: advertisedTags(s.Cfg.headscale(), mgmt.MgmtTag), TSNetTLS: true,
 		TSNetAuthKeyFile: s.mgmtJoinFile(), TSNetAuthKeyOnce: true, // tw up's single-use join key, when there is one (up_mgmtjoin.go)
-		WarmKeys: mgmtd.DefaultWarmKeys, Log: mlog, RevokeWarmKeysOnClose: true, // tw down leaves no preauthorized key in custody (#158)
+		Log: mlog, RevokeWarmKeysOnClose: true, // tw down leaves no preauthorized key in custody (#158)
 		MetricsPort: obs.DefaultMetricsPort}
 	if mo.TSAPIURL == "" {
 		mo.TSAPIURL = tsapi.DefaultBaseURL
 	}
 	s.Cfg.storeOptions(&mo)         // up_store.go
 	s.Cfg.retentionSingle(&mo, nil) // up_retention.go
+	s.Cfg.identitySingle(&mo, nil)  // up_identity.go
+	if !s.Cfg.PortMapping {
+		netd.DisablePortMapping() // process-wide: before mgmt's node exists
+	}
 	logf("supervising in %s (tailnet %s): single process, mgmt + embedded host %s", s.Dir, s.Cfg.Tailnet, s.Cfg.HostID)
 	mrt, err := mgmtd.Start(ctx, mo)
 	if err != nil {
@@ -1139,13 +1141,14 @@ func superviseSingle(s *state, logf func(string, ...any)) error {
 	deny := s.sandboxDenyList() // sandbox_layout.go
 	ho := hostdrun.Options{Client: inproc.NewClient(mrt.Handler(), s.Cfg.HostID), HostID: s.Cfg.HostID,
 		DataDir: filepath.Join(s.Dir, "hostd"), RunDir: s.hostdRunDir(), Workerd: s.Cfg.Workerd,
-		Heartbeat: hb, KillTombstone: tomb, HostnamePrefix: s.Cfg.HostnamePrefix, Sandbox: "auto", SandboxDeny: deny, PoolNodes: hostdrun.DefaultPoolNodes,
+		Heartbeat: hb, KillTombstone: tomb, HostnamePrefix: s.Cfg.HostnamePrefix, Sandbox: "auto", SandboxDeny: deny,
 		Ephemeral: s.Cfg.Ephemeral, InsecureSharedHost: s.Cfg.InsecureSharedHost, AllowSiblingEgress: s.Cfg.AllowSiblingEgress, Log: hlog}
 	// Experimental compatibility flags (hostd/gen/compatflags.go, #337).
 	ho.AllowExperimentalFlags = s.Cfg.AllowExperimentalFlags
 	// The converted container image cache cap, tw-hostd's default (#476).
 	ho.ContainerImageCacheMaxMiB = hostdrun.DefaultImageCacheMiB
 	s.Cfg.retentionSingle(nil, &ho) // up_retention.go
+	s.Cfg.identitySingle(nil, &ho)  // up_identity.go
 	s.Cfg.workerInternetSingle(&ho) // up_workerinternet.go
 	hrt, err := hostdrun.New(ctx, ho)
 	if err != nil {

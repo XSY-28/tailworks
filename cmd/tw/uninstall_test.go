@@ -21,6 +21,7 @@ import (
 type uninstallEnv struct {
 	home, state string
 	prefix      string // the binary's install prefix ("" = none)
+	npm         *npminstall.Install
 	deleted     []string
 	deleteErr   error
 	setupRecord string
@@ -34,12 +35,20 @@ func newUninstallEnv(t *testing.T) *uninstallEnv {
 	t.Setenv("HOME", e.home)
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("TW_STATE_DIR", "")
-	oldRec, oldSelf, oldDel, oldEnv, oldNPM, oldTerm := uninstallSetupRecord, uninstallSelfPrefix, uninstallDeleteNode, uninstallAgentEnv, npmSelf, confirmIsTerminal
+	oldRec, oldCh, oldDel, oldEnv, oldTerm := uninstallSetupRecord, uninstallChannel, uninstallDeleteNode, uninstallAgentEnv, confirmIsTerminal
 	t.Cleanup(func() {
-		uninstallSetupRecord, uninstallSelfPrefix, uninstallDeleteNode, uninstallAgentEnv, npmSelf, confirmIsTerminal = oldRec, oldSelf, oldDel, oldEnv, oldNPM, oldTerm
+		uninstallSetupRecord, uninstallChannel, uninstallDeleteNode, uninstallAgentEnv, confirmIsTerminal = oldRec, oldCh, oldDel, oldEnv, oldTerm
 	})
 	uninstallSetupRecord = func() string { return e.setupRecord }
-	uninstallSelfPrefix = func() string { return e.prefix }
+	uninstallChannel = func() installInfo {
+		if e.npm != nil {
+			return installInfo{Channel: channelNPM, NPM: *e.npm}
+		}
+		if e.prefix != "" {
+			return installInfo{Channel: channelPrefix, Prefix: e.prefix}
+		}
+		return installInfo{Channel: channelOther}
+	}
 	uninstallDeleteNode = func(_ context.Context, _ *state, id string) error {
 		if e.deleteErr != nil {
 			return e.deleteErr
@@ -48,7 +57,6 @@ func newUninstallEnv(t *testing.T) *uninstallEnv {
 		return nil
 	}
 	uninstallAgentEnv = func() (twagent.Env, error) { return twagent.Env{Home: e.home}, nil } // no LookPath: only ~/.<agent> dirs count
-	npmSelf = func() (npminstall.Install, bool) { return npminstall.Install{}, false }
 	confirmIsTerminal = func() bool { return false }
 	return e
 }
@@ -323,5 +331,23 @@ func TestUninstallGuards(t *testing.T) {
 	}
 	if !exists(filepath.Join(e.state, "bin")) {
 		t.Error("a refusal deleted something")
+	}
+}
+
+// Installed with npm: the package stays (npm owns it) and the npm command
+// is printed; the state dir still goes.
+func TestUninstallNPM(t *testing.T) {
+	e := newUninstallEnv(t)
+	e.npm = &npminstall.Install{Dir: filepath.Join(e.home, "lib/node_modules/@tailworks/cli-x"), Package: "@tailworks/cli-x"}
+	e.write(t, "update-check.json", "{}")
+	res, _, err := e.run(t, "--yes", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Prefix != "" || !strings.Contains(strings.Join(res.Manual, "\n"), "npm uninstall -g tailworks") {
+		t.Errorf("prefix %q, manual %v", res.Prefix, res.Manual)
+	}
+	if exists(e.state) {
+		t.Errorf("left %s", e.state)
 	}
 }

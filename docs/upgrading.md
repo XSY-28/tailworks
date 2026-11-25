@@ -119,6 +119,14 @@ tw-mgmt restore-fence -state-dir ~/.tailworks/mgmt
 tw up
 ```
 
+**Agent skills.** The skills `tw agent setup` wrote into your home
+directory are stamped with the version that wrote them. After a healthy
+upgrade, `tw upgrade` runs the new `tw` to rewrite them (only files and
+blocks that `tw` wrote; it creates nothing new), and `--plan` lists that
+step when there is something to refresh. Skills installed into a project
+(`--scope project`) keep the old version until you re-run
+`tw agent setup --scope project` there.
+
 **The microVM tier's helper** is root-owned. `tw upgrade` doesn't touch it.
 When `tw doctor` reports its protocol out of range, run
 `sudo tw host setup --microvm`. A helper serves its own protocol version and
@@ -129,8 +137,10 @@ within one release line.
 
 If `tw` came from npm (`npm install -g tailworks`, or `npx tailworks`;
 [INSTALL.md](INSTALL.md#install-with-npm)), npm owns the binaries, so
-`tw upgrade` refuses with `npm_install` and `tw version --check` prints the
-npm command. Upgrade with npm instead:
+`tw upgrade` refuses with `npm_install`. `tw upgrade --plan`,
+`tw version --check` and `tw doctor` print the npm command
+(`tw backup && tw down && npm install -g tailworks@<version> && tw up`).
+Upgrade with npm instead:
 
 ```sh
 tw backup                                            # npm has no rollback: keep a way back

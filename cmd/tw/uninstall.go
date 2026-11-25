@@ -31,8 +31,8 @@ package main
 // install.sh --uninstall --purge stays as the fallback for when no tw
 // binary runs; for the prefix it ends in the same place.
 //
-// How this tw was installed (prefix, npm, neither) is worked out here on
-// its own; it can fold into a shared install-channel classifier later.
+// How this tw was installed (prefix, npm, npx, source, other) comes from
+// installChannel (install_channel.go), as for tw upgrade and tw doctor.
 
 import (
 	"context"
@@ -89,8 +89,8 @@ var (
 		}
 		return ""
 	}
-	// uninstallSelfPrefix is the install prefix this binary runs from.
-	uninstallSelfPrefix = installPrefixOf
+	// uninstallChannel is how this binary was installed.
+	uninstallChannel = installChannel
 	// uninstallDeleteNode deletes one of tailworks' own nodes with the
 	// tenant's credential (OAuth client or Headscale API key).
 	uninstallDeleteNode = deleteNodeWithCredential
@@ -149,8 +149,8 @@ func cmdUninstall(args []string) error {
 	}
 	if rec := uninstallSetupRecord(); rec != "" && isFile(rec) {
 		tw := "tw"
-		if p := uninstallSelfPrefix(); p != "" {
-			tw = filepath.Join(p, "bin", "tw")
+		if ch := uninstallChannel(); ch.Channel == channelPrefix {
+			tw = filepath.Join(ch.Prefix, "bin", "tw")
 		}
 		return fail("uninstall_blocked", "the microVM tier's helper is installed ("+rec+"): undoing it needs root and this tw binary, so it goes first").
 			withFix("sudo "+tw+" host setup --undo", "then tw uninstall again")
@@ -272,10 +272,10 @@ func uninstallOtherHosts(ctx context.Context, s *state) error {
 // uninstallPrefix is the install prefix to remove: the one this binary
 // runs from, else the one that runs this state dir. An extracted release
 // directory (it has SHA256SUMS) is not an install and is never removed.
-func uninstallPrefix(s *state) string {
+func uninstallPrefix(s *state, ch installInfo) string {
 	installed := func(p string) bool { return p != "" && !isFile(filepath.Join(p, "SHA256SUMS")) }
-	if p := uninstallSelfPrefix(); installed(p) {
-		return p
+	if ch.Channel == channelPrefix && installed(ch.Prefix) {
+		return ch.Prefix
 	}
 	for _, c := range statePrefixCandidates(s) {
 		if installed(c.Prefix) {
@@ -369,15 +369,17 @@ func planUninstall(s *state, keep, healthy, running bool) *uninstallPlan {
 	manual("skills set up per project (tw agent setup --scope project) stay: tw agent remove --scope project --dir <project>")
 
 	// The install.
-	prefix := uninstallPrefix(s)
+	ch := uninstallChannel()
+	prefix := uninstallPrefix(s, ch)
 	r.Prefix = prefix
-	if in, ok := npmSelf(); ok {
-		if in.NPX {
-			manual("this tw runs from npx's cache (%s): nothing to uninstall there", in.Dir)
-		} else {
-			manual("npm uninstall -g tailworks   (npm owns %s)", in.Dir)
-		}
-	} else if prefix == "" {
+	switch {
+	case ch.Channel == channelNPX:
+		manual("this tw runs from npx's cache (%s): nothing to uninstall there", ch.NPM.Dir)
+	case ch.Channel == channelNPM:
+		manual("npm uninstall -g tailworks   (npm owns %s)", ch.NPM.Dir)
+	case ch.Channel == channelSource:
+		manual("this tw is a source checkout (%s): delete the checkout yourself if you're done with it", ch.Root)
+	case prefix == "":
 		manual("this tw runs from %s, not an install prefix: remove it yourself if you installed it there", nonEmpty(exeDir(), "an unknown directory"))
 	}
 	if prefix != "" {

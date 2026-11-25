@@ -35,8 +35,9 @@ Last update: 2026-11-24. `tw uninstall` (#487); install.sh/get.sh refuse another
 
 ## Decisions
 
-- Channel detection (prefix / npm / neither) is self-contained in
-  uninstall.go: `installChannel()` (#498) had not landed on master.
+- Channel detection uses `installChannel()` (#498, landed during this
+  branch): npm and npx print the npm line, a source checkout says to delete
+  it by hand, a prefix install is removed.
 - An extracted release directory (it has SHA256SUMS) is never treated as the
   install prefix to remove.
 - Added `--dry-run` (not in the issue) so the plan can be read without a
@@ -50,8 +51,9 @@ Last update: 2026-11-24. `tw uninstall` (#487); install.sh/get.sh refuse another
 - `make install-test`: ok (new cases: refusal over a running tw, repair,
   `--force`, get.sh refusal before download, `TW_INSTALL_FORCE=1`,
   `--uninstall --purge` removes everything).
-- `make lint`: ok (before merging master; the merge brought only help-flag
-  changes, `make cli-docs` rerun after it).
+- `make lint`: ok, after the second merge of origin/master (INSTALL.md conflict
+  resolved: master moved the Disk section out; `make cli-docs` rerun).
+- Second merge: `go test ./cmd/tw -run 'TestUninstall|TestHelp|TestCompletion|TestDocsNameRealCommands|TestCLIReference|TestDestructive|TestDidYouMean|TestDesignDocs|Schema|TestCLIJSONContract|Channel|Install'`: ok.
 - `make test` (after merging origin/master): failures in cmd/tw
   (TestCLIEndToEnd, TestCLIOAuth, TestCLIMultiTenant, TestDevPython), mgmt
   (TestWorkloadReplicas, TestRT3_H23_PlacementPoison, TestTenantAdminScope)

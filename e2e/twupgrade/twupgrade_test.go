@@ -190,6 +190,8 @@ type upgradeResult struct {
 	Backup     string
 	RolledBack bool
 	Health     string
+
+	AgentSkills string // issue #490
 }
 
 func TestTwUpgradeSingleMachine(t *testing.T) {
@@ -242,7 +244,19 @@ func TestTwUpgradeSingleMachine(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := &machine{t: t, prefix: prefix, app: app}
+	// A home of its own, with a skill an older tw agent setup wrote: the
+	// good upgrade refreshes it (issue #490), and the real home isn't
+	// touched.
+	home := filepath.Join(work, "home")
+	skill := filepath.Join(home, ".claude", "skills", "tw", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(skill), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(skill, []byte("<!-- tw agent skills 0.0.1 -->\nold\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	m.env = append(os.Environ(),
+		"HOME="+home,
 		"TW_RELEASE_SIGNERS="+signers,
 		"TW_WORKERD="+wd,
 		"TW_CREATE_TAILWORKS="+filepath.Join(root, "js", "packages", "create-tailworks"),
@@ -303,7 +317,8 @@ func TestTwUpgradeSingleMachine(t *testing.T) {
 	// The plan changes nothing.
 	var plan upgradeResult
 	m.mustJSON(&plan, "upgrade", "--from", relGood, "--plan")
-	if plan.Plan.From != oldV || plan.Plan.To != newV || len(plan.Plan.Steps) != 5 || plan.Upgraded || plan.Backup != "" {
+	if plan.Plan.From != oldV || plan.Plan.To != newV || len(plan.Plan.Steps) != 6 || plan.Upgraded || plan.Backup != "" ||
+		!strings.Contains(plan.Plan.Steps[5], "agent skills") {
 		t.Fatalf("plan: %+v", plan)
 	}
 
@@ -368,8 +383,14 @@ func TestTwUpgradeSingleMachine(t *testing.T) {
 	st := time.Now()
 	var res upgradeResult
 	m.mustJSON(&res, "upgrade", "--from", relGood, "--yes", "--health-timeout", "3m")
-	if !res.Upgraded || res.Health != "ok" || res.RolledBack {
+	if !res.Upgraded || res.Health != "ok" || res.RolledBack || !strings.Contains(res.AgentSkills, newV) {
 		t.Fatalf("upgrade to the good N+1: %+v", res)
+	}
+	if b, _ := os.ReadFile(skill); !strings.Contains(string(b), "<!-- tw agent skills "+newV) {
+		t.Fatalf("the agent skill wasn't refreshed by the new tw: %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".claude", "skills", "tw-deploy")); err == nil {
+		t.Fatal("the refresh created a skill tw hadn't written")
 	}
 	if bs := m.backups(); len(bs) != 3 || !slices.Contains(bs, filepath.Base(res.Backup)) || !strings.HasSuffix(res.Backup, "-"+oldV) {
 		t.Fatalf("backups %v, result says %q", bs, res.Backup)
