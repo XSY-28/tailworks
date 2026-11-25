@@ -27,6 +27,10 @@ type appOpts struct {
 
 	// SourceMap: deploy follows upload_source_maps; tw dev sets it (sourcemap.go).
 	SourceMap sourceMapMode
+
+	// DevBuild: tw dev runs build.command itself, only when build.watch_dir
+	// changes (buildcmd.go), so a.build doesn't.
+	DevBuild bool
 }
 
 // builder names the bundler for messages and warnings.

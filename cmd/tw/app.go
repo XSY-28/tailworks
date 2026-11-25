@@ -264,6 +264,9 @@ func (a *app) srcTags() []string {
 // twin of create-tailworks's build.mjs), into what hostd/gen expects
 // (dist/index.js + tailworks.jsonc + wrangler.jsonc + tw-bundle.json), and packs it.
 func (a *app) build(vars map[string]string) ([]byte, int, error) {
+	if err := a.prebuild(); err != nil { // buildcmd.go: the wrangler config's build.command
+		return nil, 0, err
+	}
 	if a.Runtime != bundle.RuntimeNode && isPythonApp(a.Wrangler) { // python.go: packed as it is, no bundler
 		files, main, types, n, err := a.buildPython()
 		if err != nil {

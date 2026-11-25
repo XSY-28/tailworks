@@ -164,13 +164,33 @@ wrangler names them.
 |---|---|---|---|
 | what runs | esbuild 0.28.2, linked into `tw` | `wrangler deploy --dry-run --outdir <tmp> --config <file> --env=<env>` in the app directory. Nothing is sent to Cloudflare | nothing: tailworks packs a directory you built with `wrangler deploy --dry-run --outdir <dir>` |
 | needs Node.js | no | yes, and wrangler (`node_modules/.bin/wrangler`, then `PATH`; `$TW_WRANGLER` overrides) | no (at deploy time) |
-| use it for | most projects | custom builds, or to get exactly wrangler's output | CI that already runs wrangler, or a pinned wrangler version |
+| use it for | most projects, including a [custom build](#custom-builds) | to get exactly wrangler's output, or the `rules` / `no_bundle` settings below | CI that already runs wrangler, or a pinned wrangler version |
 
 For `--from-wrangler-out`, tailworks finds the entry by `main`'s name
 (`src/index.ts` becomes `index.js`). It leaves out `README.md` and source
 maps. Each other module gets its type from your `rules` and wrangler's
 default rules, matched on its file name, and otherwise from its extension.
 Tailworks doesn't check that the directory is up to date with your sources.
+
+<a id="custom-builds"></a>A config with a custom build
+(`"build": {"command": "…"}`) runs that command before the built-in esbuild
+bundles, as wrangler does: in a shell (`sh -c`; `cmd /c` on Windows), in
+`build.cwd` (default: the config's directory), with every
+`node_modules/.bin` from there up first on `PATH`, as under `npm run`.
+`tw deploy` and `tw policy` print what ran and stream its output on stderr:
+
+```
+› build      esbuild src/client/index.tsx --bundle --splitting --format=esm --platform=browser --outdir=public/dist
+```
+
+If it exits non-zero, nothing is deployed (`build_command_failed`).
+`tw dev` runs it once at start, then again only when a file under
+`build.watch_dir` (default `./src`, as wrangler) changes; what the build
+writes (often under `assets.directory`) doesn't count as an edit, so it
+can't trigger another reload. It is your project's own command, run on
+your machine, as `npm run build` would be. `--wrangler` leaves it to
+wrangler, and a [Pages project](#pages), a [pre-built](#no-bundle)
+`no_bundle` Worker and a `runtime: "node"` app don't run it.
 
 <a id="no-bundle"></a>A config with `"no_bundle": true` and `rules` of type
 ESModule whose globs are only `**/*.js` and `**/*.mjs` (what the
@@ -196,7 +216,7 @@ Measured with `e2e/wrangler/testdata/toml-app` and wrangler 4.60.0
 | custom `rules` of type Text, Data or CompiledWasm (with `fallthrough`) | ✅ | ✅ | e.g. `**/*.md` as Text. The host types each module from `tw-bundle.json` `modules` |
 | `no_bundle` with ESModule `rules` for only `**/*.js` / `**/*.mjs` (pre-built, e.g. Vite plugin output), with `find_additional_modules`, `base_dir` | ✅ packed as they are ([pre-built](#no-bundle)) | ✅ | |
 | other `rules` of type ESModule / CommonJS, `no_bundle`, `find_additional_modules`, `base_dir`, `preserve_file_names` | ❌ warned | ✅ ES modules | tailworks ships ES modules only; a `.cjs` module in wrangler's output is an error |
-| `build` (custom build command) | ❌ warned | ✅ | |
+| `build` (custom build command) | ✅ runs `build.command` first ([custom builds](#custom-builds)) | ✅ | not for a Pages project or a pre-built `no_bundle` Worker (warned) |
 | `minify`, `keep_names`, `jsx_factory`, `jsx_fragment`, `tsconfig` | ✅ mapped to esbuild options | ✅ | mapped, but not measured end to end |
 | `nodejs_compat` | ✅ bare built-ins become `node:*`; workerd provides them | ✅ plus wrangler's unenv polyfills | toml-app's entry: 1.0 KB built-in, 21 KB wrangler. Both pass the same checks (`node:buffer`) |
 | `node_compat` (legacy) | ❌ warned | ❌ wrangler 4 rejects it | use `compatibility_flags = ["nodejs_compat"]` |
@@ -348,7 +368,8 @@ the stand-in Worker.
 
 `tw dev` serves the same way and reloads when a file in `directory`
 changes, even when it is `dist/`. Build your client (for example
-`npm run build`) before `tw deploy`; tailworks doesn't run the build.
+`npm run build`) before `tw deploy`, or set the wrangler config's
+`build.command` and tailworks runs it first ([custom builds](#custom-builds)).
 
 Differences from Cloudflare:
 
@@ -529,6 +550,14 @@ const n = await env.ADMIN.countUsers();       // RPC to the Admin entrypoint
   promise pipelining, a request and response streaming at the same time
   (each streams on its own), and, in `tw dev`, a binding to another
   workload.
+- **When the target moves**, calls follow it: the target is resolved
+  again at most 5 s after its last lookup (sooner when its old node is
+  gone), plus the time to reach a new node. While a takeover is waiting
+  for the old host's lease to run out, calls fail or wait. Once the target
+  is undeployed (or killed), calls stop reaching it within those 5 s. The
+  caller the target sees is the calling copy's own node, across moves of
+  either side. The data-plane chaos loop checks all of this under faults
+  (`e2e/dataplane:TestRouting`, scenario `bindings`).
 
 `tw types` types each binding as `Fetcher`.
 

@@ -258,5 +258,8 @@ func (s *Server) appendJournal(w http.ResponseWriter, r *http.Request) {
 	}
 	st.update = time.Now()
 	s.storeAppends++
+	if s.loseAppendAnswerLocked(w) {
+		return
+	}
 	writeJSON(w, 201, mgmtapi.StoreAppendResult{Incarnation: st.inc, Head: st.head})
 }

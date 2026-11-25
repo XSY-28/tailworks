@@ -171,6 +171,26 @@ The templates' `.gitignore` lists `.dev.vars`.
 - **Never logged or audited.** The audit records `secret_put`,
   `secret_delete` and `secret_release` carry names only.
 
+## Tests
+
+The guarantees above are checked under faults by the data-plane chaos
+loop's deploys scenarios (`make e2e-dataplane-deploys`, nightly;
+`e2e/dataplane/LOOP.md` "Deploys"): concurrent deploys, rollbacks, previews
+and `tw secret put`/`rm` through three mgmt replicas on Postgres, while
+hosts, replicas and their database links fail. Its invariant V4 checks
+that:
+
+- a deployment runs with the secrets the workload had when it was
+  deployed, or newer, never a value overwritten or deleted before that;
+- a rollback gets the workload's current secrets, not the old bundle's;
+- a preview gets the workload's secrets, at its own lease, and never one
+  set on its own name;
+- values are released only to the host holding that epoch's lease;
+- no value appears in any process log, audit record, or mgmt's database.
+
+Concurrent writes of one workload's secrets through several mgmt replicas
+are serialised (#578): `TestMM_H24_SecretWritesAcrossReplicas`.
+
 ## Not supported yet
 
 - **The microVM tier.** A `"tier": "microvm"` deployment of a workload that

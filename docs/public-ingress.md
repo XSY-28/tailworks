@@ -284,6 +284,24 @@ tw expose on  <workload>
   The operator's change is recorded on mgmt's chain and the listener
   change on the host's.
 
+## Under faults
+
+The data-plane chaos loop (`e2e/dataplane:TestRouting`, scenarios
+`public` and `routing`) drives netd's public listener directly while it
+moves the workload, takes it over from a stalled or cut-off host, restarts
+hosts and mgmt, and changes the route list under load:
+
+- **Only the lease holder answers.** A public request is never answered
+  by a copy whose lease has moved on, and every public request reaches
+  the Worker, which sees a public requester.
+- **Route changes.** A path that isn't listed never reaches your code: a
+  redeploy that removes a route takes effect when the new deployment is
+  active, and the loop checks a 10 s bound. A tailnet-only path over the
+  public listener is always `404 not_public`.
+- **Availability.** While a host is stalled or cut off, the public URL
+  fails until the takeover (about 45 s, docs/locks.md). The loop reports
+  each path's availability in and out of fault windows.
+
 ## Checking it
 
 `tw doctor` shows:

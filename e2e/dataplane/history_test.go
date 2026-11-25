@@ -84,6 +84,7 @@ type history struct {
 	dels   []delivery
 	regs   []regOp
 	d1s    []d1Op
+	kvs    []kvOp // kv_test.go
 	pulses []pulseEv
 	locks  []lockEv
 	faults []faultEv

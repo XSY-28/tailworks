@@ -47,7 +47,7 @@ printed anywhere.
 400 · cli. **When:** `--tenant` named a tailnet that has more than one tenant (several teams on one tailnet, [teams.md](teams.md)). **Fix:** name the tenant by its ID; the error lists them (`tw tenant ls`).
 
 ### approval_not_pending
-409 · hostd, mgmt, cli. **When:** a decision (`tw approve`, the admin UI, `POST /_tw/approvals/<workflow>/<instance>`) names a Workflow instance that is not waiting for an approval: already approved or rejected, timed out, or it never asked. **Fix:** `tw approvals [workload] --all` shows what is waiting and what was decided ([approvals](approvals.md)).
+409 · hostd, mgmt, cli. **When:** a decision (`tw approve`, the admin UI, `POST /_tw/approvals/<workflow>/<instance>`) names a Workflow instance that is not waiting for an approval: already approved or rejected, being decided by another request right now, timed out, or it never asked. **Fix:** `tw approvals [workload] --all` shows what is waiting and what was decided ([approvals](approvals.md)).
 
 ### approval_requires_identity
 Thrown in the Worker · platform. **When:** app code sent an event of type `approval` or `approval-*` to a Workflow instance (for example the Agents SDK's `approveWorkflow()`). On tailworks an approval is a decision by a tailnet identity, so only tailworks delivers it. **Fix:** approve with `tw approve <workload> <instance>`, the admin UI, or a same-origin `POST /_tw/approvals/<workflow>/<instance>` from the app's page on the workload's node ([approvals](approvals.md)).
@@ -75,6 +75,9 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### bootstrap_failed
 502 · netd, mgmt, cli. **When:** an object's node could not be created: the control plane refused the mint (tag not owned, key invalid), the token exchange failed, or the node never joined. From `tw up`, mgmt's or the host's own node failed to join. From `tw deploy`, "the workload node for <workload> is killed": the workload's entry node was killed (`tw kill`) while it was deployed. **Fix:** check the tagOwners snippet (`policy_missing_tag_owners`), the credential (`tw doctor`), then `tw logs --component mgmt`. From `tw up`, "… without the tag:tw-mgmt tag" means control dropped the tag because `tag:tw` doesn't own `tag:tw-mgmt`: add the tagOwners snippet, remove the half-joined node in the admin console (Machines), then `tw up` again. For a killed workload node: `tw undeploy <workload>`, then deploy it again (see `killed`).
+
+### build_command_failed
+1 · cli. **When:** the wrangler config's custom build (`build.command`) exited non-zero; `tw deploy`, `tw dev` and `tw policy` run it before bundling ([wrangler.md](wrangler.md#custom-builds)). Nothing is deployed. **Fix:** its output is printed above the error; fix the build and re-run, or run it yourself and remove `build` from the wrangler config.
 
 ### build_failed
 500 · cli. **When:** esbuild (workerd apps) or `create-tailworks build-node` (Node apps) could not bundle the app. **Fix:** the compiler output is in the detail; fix the source and re-run. `Could not resolve "@tailworks/…"` means tailworks' own JS packages are missing next to its bundler: in a source checkout run `make deps` (a plain `make build` doesn't install them), otherwise reinstall tailworks; `tw doctor` checks it.

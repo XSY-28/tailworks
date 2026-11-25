@@ -109,6 +109,7 @@ func run() error {
 		pathEvery  = flag.Duration("path-every", hostd.DefaultPathEvery, "smart placement: measure and report tailnet paths to assignments' placement targets this often (negative disables)")
 		reqMaxAge  = flag.Duration("request-log-max-age", 0, "also drop request records (tw logs --source requests) older than this, e.g. 168h; 0 = keep them until the size rotation does (the default)")
 		queueVis   = flag.Duration("queue-visibility", hostd.DefaultQueueVisibility, "queues: how long a claimed batch stays hidden in mgmt (extended while queue() runs); bounds how soon a crashed consumer's batch is delivered again")
+		pubTestDir = flag.String("test-public-listen-dir", "", "with -local-dev (hermetic tests): serve public nodes on loopback instead of Funnel, writing each listener's address to <dir>/<node>.addr")
 		siblings   = flag.Bool("allow-sibling-egress", false, "dial other objects hosted here over WireGuard (a hairpin) instead of netd's in-process hop (tests)")
 		ctrOff     = flag.Bool("no-containers", false, "don't offer containers (ctx.container) even with a microVM backend")
 		ctrKernel  = flag.String("vm-container-kernel", "", "containers: guest kernel with erofs (guest/build-kernel.sh; default -vm-kernel)")
@@ -165,6 +166,7 @@ func run() error {
 	o.WorkerdHeapMiB, o.NodeHeapMiB = *wdHeap, *nodeHeap
 	o.AllowExperimentalFlags = *allowExp // hostd/gen/compatflags.go (#337)
 	o.PyodideDir = *pyodideDir           // hostd/pyodide.go
+	o.TestPublicListenDir = *pubTestDir  // internal/hostdrun/testfunnel.go
 	restart := make(chan struct{}, 1)
 	if *selfUpg {
 		o.SelfUpgrade, o.InstallPrefix = true, *instPrefix
