@@ -26,7 +26,11 @@ Last update: 2026-11-25 PT. #514 and #512: admin UI enum lists from the spec; ta
 
 ## Tests
 
-See the PR body for the final list of commands and results.
+- `go test ./mgmt/... ./hostd/fakemgmt/`: ok
+- `make test-pg` (Postgres 17, OrbStack): ok, incl. the new
+  `TestStoreAuditWorkloadAndObjectFilters/postgres` (backfill SQL on PG)
+- `make lint`: ok (after merging origin/master)
+- `make test` (mbp, after merging origin/master): ok
 
 ## Gaps
 
