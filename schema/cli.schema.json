@@ -2063,13 +2063,18 @@
         },
         "nodes": {
           "$ref": "#/$defs/nodeBudget"
+        },
+        "truncated": {
+          "type": "boolean",
+          "description": "More objects matched than the ceiling (--limit, default 5000) let through."
         }
       },
       "required": [
         "tenant",
         "tenantID",
         "deployments",
-        "objects"
+        "objects",
+        "truncated"
       ]
     },
     "undeploy": {
