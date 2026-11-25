@@ -496,7 +496,7 @@ func homelabUpgrade(f *flags, s *state, want, from, prefixFlag string, planOnly,
 		return fail("upgrade_failed", "install.sh failed: "+err.Error(), lastLinesOf(string(out), 5)...)
 	}
 	say("✓ installed tw %s (tw %s kept as %s)", meta.Version, cur, filepath.Join(prefix, "bin.prev"))
-	if err := startTw(s, prefix, wasService, wasRunning); err != nil {
+	if err := startTw(s, prefix, wasService, wasRunning, "--apply-policy=false"); err != nil {
 		say("! start failed: %v", err)
 	}
 
@@ -915,7 +915,11 @@ func stopTw(s *state, prefix string, service, running bool) error {
 	return nil
 }
 
-func startTw(s *state, prefix string, service, running bool) error {
+// startTw starts tw again the way it ran. upFlags go to a plain `tw up`
+// restart: the new release gets --apply-policy=false (an unattended
+// restart never asks about or writes the tailnet policy); a restored or
+// still-installed older release may not know that flag.
+func startTw(s *state, prefix string, service, running bool, upFlags ...string) error {
 	switch {
 	case service:
 		if runtime.GOOS == "darwin" {
@@ -925,7 +929,7 @@ func startTw(s *state, prefix string, service, running bool) error {
 		_, err := systemctlUser("restart", serviceUnit)
 		return err
 	case running:
-		cmd := exec.Command(filepath.Join(prefix, "bin", "tw"), "up", "--yes", "--state-dir", s.Dir)
+		cmd := exec.Command(filepath.Join(prefix, "bin", "tw"), append([]string{"up", "--yes", "--state-dir", s.Dir}, upFlags...)...)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("tw up: %v: %s", err, strings.Join(lastLinesOf(string(out), 3), " | "))
