@@ -15,7 +15,7 @@ export default {
         uuid: crypto.randomUUID(),
         mr: Math.random(),
         rnd: [...b].map((x) => x.toString(16).padStart(2, "0")).join(""),
-        at: Date.now(),
+        drawnAt: Date.now(),
         recErr: null,
       };
       try {
