@@ -46,6 +46,9 @@ func TestDataplane(t *testing.T) {
 	if strings.HasPrefix(scenario, "r2-") {
 		t.Skipf("TestR2 runs %s (r2_test.go)", scenario)
 	}
+	if strings.HasPrefix(scenario, "workflows") {
+		t.Skip("TestDataplaneWorkflows runs " + scenario)
+	}
 	names, ok := scenarios[scenario]
 	if !ok {
 		t.Fatalf("TW_DP_SCENARIO %q: one of queues, fencing, d1, mixed", scenario)

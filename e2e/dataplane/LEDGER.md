@@ -4,6 +4,7 @@ Issue #415. Process: `LOOP.md`. Findings are filed as GitHub issues
 labelled `dataplane-chaos`.
 
 - R2 buckets (#420, `TestR2`): [ledger/r2.md](ledger/r2.md)
+- Workflows and approvals (#418, scenarios `workflows`, `workflows-move`): [ledger/workflows.md](ledger/workflows.md)
 
 ## Status
 
