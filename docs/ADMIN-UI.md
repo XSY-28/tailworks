@@ -19,8 +19,7 @@ Admission is the connection's WhoIs identity, exactly as for the API
 
 | principal | result |
 |---|---|
-| a user or tagged node holding `github.com/rosskukulinski/tailworks/cap/admin` (granted to `tag:tw-mgmt`; `autogroup:admin` gets it from the base snippet), or a login in `-admins` | 200, the UI |
-| mgmt's own node (the operator console on the host machine) | 200, the UI |
+| a user or tagged node holding `github.com/rosskukulinski/tailworks/cap/admin` (granted to `tag:tw-mgmt`; `autogroup:admin` gets it from the base snippet), or a login in `-admins`, or mgmt's own node (the operator console on the host machine, via the loopback proxy or the `-local-dev` socket), which is admitted as an admin without holding any grant | 200, the UI |
 | a user or tagged node holding only `github.com/rosskukulinski/tailworks/cap/approve` (toward `tag:tw-mgmt`) | the **approvals** page only, defaulting to the tenants on its own tailnet (`GET /v1/whoami` `tenants`; `?tenant=<tenant ID>` for another); 403 `forbidden` elsewhere |
 | a user or tagged node holding only `github.com/rosskukulinski/tailworks/cap/tenant-admin` ([teams.md](teams.md)) | 200, the UI for the tenants its grants name: their deployments, objects and audit records, without the hosts, status and audit-chain panels; admin-only actions are 403 `tenant_forbidden` |
 | any other tailnet user | 403 `not_admin`, with the grant snippet to add (as an HTML page in a browser, see below) |
