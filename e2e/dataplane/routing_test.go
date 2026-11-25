@@ -27,7 +27,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1080,14 +1079,4 @@ func (n *rnemesis) takeover(wl, h string, fail, heal func()) string {
 	time.Sleep(n.between(2*time.Second, 8*time.Second))
 	heal()
 	return fmt.Sprintf("%s → %s epoch %d, takeover %s, healed at t0+%.1fs", h, d.Host, d.Epoch, how, time.Since(t0).Seconds())
-}
-
-// sortedKeys is for stable reports.
-func sortedKeys[V any](m map[string]V) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
 }
