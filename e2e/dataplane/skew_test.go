@@ -181,14 +181,35 @@ func forwardStepBefore(faults []faultEv, t time.Time) bool {
 		if f.Kind != "skew" || t.Before(f.Start) || t.After(f.End.Add(15*time.Second)) {
 			continue
 		}
-		from, rest, ok := strings.Cut(f.Detail, " → ")
-		to, _, _ := strings.Cut(rest, ";")
-		to, _, _ = strings.Cut(to, " ")
-		a, err1 := time.ParseDuration(from)
-		b, err2 := time.ParseDuration(to)
-		if ok && err1 == nil && err2 == nil && b > a {
+		if a, b, ok := skewStep(f); ok && b > a {
 			return true
 		}
 	}
 	return false
+}
+
+// skewStep is a skew fault's step, from its detail ("2m5s → -1m0s; ...").
+func skewStep(f faultEv) (from, to time.Duration, ok bool) {
+	a, rest, ok := strings.Cut(f.Detail, " → ")
+	b, _, _ := strings.Cut(rest, ";")
+	b, _, _ = strings.Cut(b, " ")
+	from, err1 := time.ParseDuration(a)
+	to, err2 := time.ParseDuration(b)
+	return from, to, ok && err1 == nil && err2 == nil
+}
+
+// offRange is the range of wall-clock offsets host may have had at t: an
+// op sent while a step is being applied (the fault's window: hostd and
+// workerd take up to ~200 ms to follow) may have seen the old one.
+func offRange(faults []faultEv, host string, t time.Time, off time.Duration) (lo, hi time.Duration) {
+	lo, hi = off, off
+	for _, f := range faults {
+		if f.Kind != "skew" || f.Host != host || t.Before(f.Start) || t.After(f.End.Add(500*time.Millisecond)) {
+			continue
+		}
+		if from, _, ok := skewStep(f); ok {
+			lo, hi = min(lo, from), max(hi, from)
+		}
+	}
+	return lo, hi
 }

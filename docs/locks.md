@@ -41,7 +41,12 @@ The safety argument is two timeouts, both measured on one clock each:
 hostd refuses to start with a fence above 40 s, which leaves a 5 s margin
 for heartbeat round trips and clock-rate drift
 (`hostd:TestFenceBelowLease`). Wall-clock skew between machines doesn't
-matter (ADR-028 §1).
+matter (ADR-028 §1). The chaos loop checks this by stepping a host's
+clock 1–6 minutes forward or back (hostd and its workerds) and then taking
+the workload over or moving it. No stale copy answered or acted
+(`e2e/dataplane:TestDataplane`, D1 and D2 with the `skew` fault). The lock
+template's own lease is another matter: see "Clocks" under
+[failure modes](#failure-modes).
 
 ## Pattern 1: a named DO as a mutex
 
@@ -310,7 +315,11 @@ const isLeader = () => !!lease && Date.now() < lease.deadline;
   client's deadline on the client's own clock, counted from when its request
   was sent. Neither compares two machines' wall clocks. A client whose
   process pauses for longer than the lease (GC, VM suspend) can act late:
-  that's what the token is for.
+  that's what the token is for. A *step* of the lock host's own clock does
+  matter: stepped forward, it ends a live holder's lease early and a second
+  client can be granted the lock; stepped back, leases last longer (#569,
+  measured by `e2e/dataplane`'s skew fault). The token still protects the
+  resource.
 - **Same-host callers.** A workload can't call the lock workload over the
   tailnet when both run on the same host (see
   [Where to run it](#pattern-2-leases-with-renewal-the-lock-template)).

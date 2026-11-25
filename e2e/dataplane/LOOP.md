@@ -102,7 +102,7 @@ with a fenced-store write after each grant and renew.
 |---|---|
 | D1 | One live serving copy: once a copy at a newer epoch has answered, no older epoch answers a request sent after that. No older epoch's Pulse egress arrives more than 1 s after the newer copy's first |
 | D1-reg | The DO counter, per epoch: increments are unique and increase in real-time order, and a read sees every increment acknowledged before it was sent. Writes survive a restart on the same host. Across a move the copy starts empty (documented) |
-| D2 | Fencing: two lock holders never overlap within an epoch, or across a takeover of a stalled or cut-off host. Tokens only go up. The store never accepts a token lower than one it has accepted |
+| D2 | Fencing: two lock holders never overlap within an epoch, or across a takeover of a stalled or cut-off host. Tokens only go up. The store never accepts a token lower than one it has accepted. An overlap within an epoch right after a forward clock step on the lock's host is a note, not a failure, until #569 is decided |
 | D3 | Queues: every acknowledged send is delivered. No two deliveries of a message carry the same `attempts`. Outside a fault window, no attempt is counted for a delivery that never reached `queue()`. Retried messages come back. Poison stops at `max_retries + 1` and reaches the dead-letter queue |
 | D4 | Every acknowledged D1 insert is there at the end |
 | KV | Only what docs/kv.md documents: a read sees the workload's own last acknowledged write (or a later one) and nothing never written, across restarts, moves and takeovers, and after healing. A key put with `expirationTtl` 60 s is there until it expires and gone after, in real time shifted by the writer's and reader's clock offsets |

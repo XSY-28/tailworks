@@ -159,21 +159,26 @@ func checkKV(h *history) result {
 			//     between (inMax), could have passed the expiry stamped on
 			//     the writer's clock. Once one has, its alarm journals the
 			//     delete, and a step back doesn't bring the key back.
-			preMax, inMax := p.Off, max(p.Off, g.Off)
+			// An op sent while a step was being applied may have seen either
+			// offset (offRange).
+			pLo, pHi := offRange(h.faults, p.Host, p.Sent, p.Off)
+			gLo, gHi := offRange(h.faults, g.Host, g.Sent, g.Off)
+			preMax, inMax := pHi, max(pHi, gHi)
 			for _, o := range h.kvs {
+				_, hi := offRange(h.faults, o.Host, o.Sent, o.Off)
 				if !o.Sent.After(p.Recv) {
-					preMax = max(preMax, o.Off)
+					preMax = max(preMax, hi)
 				}
 				if !o.Sent.Before(p.Sent) && !o.Sent.After(g.Recv) {
-					inMax = max(inMax, o.Off)
+					inMax = max(inMax, hi)
 				}
 			}
 			switch {
-			case g.V != 0 && g.Sent.After(p.Recv.Add(kvTTL+preMax-g.Off+slack)):
+			case g.V != 0 && g.Sent.After(p.Recv.Add(kvTTL+preMax-gLo+slack)):
 				expiredSeen++
 				r.fail("expired key served: %s put at %s (on %s, clock %+v), read at %s (on %s, clock %+v), %.1fs after the put",
 					g.K, p.Recv.Format("15:04:05.000"), p.Host, p.Off, g.Sent.Format("15:04:05.000"), g.Host, g.Off, g.Sent.Sub(p.Recv).Seconds())
-			case g.V == 0 && g.Recv.Before(p.Sent.Add(kvTTL-time.Second-(inMax-p.Off)-slack)):
+			case g.V == 0 && g.Recv.Before(p.Sent.Add(kvTTL-time.Second-(inMax-pLo)-slack)):
 				lostTTL++
 				r.fail("acknowledged key missing before its expiry: %s put at %s (on %s, clock %+v), read at %s (on %s, clock %+v), %.1fs after the put",
 					g.K, p.Recv.Format("15:04:05.000"), p.Host, p.Off, g.Sent.Format("15:04:05.000"), g.Host, g.Off, g.Sent.Sub(p.Recv).Seconds())
