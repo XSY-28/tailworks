@@ -259,6 +259,13 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 ### needs_root
 1 · cli. **When:** `tw host setup` changes the system and was not run as root. **Fix:** `sudo ~/.tailworks/bin/tw host setup --microvm` (sudo's PATH lacks `~/.tailworks/bin`).
 
+### network
+1 · cli. **When:** `tw upgrade` could not reach the release repository to find the latest release or to download its tarball. **Fix:** check the connection and retry, or download the tarball yourself and run `tw upgrade --from <tarball>`; `TW_REPO` and `TW_RELEASE_BASE` point it at another repository or a mirror, as for `get.sh`.
+
+### no_cgroup2
+1 · cli. **When:** `tw host setup --microvm` on a Linux host without the cgroup v2 unified hierarchy (`/sys/fs/cgroup/cgroup.controllers` is missing). **Fix:** boot with the unified hierarchy (`systemd.unified_cgroup_hierarchy=1`, the default on current distributions); the process tier works without it.
+
+
 ### no_host
 503 · mgmt. **When:** a deployment has no live host to run on (none registered, none in the tenant's pool, or all stale). **Fix:** `tw status` on the host; `tw host ls`.
 
@@ -339,6 +346,10 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 
 ### precondition_failed
 412 · mgmt. **When:** `If-Match` did not match the record's current `ETag`. **Fix:** re-read, then retry with the new ETag.
+
+### prefix_mismatch
+1 · cli. **When:** the `tw` running `tw upgrade` lives in another install (or in none, like an extracted tarball or a dev build) than the one that runs the state dir, so `tw upgrade` won't guess which to replace. The message names both and where the state dir's install came from (tw.json, the service, the running supervisor, or the state dir itself). **Fix:** `tw upgrade --prefix <dir>` to name the install to replace, or run the `tw` installed there: `<dir>/bin/tw upgrade` ([upgrading.md](upgrading.md#a-tw-up-machine)).
+
 
 ### preview_conflict
 409 · mgmt, cli. **When:** `tw deploy --preview` would run the preview as `<workload>--preview-<alias>`, and a workload of that name exists that is not a preview of this workload. **Fix:** pick another `--preview-alias`, or undeploy that workload.
@@ -517,8 +528,19 @@ Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<bi
 ### update_check_failed
 1 · cli. **When:** `tw version --check` could not find the latest release: GitHub was unreachable, answered with an error (rate limit), or the repository has no published release. **Fix:** retry later, or look at the releases page; `TW_REPO` names another repository, as for `get.sh`.
 
+### upgrade_aborted
+409 · cli. **When:** `tw upgrade` was following a fleet upgrade run that was aborted (`tw upgrade abort`). **Fix:** `tw upgrade status <run>` shows where it stopped; `tw upgrade --plan`, then `tw upgrade` to start a new run.
+
+
 ### upgrade_blocked
 409 · mgmt, cli. **When:** `tw upgrade` can't start a fleet upgrade run because its plan has blockers: a release missing from the catalog, a host's tarball not imported, parts of the fleet more than one release line behind, or an intermediate release with contract migrations. **Fix:** `tw upgrade --plan` prints each blocker and its fix ([upgrading.md](upgrading.md)).
+
+### upgrade_failed
+1 · cli. **When:** `tw upgrade` on a `tw up` machine failed at a step the message names: the store backup, `tw down`, `install.sh` (the old release is still installed), or the health check of the new release. **Fix:** if the message says it rolled back (the old release runs with the store restored), `tw logs --component mgmt` shows why the new release failed. If it did not roll back (`--no-rollback`, or a contract migration ran) or the rollback failed too: `tw logs --component mgmt` and `tw doctor`; to go back by hand, `tw down`, `tw restore <backup> --yes` (the backup the message names), `<prefix>/install.sh --rollback`, then `tw up` ([upgrading.md](upgrading.md#roll-back-by-hand)). `tw restore` alone leaves the failed release installed.
+
+### upgrade_paused
+409 · cli. **When:** `tw upgrade` was following a fleet upgrade run that paused: a step failed (the reason is in the message) or someone ran `tw upgrade pause`. **Fix:** fix the cause, then `tw upgrade resume <run>`, or `tw upgrade abort <run>`.
+
 
 ### upgrade_state
 409 · mgmt, cli. **When:** `tw upgrade pause|resume|abort` on a run that isn't running (pause), paused (resume) or active (abort). **Fix:** `tw upgrade status` shows the run's state.

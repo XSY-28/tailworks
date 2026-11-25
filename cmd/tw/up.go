@@ -472,6 +472,7 @@ func cmdUp(args []string) error {
 		return err
 	}
 	s.Cfg.LocalDev, s.Cfg.Mode = *localDev, layout
+	s.Cfg.InstallPrefix = upInstallPrefix() // upgrade_prefix.go
 	if err := storeF.apply(s); err != nil {
 		return err
 	}
