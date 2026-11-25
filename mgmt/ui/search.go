@@ -17,7 +17,7 @@ import (
 // status (state); audit records by object, caller (human), trace, tenant
 // and event kind, newest first (order=desc) with nextCursor paging. What
 // it does not is filtered here, in the UI, and the page says so: objects
-// by tag and by caller (actingFor), over the first objectsScanMax matches;
+// by tag and by human (actingFor), over the first objectsScanMax matches;
 // audit records by workload, within each page.
 
 // objectsScanMax bounds the objects the UI reads for one listing.
@@ -37,24 +37,27 @@ var objectStates = []string{
 
 type objectsData struct {
 	base
-	Tenant, Workload, State, Tag, Caller string
-	Tenants                              []tenant
-	States                               []string
-	Objects                              []object
-	Total                                int  // matches before paging
-	Truncated                            bool // objectsScanMax reached
-	Page                                 int  // 1-based
-	PrevURL, NextURL                     string
-	Errors                               []string
+	Tenant, Workload, State, Tag, Human string
+	Tenants                             []tenant
+	States                              []string
+	Objects                             []object
+	Total                               int  // matches before paging
+	Truncated                           bool // objectsScanMax reached
+	Page                                int  // 1-based
+	PrevURL, NextURL                    string
+	Errors                              []string
 }
 
-// ClientFiltered: a tag or caller filter applied by the UI.
-func (d objectsData) ClientFiltered() bool { return d.Tag != "" || d.Caller != "" }
+// ClientFiltered: a tag or human (acting-for) filter applied by the UI.
+func (d objectsData) ClientFiltered() bool { return d.Tag != "" || d.Human != "" }
 
 func (u *ui) objects(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	d := objectsData{base: u.base(r, "objects"), Tenant: q.Get("tenant"), Workload: q.Get("workload"), State: q.Get("status"),
-		Tag: strings.TrimSpace(q.Get("tag")), Caller: strings.TrimSpace(q.Get("caller")), States: objectStates, Page: 1}
+		Tag: strings.TrimSpace(q.Get("tag")), Human: strings.TrimSpace(q.Get("human")), States: objectStates, Page: 1}
+	if d.Human == "" { // the key's name before issue #449, so old links still filter
+		d.Human = strings.TrimSpace(q.Get("caller"))
+	}
 	if n, err := strconv.Atoi(q.Get("page")); err == nil && n > 1 {
 		d.Page = n
 	}
@@ -83,7 +86,7 @@ func (u *ui) objects(w http.ResponseWriter, r *http.Request) {
 		if tag != "" && !slices.Contains(o.Tags, tag) {
 			continue
 		}
-		if d.Caller != "" && !strings.Contains(strings.ToLower(o.ActingFor), strings.ToLower(d.Caller)) {
+		if d.Human != "" && !strings.Contains(strings.ToLower(o.ActingFor), strings.ToLower(d.Human)) {
 			continue
 		}
 		match = append(match, o)
@@ -99,10 +102,13 @@ func (u *ui) objects(w http.ResponseWriter, r *http.Request) {
 	d.Objects = match[start:end]
 	link := func(p int) string {
 		v := url.Values{}
-		for _, k := range []string{"tenant", "workload", "status", "tag", "caller"} {
+		for _, k := range []string{"tenant", "workload", "status", "tag"} {
 			if s := q.Get(k); s != "" {
 				v.Set(k, s)
 			}
+		}
+		if d.Human != "" {
+			v.Set("human", d.Human)
 		}
 		if p > 1 {
 			v.Set("page", strconv.Itoa(p))

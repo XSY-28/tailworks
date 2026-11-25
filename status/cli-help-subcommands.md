@@ -22,9 +22,10 @@ Issues #438 and #437 from the interface-simplification audit (#434).
   upgrade use `[flags]`, keeping required flags (`tenant add … --oauth-client-file`,
   `host setup --microvm [flags] | --undo`). kv/d1/queues/secret/r2 grammar
   unchanged (B3).
-- `initTemplates`: one list for `tw init --template`'s flag help and usage,
-  the no-config fix hint, `tw help` and `tw help --all`;
-  `TestInitTemplates` checks it against js/packages/create-tailworks/templates.
+- Templates list: dropped from this branch when merging origin/master. #504
+  (init-starting-points, cmd/tw/templates.go) already made the template
+  table the single source that #438 asked for, so this branch keeps master's
+  version.
 - `cliReference` (clidoc.go): a subcommand whose flag block equals its
   command's or an earlier subsection's keeps its `####` heading and gets
   `Same flags as [tw X](#tw-x).` (52 sections). docs/cli.md 2327 → 1655 lines.

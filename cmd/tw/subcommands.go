@@ -15,25 +15,6 @@ import (
 // list the subcommands from that line (issue #438), as completion does
 // (completion.go), so there is no second list to keep in step.
 
-// initTemplates are `tw init --template`'s choices, in the order help
-// lists them. Help can't read the templates directory: it lives in
-// create-tailworks on disk (createTailworksDir), which a release may lack.
-// TestInitTemplates checks this against js/packages/create-tailworks.
-var initTemplates = []string{
-	"hello",
-	"agent",
-	"mcp",
-	"ai-agent",
-	"lock",
-	"static-site",
-	"refund-approval",
-	"node-workflow",
-	"python",
-}
-
-// templateChoices is initTemplates joined by sep ("|", " | ").
-func templateChoices(sep string) string { return strings.Join(initTemplates, sep) }
-
 // usageCommon matches the flags every subcommand takes, after three
 // spaces at the end of the last alternative.
 var usageCommon = regexp.MustCompile(`\s{3,}(\[.*)$`)

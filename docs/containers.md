@@ -3,8 +3,9 @@
 tailworks runs Cloudflare's container surface: `ctx.container` in a Durable
 Object, the `Container` class from `@cloudflare/containers`, and the Sandbox
 SDK (0.x and 1.0) on top of it. Each container is its own microVM attached to
-one object. ADR-032 (design repo) is the decision. This page explains how to
-use it first, then how it works.
+one object. The decision is
+[ADR-032](design/adr/032-containers-code-sandboxes.md). This page explains
+how to use it first, then how it works.
 
 ## Using containers
 
@@ -138,8 +139,14 @@ a per-container proxy on the host:
 ### Lifetime
 
 - `start()` boots the VM; the container runs until its entrypoint exits,
-  `destroy()` (SIGTERM, then SIGKILL after at most 10 s), its inactivity
-  timeout, or the host's hard max lifetime (24 h by default).
+  `destroy()` (SIGTERM, then SIGKILL after at most 10 s, hostd's
+  `ContainerGrace`), its inactivity timeout, or the host's hard max
+  lifetime (24 h by default, hostd's `ContainerMaxLife`).
+- When the entrypoint exits the VM is killed, and `monitor()` resolves on
+  exit code 0 and rejects with `Container exited with unexpected exit
+  code: N` otherwise.
+- The inactivity timeout counts from the last container API call with no
+  exec, port or stdin stream open. A parked `monitor()` is not activity.
 - It belongs to the object, not to the isolate: it survives the object's
   eviction and a blue/green redeploy of the parent (the new code sees
   `running`). It dies with its host; nothing migrates.
@@ -432,17 +439,7 @@ tw deploy                    /v2/  OCI registry                            no co
   (a directory of tarballs) remains for tests and hosts without a registry.
 - **Signing** (cosign) is deferred (ADR-032).
 
-## Lifecycle
-
-| event | effect |
-|---|---|
-| `start()` | returns at once (`running` is true); hostd admits it (`AcquireContainer`: the host's capacity vector, shared with microVM DO instances, else `503 capacity_exhausted`; then mgmt's synchronous tenant reservation, `POST /v1/container-reservations`, else `429 container_quota_exceeded`, or `503 quota_unavailable` when mgmt is unreachable: fail closed), resolves the image (class's pinned refs only), boots |
-| entrypoint exits | the VM is killed; `monitor()` resolves on 0, rejects `Container exited with unexpected exit code: N` |
-| `destroy()` | SIGTERM to the entrypoint, grace capped (`ContainerGrace`, 10 s), VMM SIGKILL |
-| inactivity | no container API call and no open exec/port/stdin stream for the timeout (default 10 min, the `@cloudflare/containers` default; `setInactivityTimeout` ≤ 6 h); a parked `monitor()` is not activity |
-| hard max lifetime | `ContainerMaxLife`, default 24 h |
-| object evicted / blue-green redeploy | nothing: the next instance reconciles `running` from hostd before any event |
-| `tw kill` of the object, workload stopped or fenced (ADR-028) | VMM SIGKILL, no grace |
+## How `running` is kept
 
 `running` is synchronous in Cloudflare's API: the polyfill keeps it in the
 object's SQLite kv, reconciles it with hostd in `blockConcurrencyWhile` at

@@ -45,8 +45,8 @@ The `tailworks` package is a small shim. npm installs it with one platform
 package as an optional dependency: `@tailworks/cli-darwin-arm64`,
 `@tailworks/cli-linux-arm64` or `@tailworks/cli-linux-amd64`, picked by
 the package's `os`, `cpu` and `libc`. The platform package holds the
-release tarball's own files (`tw`, `tw-mgmt`, `tw-hostd`, `tw-netd`,
-workerd, the templates and their vendored modules). They are made from the
+release tarball's own files (`tw`, `tw-mgmt`, `tw-hostd`, workerd,
+the templates and their vendored modules). They are made from the
 signed tarball and published with npm provenance, so the binaries are the
 same ones. Neither package has an install script.
 
@@ -110,8 +110,10 @@ connection, which is exactly the identity mgmt wants to see.
 
 ### 1. Get the release
 
-The tarball is self-contained (~87 MB compressed, ~300 MB installed): the Go binaries `tw`, `tw-mgmt`,
-`tw-hostd`, `tw-netd` (static, `CGO_ENABLED=0`; esbuild is built into
+The tarball is self-contained (darwin-arm64: about 165 MB compressed,
+585 MB installed, 220 MB of it the microVM guest; the linux tarballs are
+about 10% larger): the Go binaries `tw`, `tw-mgmt` and
+`tw-hostd` (static, `CGO_ENABLED=0`; esbuild is built into
 `tw`, so deploys need no Node.js), the pinned `workerd` (1.20261121.1, from
 npm `@cloudflare/workerd-darwin-arm64`), the app templates and the
 `node_modules` they need (vendored, so `tw init` and `tw deploy` work
@@ -350,7 +352,7 @@ on `tag:tw-mgmt`). Install tailworks there too (steps 1–2), then:
 
 ```sh
 tw link tw-mgmt.<tailnet>.ts.net       # https first, then http on :80; or just `tw link`: finds tw-mgmt through MagicDNS
-tw init support --template agent        # or hello, mcp, ai-agent (needs mcp deployed), lock; node-workflow needs Node.js
+tw init support --template agent        # or hello, mcp, static-site; tw init --list for every template
 cd support && tw dev                    # optional: run it locally against an embedded control plane
 tw deploy                               # bundles here (built-in esbuild), uploads to mgmt over the tailnet, waits until the node is ready
 tw ls · tw audit <object> · tw kill <object> --cascade
@@ -438,9 +440,13 @@ With more than one host, mgmt picks the host at deploy
 {
   "tailnet": { "tags": ["tag:api"], "connects": ["tag:db"] },
   "placement": { "mode": "smart" }   // the default when connects is set; "off" to disable
-  // "placement": { "targets": ["pg-primary"], "aggregate": "worst" }  // or "sum" over several targets
 }
 ```
+
+Advanced: `"placement": { "targets": ["pg-primary"] }` places close to other
+peers than `tailnet.connects`, and with several targets `"aggregate"` picks
+how their paths combine: `"worst"` (the default) or `"sum"`
+([tailworks-jsonc.md](tailworks-jsonc.md#placement)).
 
 ```
 $ tw deploy
@@ -677,18 +683,49 @@ See [upgrading.md](upgrading.md): what may run together, upgrading a
 `tw up` machine, and upgrading a fleet. Take a
 [backup](#back-up-and-restore) first if you may want to go back.
 
+## What is in ~/.tailworks
+
+`~/.tailworks` is two directories that share a default. The **prefix**
+is where `install.sh` puts the release (`TW_HOME`, `tw upgrade
+--prefix`). The **state dir** is where tailworks keeps its data
+(`TW_STATE_DIR`, `--state-dir`). Either can move without the other.
+
+`tw down --purge` deletes no files: it kills every object and deletes its
+device. "Uninstall" below is `install.sh --uninstall`; `--purge` also
+removes the state it lists.
+
+**State dir**
+
+| Entry | Written by | In `tw backup`? | Removed by uninstall? | Safe to delete by hand? |
+|---|---|---|---|---|
+| `tw.json` | `tw up`: how it was run (mint mode, credential file path) | yes | with `--purge` | no |
+| `mgmt/` | tw-mgmt: `mgmt.db` (SQLite: tenants, deployments, objects, the audit trail, queues, the KV, D1 and R2 journals), `custody/` (the sealing key and your [secrets](secrets.md)), `tsnet/` (mgmt's node state), `registry/` (container image blobs) | yes, except `registry/` | with `--purge` | no |
+| `hostd/` | tw-hostd: each workload's Durable Object storage (`hostd/tenants/<tenant>/workloads/<workload>/`), R2 object bytes with the `fs` backend ([r2.md](r2.md)), node state, `objects.json`, the audit key | DO storage and R2 bytes (not with `--hostd=false`) | with `--purge` | no |
+| `logs/` | tw up's supervisor: `supervisor.log`, `mgmt.log`, `hostd.log` | no | with `--purge` | yes, after `tw down` |
+| `run/` | tw up: unix sockets. When `<state>/run` would be longer than 48 bytes (macOS caps socket paths), the sockets go in `/tmp/tw-<hash>` instead | no | with `--purge` (not `/tmp/tw-<hash>`) | yes, after `tw down` |
+| `supervisor.pid` | tw up's supervisor | no | with `--purge` | yes, after `tw down` |
+| `backups/` | `tw backup` without `--out`, `tw upgrade`, `tw restore` (`<time>-before-restore`), `tw custody migrate` | no | no | yes, once you won't restore them. They hold the custody key and node state: keep them like `mgmt/` |
+| `upgrade/` | `tw upgrade`: the staged release, removed when it ends | no | no | yes, when no upgrade runs |
+| `link.json` | `tw link` (a developer machine) | no | no | yes (`tw link --unlink` does it) |
+| `cli/` | `tw link --tsnet`: the CLI's own node state | no | no | yes; the next `tw link --tsnet` joins a new node |
+| `update-check.json` | `tw`: the once-a-day update check | no | no | yes |
+| `vm/` | you, if at all: hostd looks here for microVM guest assets when the release has none in `share/tailworks/vm` | no | no | yes, if the release has its guest |
+
+**Prefix**
+
+| Entry | Written by | In `tw backup`? | Removed by uninstall? | Safe to delete by hand? |
+|---|---|---|---|---|
+| `bin/`, `share/`, `VERSION`, `install.sh` | `install.sh`, `tw upgrade` | no | yes | no: it is the install |
+| `bin.prev/`, `share.prev/`, `VERSION.prev` | `install.sh` on an upgrade: the previous release, for `install.sh --rollback` | no | yes | yes, if you won't roll back |
+
+So `install.sh --uninstall --purge` leaves `backups/`, `link.json`,
+`cli/`, `update-check.json` and `vm/` behind (it says what it kept); `rm
+-rf ~/.tailworks` removes everything.
+
 ## Back up and restore
 
-Everything tailworks keeps is in its state dir (`~/.tailworks`, or `--state-dir`):
-
-- `mgmt/`: the control plane. `mgmt.db` (SQLite) holds tenants,
-  deployments, objects, the audit trail, queues and the journals of KV,
-  D1 and R2 metadata. `custody/` holds the sealing key and your
-  [secrets](secrets.md), and `tsnet/` holds mgmt's node state.
-- `hostd/`: each workload's Durable Object storage
-  (`hostd/tenants/<tenant>/workloads/<workload>/`) and, with the default
-  `fs` backend, R2 object bytes ([r2.md](r2.md)).
-- `tw.json`: how `tw up` was run (mint mode, credential file path).
+What each entry in the state dir is, and which ones a backup holds:
+[What is in ~/.tailworks](#what-is-in-tailworks).
 
 ### Back up a running install: `tw backup`
 
@@ -826,7 +863,8 @@ unused warm keys), but not tailworks' own nodes: remove `tw-mgmt` (and `tw-host-
 if you had one) in the admin console › Machines. Then, if you're done with
 tailworks on this tailnet, revoke the OAuth client, delete `~/.config/tailworks/oauth.env`, remove the tailworks
 tags and grants from your tailnet policy, and remove the `PATH` line from
-your shell profile.
+your shell profile. What uninstall removes and what it keeps, entry by
+entry: [What is in ~/.tailworks](#what-is-in-tailworks).
 
 ## Disk, storage quotas and retention
 

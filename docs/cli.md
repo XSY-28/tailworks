@@ -172,15 +172,17 @@ flags:
 create an app from a template
 
 ```text
-tw init: create an app from a template (node-workflow needs Node.js on the deploying machine)
+tw init: create an app from a template (--list: every template, with the demos and patterns)
 
-usage: tw init <dir> [--template hello|agent|mcp|ai-agent|lock|static-site|refund-approval|node-workflow|python] [--name <workload>] [--tags <tag>,…] [--object-tags [<Class>=]<tag>,…]…
+usage: tw init <dir> [--template hello|agent|mcp|static-site] [--name <workload>] [--tags <tag>,…] [--object-tags [<Class>=]<tag>,…]…  |  init --list
 
 flags:
   -json
     	machine-readable output
   -keep-tags
     	keep the template's tags instead of naming them after the app (tag:tw-wl-<workload>, tag:tw-<workload>-<class>)
+  -list
+    	list every template: the starting points, then demos and patterns (templates.go)
   -name string
     	workload name (default: the directory name)
   -object-tags value
@@ -190,7 +192,7 @@ flags:
   -tags string
     	use these existing tags for the workload node instead of a new per-app tag (comma-separated, e.g. tag:tw-app); see docs/tailworks-jsonc.md#tags-and-tw-init
   -template string
-    	hello | agent | mcp | ai-agent | lock | static-site | refund-approval | node-workflow | python (default "hello")
+    	hello | agent | mcp | static-site (tw init --list: every template) (default "hello")
 ```
 
 ### tw dev
@@ -396,7 +398,7 @@ flags:
   -json
     	machine-readable output
   -name string
-    	workload name (default: tailworks.jsonc name)
+    	workload name (default: tailworks.jsonc name, then wrangler name, then the directory)
   -no-wait
     	return once mgmt accepted the deploy
   -platform string
@@ -442,7 +444,7 @@ flags:
   -json
     	machine-readable output
   -name string
-    	workload name (default: tailworks.jsonc name)
+    	workload name (default: tailworks.jsonc name, then wrangler name, then the directory)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
@@ -1615,7 +1617,7 @@ move secrets to setec to run several mgmt replicas
 tw custody: move this install's secrets and store keys from file custody to setec, so it can run several mgmt replicas: every entry is mapped to its name (refused if one can't be), copied, read back, and tw.json switched; run with tailworks stopped
 
 subcommands:
-  tw custody migrate --to setec --setec-url <url> [--dry-run]
+  tw custody migrate --setec-url <url> [--dry-run]
 
 flags:
   -dry-run
@@ -1623,11 +1625,11 @@ flags:
   -json
     	machine-readable output
   -setec-url string
-    	migrate --to setec: the setec server URL (what tw up --setec-url would take)
+    	migrate: the setec server URL to move file custody to (what tw up --setec-url would take)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -to string
-    	migrate: the custody to move to (setec)
+    	deprecated: setec is the only target; leave it out
 ```
 
 #### tw custody migrate

@@ -48,4 +48,10 @@ if (!tw.error) process.exit(tw.status ?? 1);
 cpSync(path.join(templates, template), dir, { recursive: true });
 // npm drops .gitignore from published packages: templates ship "gitignore".
 if (existsSync(path.join(dir, "gitignore"))) renameSync(path.join(dir, "gitignore"), path.join(dir, ".gitignore"));
-console.log(`created ${dir} from template ${template}\n  cd ${dir} && npm install && npx tsc --noEmit\n  then run it locally: npx tailworks dev   (or npm install -g tailworks; docs: https://github.com/rosskukulinski/tailworks/blob/master/docs/INSTALL.md)`);
+// The same two next steps tw init prints (cmd/tw/templates.go), in their
+// npx forms.
+const cd = `cd ${dir} && ${template === "node-workflow" ? "npm install && " : ""}npx tailworks dev`;
+console.log(`created ${dir} from template ${template}`);
+console.log(`  ${cd.padEnd(40)} # try it here, no tailnet`);
+console.log(`  ${"npx tailworks deploy --apply-policy".padEnd(40)} # shows the policy lines, asks, writes, deploys`);
+if (template === "ai-agent") console.log(`  its tools need the mcp template deployed as workload "mcp" and a grant: see ${path.join(dir, "README.md")}`);

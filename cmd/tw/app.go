@@ -33,7 +33,8 @@ func workloadLabel(s string) string {
 
 func cmdInit(args []string) error {
 	f := newFlags("init")
-	tmpl := f.String("template", "hello", templateChoices(" | "))
+	tmpl := f.String("template", "hello", startingPoints(" | ")+" (tw init --list: every template)")
+	list := f.Bool("list", false, "list every template: the starting points, then demos and patterns (templates.go)")
 	name := f.String("name", "", "workload name (default: the directory name)")
 	keepTags := f.Bool("keep-tags", false, "keep the template's tags instead of naming them after the app (tag:tw-wl-<workload>, tag:tw-<workload>-<class>)")
 	tags := f.String("tags", "", "use these existing tags for the workload node instead of a new per-app tag (comma-separated, e.g. tag:tw-app); see docs/tailworks-jsonc.md#tags-and-tw-init")
@@ -42,6 +43,9 @@ func cmdInit(args []string) error {
 	pos, err := f.parse(args)
 	if err != nil {
 		return err
+	}
+	if *list {
+		return cmdInitList(f)
 	}
 	if len(pos) != 1 {
 		return fail("bad_request", "tw init needs a directory", "usage: tw "+usageOf("init"))
@@ -144,18 +148,7 @@ func cmdInit(args []string) error {
 		if tags := initTags(dir); len(tags) > 0 {
 			fmt.Printf("  tags: %s (tw policy prints what to add to your tailnet policy for them)\n", strings.Join(tags, ", "))
 		}
-		if *tmpl == "node-workflow" {
-			// The Node tier bundles the app's own dependencies with the
-			// machine's Node.js; nothing is vendored for it.
-			fmt.Printf("  cd %s && npm install && tw dev    # or tw deploy\n", pos[0])
-			fmt.Printf("  needs Node.js ≥ 24 and npm on this machine; `npm install` fetches the template's dependencies, so this one can't be built or deployed offline\n")
-			return
-		}
-		fmt.Printf("  cd %s && tw policy && tw deploy   # or `tw dev` for a local run with no tailnet\n", pos[0])
-		if *tmpl == "ai-agent" {
-			// Its tools are a second app's; on its own it only refuses.
-			fmt.Printf("  its tools need the mcp template deployed as workload \"mcp\" and a grant: see %s\n", filepath.Join(pos[0], "README.md"))
-		}
+		printInitNext(pos[0], *tmpl) // templates.go
 	})
 	return nil
 }
@@ -179,6 +172,10 @@ type app struct {
 
 	// Pages is a Cloudflare Pages project (pages.go); nil for a Worker.
 	Pages *pagesProject
+
+	// WranglerName is the wrangler config's top-level "name", before
+	// --env (appname.go compares it with tailworks.jsonc's).
+	WranglerName string
 }
 
 func loadApp(dir, name string) (*app, error) { return loadAppWith(dir, name, appOpts{}) }
@@ -208,7 +205,7 @@ func loadAppWith(dir, name string, o appOpts) (*app, error) {
 					withFix(`add a wrangler.jsonc: {"name": "<site>", "pages_build_output_dir": "./public"} (the folder your build writes)`)
 			}
 			if twErr != nil {
-				return nil, fail("bad_request", "no tailworks.jsonc or wrangler config in "+dir).withFix("tw init <dir> --template " + templateChoices("|"))
+				return nil, fail("bad_request", "no tailworks.jsonc or wrangler config in "+dir).withFix("tw init <dir>   (tw init --list: the templates)")
 			}
 			return nil, fail("bad_request", "no wrangler.jsonc, wrangler.json or wrangler.toml in "+dir)
 		}
@@ -242,6 +239,7 @@ func loadAppWith(dir, name string, o appOpts) (*app, error) {
 		return nil, fail("bad_request", "tailworks.jsonc has no tailnet.tags (the workload node's tags)").
 			withFix(`add "tailnet": { "tags": ["tag:tw-wl-` + a.Name + `"] }`)
 	}
+	a.Warnings = append(a.Warnings, a.nameNotes(name, top.Name)...) // appname.go
 	if a.Pages != nil {
 		secrets, _ := typesSecrets(a)
 		_, declared := genTypes(a, a.Dir, secrets)
@@ -398,7 +396,7 @@ type deployResult struct {
 
 func cmdDeploy(args []string) error {
 	f := newFlags("deploy")
-	name := f.String("name", "", "workload name (default: tailworks.jsonc name)")
+	name := f.String("name", "", "workload name (default: tailworks.jsonc name, then wrangler name, then the directory)")
 	allowMissing := f.Bool("allow-missing-grants", false, "deploy even if tailnet.connects grants are missing")
 	applyPolicy := f.Bool("apply-policy", false, "when the preflight finds tagOwners, grants, funnel nodeAttrs or Service auto-approval missing, write them to the tailnet policy first (as tw policy --apply)")
 	yes := f.Bool("yes", false, "with --apply-policy: write the policy without asking (needed without a terminal, and with --json)")

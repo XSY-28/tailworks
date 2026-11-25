@@ -428,7 +428,7 @@ heartbeat, 12 s kill tombstone).
 | microVM boot | 60 s | no | `hostd/workload.go:#vm-boot` |
 | Tailnet nodes advertised per host | 25% of RAM at 8 MiB per node, at least 50 and at most 1000 (500 when RAM can't be read); see [Per-node memory](#per-node-memory-measured) | `-capacity-nodes` (0: derived) | `hostd/capacitynodes.go:nodeMemShare`, `hostd/capacitynodes.go:NodeMemMiB`, `hostd/capacitynodes.go:MinCapacityNodes`, `hostd/capacitynodes.go:MaxCapacityNodes`, `hostd/capacitynodes.go:FallbackCapacityNodes` |
 | Pre-joined nodes per hot class | 1 | `-pool-nodes` | `internal/hostdrun/hostdrun.go:DefaultPoolNodes` |
-| Concurrent node joins | 16 | `tw-netd -join-parallel` | `cmd/tw-netd/main.go:-join-parallel` |
+| Concurrent node joins | 16 | no | `netd/registry.go:JoinParallel` |
 | One node join | 2 min | no | `netd/registry.go:JoinTimeout` |
 | Heartbeat | 3 s | `-heartbeat` | `cmd/tw-hostd/main.go:-heartbeat` |
 | Stop serving stateful workloads without a heartbeat | 30 s, at most 40 s | `-fence-after` | `hostd/host.go:DefaultFenceAfter`, `hostd/host.go:MaxFenceAfter` |
@@ -507,7 +507,7 @@ tailnet, `make e2e-regrate-real` (`e2e/regrate`).
 
 No registration was refused or slowed: the register round trip stayed at
 0.43 s at 50-way. At these sizes the rate is concurrent joins ÷ join time,
-set by netd's `-join-parallel`, not by control. Sustained rates over more
+set by netd's concurrent-join limit (`JoinParallel`), not by control. Sustained rates over more
 than 50 nodes, and several hosts registering at once, were not measured.
 
 ## Management API

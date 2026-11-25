@@ -2,8 +2,6 @@ package main
 
 import (
 	"bytes"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -90,24 +88,5 @@ func TestSubcommandHelp(t *testing.T) {
 
 	if err := cmdHost(nil); err == nil || !strings.Contains(err.Error(), "tw host needs a subcommand: add, ls, rm, cordon, uncordon, drain, setup, vmcheck") {
 		t.Errorf("tw host: %v", err)
-	}
-}
-
-// TestInitTemplates: help's template list is the create-tailworks
-// templates directory.
-func TestInitTemplates(t *testing.T) {
-	ents, err := os.ReadDir(filepath.Join("..", "..", "js", "packages", "create-tailworks", "templates"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var dirs []string
-	for _, e := range ents {
-		if e.IsDir() {
-			dirs = append(dirs, e.Name())
-		}
-	}
-	got := slices.Sorted(slices.Values(initTemplates))
-	if !slices.Equal(got, dirs) {
-		t.Errorf("initTemplates %q, templates directory %q", got, dirs)
 	}
 }

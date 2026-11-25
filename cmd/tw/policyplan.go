@@ -47,7 +47,7 @@ type policyResult struct {
 
 func cmdPolicy(args []string) error {
 	f := newFlags("policy")
-	name := f.String("name", "", "workload name (default: tailworks.jsonc name)")
+	name := f.String("name", "", "workload name (default: tailworks.jsonc name, then wrangler name, then the directory)")
 	tenantF := tenantFlag(f)
 	vars := varFlags{}
 	f.Var(vars, "var", "override a wrangler var (KEY=VALUE, repeatable)")
