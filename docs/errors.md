@@ -515,7 +515,7 @@ Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<bi
 409 · mgmt, cli. **When:** `tw upgrade pause|resume|abort` on a run that isn't running (pause), paused (resume) or active (abort). **Fix:** `tw upgrade status` shows the run's state.
 
 ### upstream_unavailable
-503 · netd. **When:** the platform upstream (workerd or node behind netd) is not answering. **Fix:** it is restarting or crashed; `tw logs <workload>`.
+503 · netd, hostd. **When:** the platform upstream (workerd or node behind netd) is not answering; or the host has had no successful heartbeat to mgmt within the fence window (30 s) after a stall or a cut-off, so a workload with Durable Objects refuses requests and egress until mgmt confirms its lease ([locks.md](locks.md)). **Fix:** it is restarting or crashed; `tw logs <workload>`. After a stall, retry: the host serves again after its next heartbeat, or the workload has moved to another host.
 
 ### usermod_failed
 1 · cli. **When:** `tw host setup --microvm` could not add the user to the `kvm` group. **Fix:** `sudo usermod -aG kvm <user>` and log in again.

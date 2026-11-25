@@ -1,8 +1,9 @@
 # tw docs map
 
-Every tailworks doc, by who you are and by what you need. The same files ship
-in the CLI: `tw docs ls`, `tw docs search <words>`,
-`tw docs show <doc>[#<anchor>]`.
+Every tailworks doc, by who you are and by what you need. The guides in this
+directory ship in the CLI: `tw docs ls`, `tw docs search <words>`,
+`tw docs show <doc>[#<anchor>]`. The API contract (`contracts/`) and the
+design records (`design/`) don't; read them here on GitHub.
 
 ## Start here by role
 
