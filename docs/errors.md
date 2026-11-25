@@ -95,7 +95,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 403 · netd (SDK `@tailworks/mcp`), mgmt (`/mcp`, approvals), hostd, cli. **When:** the caller's app capability lacks the tool (or the capability itself) the MCP server requires. From tailworks' own MCP server: a `deploy`, `kill` or `undeploy` call without a `github.com/rosskukulinski/tailworks/cap/mcp` grant naming the tool, or, on the tailworks host, a `tw mcp` bridge started without `--allow <tool>`. **Fix:** add the `app` capability with the tool to the grant from the caller's tag to the server's tag (the error's `snippet` has it); for tailworks' MCP server, ask the tailnet admin, don't work around it. For approvals: the approver's `github.com/rosskukulinski/tailworks/cap/approve` grants do not cover the workload, Workflow, step, decision or a param limit (`missing` says which); grant it to the approver on the workload's tag (the app's page, `/_tw/approvals`) and on `tag:tw-mgmt` (`tw approve`, the admin UI) ([approvals](approvals.md)).
 
 ### confirmation_required
-1 · cli. **When:** a command that asks first had no terminal to ask on (a coding agent, a script, or `--json`), so it did nothing. These commands ask first: `tw agent setup` and `tw agent remove` (they would write or delete files), `tw upgrade`, and every command that deletes data or a tenant's resources: `tw d1 rm`, `tw kv namespace rm`, `tw queues rm`, `tw queues purge`, `tw r2 bucket rm`, `tw tenant rm` and `tw host rm`. **Fix:** run it in a terminal and answer the prompt (a delete asks you to type the name), or add `--yes`. An agent should tell the user what will be lost (and show `--dry-run` where there is one) and add `--yes` only after the user agreed to that action.
+1 · cli. **When:** a command that asks first had no terminal to ask on (a coding agent, a script, or `--json`), so it did nothing. These commands ask first: `tw agent setup` and `tw agent remove` (they would write or delete files), `tw upgrade`, and every command that deletes data or a tenant's resources: `tw d1 rm`, `tw kv namespace rm`, `tw queues rm`, `tw queues purge`, `tw r2 bucket rm`, `tw tenant rm`, `tw host rm` and `tw uninstall`. **Fix:** run it in a terminal and answer the prompt (a delete asks you to type the name), or add `--yes`. An agent should tell the user what will be lost (and show `--dry-run` where there is one) and add `--yes` only after the user agreed to that action.
 
 ### credential_file_insecure
 403 · cli. **When:** a credential file (`tw tenant add --oauth-client-file`, `--api-key-file`, `--db-file`) is readable by other users, or is owned by another user. (`tw up` tightens its own OAuth client file to 0600 instead.) **Fix:** `chmod 600 <file>` then run the command again.
@@ -335,7 +335,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 503 · mgmt. **When:** mgmt cannot read the tenant policy: the OAuth client has no `policy_file:read`, so spawn checks and deploy preflight cannot run. **Fix:** give the client Policy File › Read; until then `tw deploy` says `preflight skipped`.
 
 ### policy_write_denied
-403 · mgmt, cli. **When:** `tw policy --apply` / `tw deploy --apply-policy`: the tenant's OAuth client may not write the tailnet policy (it has Policy File › Read, or no Policy File scope). Nothing was written. **Fix:** generate a client with the Policy File write scope and `tw tenant set <tenant> --oauth-client-file <file>`, or add the snippet `tw policy` prints in the admin console.
+403 · mgmt, cli. **When:** `tw policy --apply`: the tenant's OAuth client may not write the tailnet policy (it has Policy File › Read, or no Policy File scope). Nothing was written. (`tw deploy --apply-policy` says so in one line and fails with `acl_denied` and the snippet instead.) **Fix:** generate a client with the Policy File write scope and `tw tenant set <tenant> --oauth-client-file <file>`, or add the snippet `tw policy` prints in the admin console.
 
 ### precondition_failed
 412 · mgmt. **When:** `If-Match` did not match the record's current `ETag`. **Fix:** re-read, then retry with the new ETag.
@@ -489,6 +489,9 @@ Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<bi
 
 ### unhealthy
 503 · cli. **When:** `tw status` finds tailworks not healthy: mgmt not answering, or no live host. **Fix:** `tw logs --component mgmt|hostd`.
+
+### uninstall_blocked
+409 · cli. **When:** `tw uninstall` refused before changing anything: the microVM tier's helper is installed (`/etc/tailworks/setup.json`; undoing it needs root and this `tw` binary); tailworks is set up in the state dir but mgmt isn't running or healthy (the purge needs it); other hosts are registered with this mgmt (they would be orphaned); or the state dir is your home directory or contains it. **Fix:** the one it names: `sudo <prefix>/bin/tw host setup --undo`; `tw up` (or `tw uninstall --force`, then delete the objects' devices in the admin console › Machines); `tw host drain <host>` and `tw host rm <host>` for each other host; `--state-dir` naming tailworks' own state dir. Then `tw uninstall` again ([INSTALL.md](INSTALL.md#uninstall)).
 
 ### unknown_namespace
 404 · mgmt. **When:** `(workload, class)` is not declared in the workload's `tailworks.jsonc`. **Fix:** declare the class under `tailnet.objects`, redeploy.

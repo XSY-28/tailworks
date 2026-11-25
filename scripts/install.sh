@@ -3,8 +3,9 @@
 #
 #   ./install.sh                 install (or upgrade, or repair) into ~/.tailworks
 #   ./install.sh --prefix DIR    install into DIR instead
+#   ./install.sh --force         replace a different version while tw runs from the prefix
 #   ./install.sh --uninstall     remove bin/ and share/ (keeps tailworks state: tw.json, logs, …)
-#   ./install.sh --uninstall --purge   also remove the state in the prefix (run `tw down` first)
+#   ./install.sh --uninstall --purge   remove the whole prefix, state and backups/ included (run `tw down --purge` first)
 #   ~/.tailworks/install.sh --rollback swap the previous install (bin.prev, share.prev) back in
 #   ./install.sh --allow-unsigned      install a release without a valid SHA256SUMS.sig (local builds)
 #   ./install.sh --force         with --rollback or --uninstall: go ahead while tailworks runs from the prefix (what tw upgrade passes after stopping it)
@@ -18,7 +19,11 @@
 # re-install of the same version keeps the older .prev), and copies this
 # script to <prefix>/install.sh so --rollback works without the tarball.
 # --rollback refuses while tailworks runs from the prefix (tw down first, or
-# --force); rolling back twice returns to where you started.
+# --force); rolling back twice returns to where you started. So does an
+# install of another version over a running tailworks: `tw upgrade` is the
+# way to do that (it backs up, health-checks and rolls back); a same-version
+# re-run (a repair) goes ahead. `tw uninstall` is the full uninstall;
+# --uninstall --purge is its fallback when no tw binary runs.
 set -eu
 PREFIX=${TW_HOME:-$HOME/.tailworks}
 MODE=install
@@ -61,11 +66,15 @@ if [ "$MODE" = uninstall ]; then
 	if running && [ "$FORCE" != 1 ]; then
 		die "tw is running from $PREFIX (tw down first, or pass --force)"
 	fi
+	if [ "$PURGE" = 1 ]; then
+		# The same end state as `tw uninstall` for the prefix: all of it.
+		case $PREFIX in
+		"" | / | "$HOME" | "$HOME/") die "won't remove $PREFIX" ;;
+		esac
+		rm -rf "$PREFIX"
+	fi
 	rm -rf "$PREFIX/bin" "$PREFIX/share" "$PREFIX/VERSION" "$PREFIX/.install-"* \
 		"$PREFIX/bin.prev" "$PREFIX/share.prev" "$PREFIX/VERSION.prev" "$PREFIX/install.sh"
-	if [ "$PURGE" = 1 ]; then
-		rm -rf "$PREFIX/tw.json" "$PREFIX/logs" "$PREFIX/run" "$PREFIX/mgmt" "$PREFIX/hostd" "$PREFIX/supervisor.pid"
-	fi
 	rmdir "$PREFIX" 2>/dev/null || true
 	if [ -d "$PREFIX" ]; then
 		say "✓ uninstalled tw from $PREFIX (state kept: $(ls -A "$PREFIX" | tr '\n' ' '))"
@@ -99,6 +108,14 @@ SRC=$(cd "$(dirname "$0")" && pwd)
 [ -f "$SRC/VERSION" ] && [ -x "$SRC/bin/tw" ] || die "run me from the extracted tw release directory"
 VERSION=$(cat "$SRC/VERSION")
 t0=$(date +%s)
+
+# Another version over a running tailworks: refuse, don't swap binaries
+# under it (no backup, no health check, no rollback). tw upgrade does it
+# properly; tw upgrade and hostd's self-upgrade pass --force.
+cur=$(cat "$PREFIX/VERSION" 2>/dev/null || true)
+if [ -n "$cur" ] && [ "$cur" != "$VERSION" ] && running && [ "$FORCE" != 1 ]; then
+	die "tw $cur is running from $PREFIX: \`$PREFIX/bin/tw upgrade --from $SRC\` backs up, health-checks and rolls back; or \`tw down\` first; --force swaps anyway"
+fi
 
 # Platform check.
 os=$(uname -s | tr '[:upper:]' '[:lower:]')

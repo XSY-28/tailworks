@@ -99,6 +99,8 @@ func cmdInit(args []string) error {
 	}
 	// Name the workload after the directory (tailworks.jsonc and wrangler.jsonc),
 	// and the npm package too (its first "name" is the top-level one).
+	// create-tailworks without tw does the same (lib/init.mjs); keep them in
+	// step (TestCreateTailworksRenamesLikeInit).
 	for _, fn := range []string{"package.json", "tailworks.jsonc", "wrangler.jsonc"} {
 		p := filepath.Join(dir, fn)
 		b, err := os.ReadFile(p)
@@ -501,12 +503,9 @@ func cmdDeploy(args []string) error {
 		printNodeBudget("✓ preflight  nodes: ", "! preflight  nodes: ", tn.Tailnet, res.Nodes)
 	}
 	if !pf.OK && *applyPolicy {
-		ar, err := applyAppPolicy(ctx, mc, f, tn.TenantID, a.Name, tb, *yes, "tw deploy --apply-policy")
-		if err != nil {
+		if err := deployApplyPolicy(ctx, mc, f, tn.TenantID, a.Name, tb, *yes, *allowMissing, &pf, &res, ev); err != nil { // deploy_policy.go
 			return err
 		}
-		pf, res.Preflight, res.PolicyApplied = ar.Preflight, ar.Preflight, ar
-		ev.emit("policy", map[string]any{"changed": ar.Changed, "added": ar.Added, "manual": ar.Manual, "ok": pf.OK})
 	}
 	if !pf.OK && !*allowMissing {
 		return preflightFailure(pf)

@@ -77,13 +77,14 @@ How it differs from a tarball install:
   and `tw` then says so. Reinstall without it.
 - **Size:** about 120 MB to download and 400 MB on disk, mostly workerd.
 
-`npm create tailworks` runs `tw init` when `tw` is on your PATH, so an
-`npm install -g tailworks` makes it name the app's workload and tags after
-the directory.
+`npm create tailworks` runs `tw init` when `tw` is on your PATH. Without
+it, it copies the template and names the app's workload and tags after the
+directory the same way; only `--tags`, `--object-tags` and `--keep-tags`
+need `tw`.
 
-To remove it: `tw down --service` (if you ran `tw up`), then
-`npm uninstall -g tailworks`. Your state in `~/.tailworks` stays until you
-delete it ([Uninstall](#uninstall)).
+To remove it: `tw uninstall`, then `npm uninstall -g tailworks` (which
+`tw uninstall` prints last). `tw uninstall` also deletes your state in
+`~/.tailworks` unless you pass `--keep-state` ([Uninstall](#uninstall)).
 
 ## macOS
 
@@ -162,7 +163,7 @@ attribute from its own copy.
 
 ```sh
 cd tailworks-*-darwin-arm64
-./install.sh                  # installs into ~/.tailworks; safe to re-run (repair); to upgrade, use `tw upgrade` (docs/upgrading.md)
+./install.sh                  # installs into ~/.tailworks; safe to re-run (repair); to upgrade, use `tw upgrade` (docs/upgrading.md): while tw runs, install.sh refuses another version
 export PATH="$HOME/.tailworks/bin:$PATH"
 echo 'export PATH="$HOME/.tailworks/bin:$PATH"' >> ~/.zprofile   # the installer prints this; it doesn't edit your profile
 ```
@@ -415,9 +416,23 @@ Day 2: `tw ls`, `tw logs support`, `tw kill <object>`,
 #### A second tenant (another tailnet) on the same Mac
 
 ```sh
-tw tenant add <other-tailnet>.ts.net --oauth-client-file ~/.config/tailworks/other-oauth.env   # that tailnet's own OAuth client
+tw tenant add <other-tailnet>.ts.net           # asks for that tailnet's own OAuth client secret
 tw deploy --tenant <other-tailnet>.ts.net      # also: ls, kill, audit, logs --tenant
 tw tenant ls
+```
+
+Like the first `tw up`, `tw tenant add` asks for the OAuth client secret on
+a terminal and saves it to `~/.config/tailworks/tn_<other-tailnet>-oauth.env`
+(0600), reusing that file next time. Create the client in the other
+tailnet's admin console as for `tw up` (Auth Keys write, tag `tag:tw`, and
+`tag:tw` in its `tagOwners`). The tenant's tailnet needs nothing else in
+its policy: tailworks' own nodes stay on your tailnet, and `tw tenant add`
+writes nothing to the other tailnet's policy. In a script, or with `--json`
+or `--state-dir`, pass the file instead:
+
+```sh
+umask 077; printf 'TS_OAUTH_CLIENT_SECRET=tskey-client-…\n' > ~/.config/tailworks/other-oauth.env
+tw tenant add <other-tailnet>.ts.net --oauth-client-file ~/.config/tailworks/other-oauth.env
 ```
 
 Each tenant gets its own netd registry (its tailnet's control plane and
@@ -430,13 +445,12 @@ OAuth client file (created in that tailnet's admin console); `tw tenant
 add` refuses one that already serves another tenant.
 
 ```sh
-tw down --purge           # kill every object and delete its devices, then stop
-~/Downloads/tailworks/tailworks-*-darwin-arm64/install.sh --uninstall --purge   # remove ~/.tailworks
+tw down                   # stop (tw up starts it again; state kept)
+tw uninstall              # remove tailworks: objects, devices, service, install and ~/.tailworks
 ```
 
-`--uninstall` without `--purge` keeps your state (`tw.json`, logs, data).
-Installed with `get.sh`? It doesn't keep the release directory; see
-[Uninstall](#uninstall) for the full list.
+`tw uninstall` prints what it removes and asks first; `--keep-state` keeps
+your data. See [Uninstall](#uninstall).
 
 ### Troubleshooting
 
@@ -477,25 +491,26 @@ variable `tw`, `get.sh` and `install.sh` read is in
 [cli.md](cli.md#environment).
 
 `tw down --purge` deletes no files: it kills every object and deletes its
-device. "Uninstall" below is `install.sh --uninstall`; `--purge` also
-removes the state it lists.
+device. "Uninstall" below is [`tw uninstall`](#uninstall): it removes every
+entry in both tables, unless you pass `--keep-state`, which keeps the state
+dir's entries. It deletes nothing else it finds there, and names it.
 
 **State dir**
 
 | Entry | Written by | In `tw backup`? | Removed by uninstall? | Safe to delete by hand? |
 |---|---|---|---|---|
-| `tw.json` | `tw up`: how it was run (mint mode, credential file path) | yes | with `--purge` | no |
-| `mgmt/` | tw-mgmt: `mgmt.db` (SQLite: tenants, deployments, objects, the audit trail, queues, the KV, D1 and R2 journals), `custody/` (the sealing key and your [secrets](secrets.md)), `tsnet/` (mgmt's node state), `registry/` (container image blobs) | yes, except `registry/` | with `--purge` | no |
-| `hostd/` | tw-hostd: each workload's Durable Object storage (`hostd/tenants/<tenant>/workloads/<workload>/`), R2 object bytes with the `fs` backend ([r2.md](r2.md)), node state, `objects.json`, the audit key | DO storage and R2 bytes (not with `--hostd=false`) | with `--purge` | no |
-| `logs/` | tw up's supervisor: `supervisor.log`, `mgmt.log`, `hostd.log` | no | with `--purge` | yes, after `tw down` |
-| `run/` | tw up: unix sockets. When `<state>/run` would be longer than 48 bytes (macOS caps socket paths), the sockets go in `/tmp/tw-<hash>` instead | no | with `--purge` (not `/tmp/tw-<hash>`) | yes, after `tw down` |
-| `supervisor.pid` | tw up's supervisor | no | with `--purge` | yes, after `tw down` |
-| `backups/` | `tw backup` without `--out`, `tw upgrade`, `tw restore` (`<time>-before-restore`), `tw custody migrate` | no | no | yes, once you won't restore them. They hold the custody key and node state: keep them like `mgmt/` |
-| `upgrade/` | `tw upgrade`: the staged release, removed when it ends | no | no | yes, when no upgrade runs |
-| `link.json` | `tw link` (a developer machine) | no | no | yes (`tw link --unlink` does it) |
-| `cli/` | `tw link --tsnet`: the CLI's own node state | no | no | yes; the next `tw link --tsnet` joins a new node |
-| `update-check.json` | `tw`: the once-a-day update check | no | no | yes |
-| `vm/` | you, if at all: hostd looks here for microVM guest assets when the release has none in `share/tailworks/vm` | no | no | yes, if the release has its guest |
+| `tw.json` | `tw up`: how it was run (mint mode, credential file path) | yes | yes, unless `--keep-state` | no |
+| `mgmt/` | tw-mgmt: `mgmt.db` (SQLite: tenants, deployments, objects, the audit trail, queues, the KV, D1 and R2 journals), `custody/` (the sealing key and your [secrets](secrets.md)), `tsnet/` (mgmt's node state), `registry/` (container image blobs) | yes, except `registry/` | yes, unless `--keep-state` | no |
+| `hostd/` | tw-hostd: each workload's Durable Object storage (`hostd/tenants/<tenant>/workloads/<workload>/`), R2 object bytes with the `fs` backend ([r2.md](r2.md)), node state, `objects.json`, the audit key | DO storage and R2 bytes (not with `--hostd=false`) | yes, unless `--keep-state` | no |
+| `logs/` | tw up's supervisor: `supervisor.log`, `mgmt.log`, `hostd.log` | no | yes, unless `--keep-state` | yes, after `tw down` |
+| `run/` | tw up: unix sockets. When `<state>/run` would be longer than 48 bytes (macOS caps socket paths), the sockets go in `/tmp/tw-<hash>` instead | no | yes, unless `--keep-state` | yes, after `tw down` |
+| `supervisor.pid` | tw up's supervisor | no | yes, unless `--keep-state` | yes, after `tw down` |
+| `backups/` | `tw backup` without `--out`, `tw upgrade`, `tw restore` (`<time>-before-restore`), `tw custody migrate` | no | yes, unless `--keep-state` | yes, once you won't restore them. They hold the custody key and node state: keep them like `mgmt/` |
+| `upgrade/` | `tw upgrade`: the staged release, removed when it ends | no | yes, unless `--keep-state` | yes, when no upgrade runs |
+| `link.json` | `tw link` (a developer machine) | no | yes, unless `--keep-state` | yes (`tw link --unlink` does it) |
+| `cli/` | `tw link --tsnet`: the CLI's own node state | no | yes, unless `--keep-state` | yes; the next `tw link --tsnet` joins a new node |
+| `update-check.json` | `tw`: the once-a-day update check | no | yes, unless `--keep-state` | yes |
+| `vm/` | you, if at all: hostd looks here for microVM guest assets when the release has none in `share/tailworks/vm` | no | yes, unless `--keep-state` | yes, if the release has its guest |
 
 **Prefix**
 
@@ -504,9 +519,10 @@ removes the state it lists.
 | `bin/`, `share/`, `VERSION`, `install.sh` | `install.sh`, `tw upgrade` | no | yes | no: it is the install |
 | `bin.prev/`, `share.prev/`, `VERSION.prev` | `install.sh` on an upgrade: the previous release, for `install.sh --rollback` | no | yes | yes, if you won't roll back |
 
-So `install.sh --uninstall --purge` leaves `backups/`, `link.json`,
-`cli/`, `update-check.json` and `vm/` behind (it says what it kept); `rm
--rf ~/.tailworks` removes everything.
+`/tmp/tw-<hash>` (the sockets of a long state dir) goes too. Without a
+working `tw` binary, `install.sh --uninstall --purge` (from the prefix or a
+release directory) removes the whole prefix, the state in it included, and
+`install.sh --uninstall` removes only the prefix's own entries.
 
 ## Back up and restore
 
@@ -637,20 +653,55 @@ runs on it. HA runs `tw-mgmt` directly on each replica machine. Both are in
 ## Uninstall
 
 ```sh
-tw agent remove                               # if you installed the coding-agent skills
-tw down --purge --service                     # kill every object, delete its device, stop, remove the service
-sudo ~/.tailworks/bin/tw host setup --undo          # Linux, only if you ran host setup --microvm
-rm -rf ~/.tailworks                                  # or: <release dir>/install.sh --uninstall --purge
-npm uninstall -g tailworks                           # if you installed it with npm
+tw uninstall --dry-run        # what it would do and delete
+tw uninstall                  # do it (asks first; --yes without a terminal)
 ```
 
-`tw down --purge` deletes the objects' devices (any `tw down` revokes
-unused warm keys), but not tailworks' own nodes: remove `tw-mgmt` (and `tw-host-<id>`
-if you had one) in the admin console › Machines. Then, if you're done with
-tailworks on this tailnet, revoke the OAuth client, delete `~/.config/tailworks/oauth.env`, remove the tailworks
-tags and grants from your tailnet policy, and remove the `PATH` line from
-your shell profile. What uninstall removes and what it keeps, entry by
+It ends in one of three places:
+
+- **`tw uninstall`**: nothing of tailworks is left on this machine. It
+  kills every object and deletes its device (`tw down --purge`), deregisters
+  this host (with `tw up --separate-host`), stops tailworks and removes its
+  login service, deletes mgmt's own `tw-mgmt` node with your OAuth client
+  (or Headscale API key), removes tailworks' skills from the coding agents
+  it finds (`tw agent remove`), removes the install (`bin/`, `share/`, the
+  `.prev` copies, `VERSION`, `install.sh`) and deletes the state dir. That
+  includes `mgmt.db` (every tenant's KV, D1, R2 and queue data), the audit
+  trail and `backups/`. Take a `tw backup --out <a directory outside
+  ~/.tailworks>` first if you may want any of it back.
+- **`tw uninstall --keep-state`**: the same, but the state dir's data stays.
+  `tw.json` then forgets mgmt's deleted node, so a later `tw up` joins a new
+  one.
+- **A developer machine** (`tw link`, no `tw up`): it removes `link.json`,
+  `cli/` and the install.
+
+It refuses, before it changes anything:
+
+- **The microVM tier's helper is installed** (Linux, `tw host setup
+  --microvm`). Undoing it needs root and this `tw` binary, so it goes
+  first: `sudo ~/.tailworks/bin/tw host setup --undo`, then `tw uninstall`.
+- **tailworks is set up but mgmt isn't running or healthy.** The purge needs
+  mgmt. Run `tw up` first, or pass `--force` and delete the objects'
+  devices in the admin console › Machines yourself.
+- **Other hosts are registered with this mgmt.** Uninstalling it would
+  orphan them. `tw host drain` and `tw host rm` each one first.
+
+Installed with npm? `tw uninstall` removes everything but the package and
+prints `npm uninstall -g tailworks` to run last. If its OAuth client may
+not delete devices, it says which node to delete in the admin console ›
+Machines.
+
+It never changes your tailnet policy. It prints what it deliberately
+leaves, for you to do if you're done with tailworks: revoke the OAuth
+client and delete its file (`~/.config/tailworks/oauth.env`), remove the
+tailworks tags and grants from the policy, drop a Postgres store or setec
+entries (`tw up --db`, `--custody setec`), `loginctl disable-linger` on
+Linux, and the `PATH` line in your shell profile. What it removes, entry by
 entry: [What is in ~/.tailworks](#what-is-in-tailworks).
+
+With no working `tw` binary, `install.sh --uninstall --purge` (from
+`~/.tailworks` or a release directory) removes the whole prefix. It does
+none of the rest: run `tw down --purge` before it if you can.
 
 ## Linux
 
@@ -925,4 +976,4 @@ sudo ~/.tailworks/bin/tw host setup --undo
 This stops the service (and every microVM), and removes the unit,
 `/usr/local/libexec/tailworks`, `/etc/tailworks`, `/var/lib/tailworks-vm`, the sysctl file
 (huge pages back to their old value) and the `kvm` membership it added. Your
-DO volumes stay in `~/.tailworks` until `install.sh --uninstall --purge`.
+DO volumes stay in `~/.tailworks` until `tw uninstall`.

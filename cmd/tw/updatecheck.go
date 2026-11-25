@@ -249,6 +249,7 @@ var noUpdateNotice = map[string]bool{
 	"dev":         true, // local only: no outbound request (#104)
 	"init":        true, // local only: no outbound request (#104)
 	"mcp":         true,
+	"uninstall":   true, // it deletes update-check.json
 	"version":     true,
 }
 

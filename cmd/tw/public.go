@@ -121,7 +121,8 @@ func preflightFailure(pf mgmt.PreflightResult) *cliErr {
 	if pf.ServiceUnapproved {
 		e.Fix = append(e.Fix, "let the workload node host "+pf.Service+" (control won't route it otherwise):", "  "+pf.ServiceSnippet)
 	}
-	e.Fix = append(e.Fix, "then re-run, or deploy anyway with --allow-missing-grants")
+	e.Fix = append(e.Fix, "then re-run, or deploy anyway with --allow-missing-grants",
+		"or let tw add them (shows the lines and asks first): tw deploy --apply-policy")
 	return e
 }
 
