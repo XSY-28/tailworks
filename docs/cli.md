@@ -1645,6 +1645,7 @@ them, and secrets and `node.env` can't use them.
 | --- | --- | --- | --- |
 | `TW_STATE_DIR` | the state dir (default `~/.tailworks`). A `tw up --service` unit passes `--state-dir` itself. | `--state-dir` | tw |
 | `TW_HOME` | where `get.sh` and `install.sh` install the release (the prefix; default `~/.tailworks`). It shares the state dir's default but is a different thing: [What is in ~/.tailworks](INSTALL.md#what-is-in-tailworks). | `install.sh --prefix` | scripts |
+| `TW_INSTALL_FORCE` | `1`: `get.sh` replaces another version while tailworks runs from the prefix, with no backup or health check. Use `tw upgrade` instead. | `install.sh --force` | scripts |
 | `TW_NO_UPDATE_CHECK` | set (to `1`): no once-a-day "newer release" notice after a command. `CI` does the same. |  | tw |
 | `CI` | set (as CI systems do): no update notice, as with `TW_NO_UPDATE_CHECK`. |  | tw |
 | `TW_WORKERD` | the workerd binary, when it isn't next to `tw` or in `~/.tailworks/bin`. | `--workerd` (`tw up`, `tw dev`) | tw |

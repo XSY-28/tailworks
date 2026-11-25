@@ -37,6 +37,12 @@ var envVars = []envVar{
 		ScriptsOnly: true,
 	},
 	{
+		Name:        "TW_INSTALL_FORCE",
+		What:        "`1`: `get.sh` replaces another version while tailworks runs from the prefix, with no backup or health check. Use `tw upgrade` instead.",
+		Flag:        "`install.sh --force`",
+		ScriptsOnly: true,
+	},
+	{
 		Name: "TW_NO_UPDATE_CHECK",
 		What: "set (to `1`): no once-a-day \"newer release\" notice after a command. `CI` does the same.",
 	},
