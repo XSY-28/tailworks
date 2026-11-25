@@ -543,7 +543,7 @@ func (m *Mgmt) RegisterHost(ctx context.Context, r RegisterRequest, nodeID, node
 	auditKey := r.AuditPubKey
 	if old.AuditPubKey != "" {
 		if auditKey != "" && auditKey != old.AuditPubKey {
-			return Host{}, false, errf(403, "host_identity_mismatch", "host %s: auditPubKey is pinned to the key of its first registration (rotate with tw host rm %s --drain, then tw host add)", r.HostID, r.HostID)
+			return Host{}, false, errf(403, "host_identity_mismatch", "host %s: auditPubKey is pinned to the key of its first registration (rotate with tw host rm %s --force, then tw host add)", r.HostID, r.HostID)
 		}
 		auditKey = old.AuditPubKey
 	}
@@ -1186,7 +1186,7 @@ func (m *Mgmt) guardTakeover(ctx context.Context, t Tenant, r DeployRequest, hos
 	if old.LastSeen > 0 {
 		seen = now.Sub(time.UnixMilli(old.LastSeen)).Round(time.Second).String() + " ago"
 	}
-	return "", errf(409, "takeover_unconfirmed", "workload %q runs on host %s, which mgmt last heard from %s; it may still be serving the workload's %s from its own disk, so moving it to %s could run two copies. If %s is gone for good: `tw host rm %s --drain`, or redeploy with --force-takeover. If it is coming back, wait for it. Classes that tolerate two instances can set \"fence\": \"never\" in tailworks.jsonc",
+	return "", errf(409, "takeover_unconfirmed", "workload %q runs on host %s, which mgmt last heard from %s; it may still be serving the workload's %s from its own disk, so moving it to %s could run two copies. If %s is gone for good: `tw host rm %s --force`, or redeploy with --force-takeover. If it is coming back, wait for it. Classes that tolerate two instances can set \"fence\": \"never\" in tailworks.jsonc",
 		r.Workload, old.ID, seen, why, host, old.ID, old.ID)
 }
 
@@ -1207,8 +1207,8 @@ func (m *Mgmt) leaseHeldError(ctx context.Context, name, workload string) *Error
 	}
 	if herr == nil && h.Live(now) {
 		// A live holder keeps renewing: its lease won't run out.
-		return errf(409, "lease_held", "workload %q runs on host %s (live, epoch %d, last seen %s); it can't be placed elsewhere while %s holds it. To move it, drain that host first (`tw host rm %s --drain`)",
-			workload, l.Holder, l.Epoch, seen, l.Holder, l.Holder)
+		return errf(409, "lease_held", "workload %q runs on host %s (live, epoch %d, last seen %s); it can't be placed elsewhere while %s holds it. Redeploy with --replace to move it (or `tw host drain %s` to move everything off that host); if %s is gone for good, `tw host rm %s --force`",
+			workload, l.Holder, l.Epoch, seen, l.Holder, l.Holder, l.Holder, l.Holder)
 	}
 	left := time.UnixMilli(l.ExpiresAt).Sub(now)
 	if left < 0 {

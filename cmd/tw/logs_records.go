@@ -28,7 +28,7 @@ type logsOpts struct {
 }
 
 func logsFlags(f *flags) func() (logsOpts, error) {
-	console := f.Bool("console", false, "the app's raw output (workerd.log, the node tier's app.log, the microVM console) instead of request records")
+	console := f.Bool("console", false, "the app's raw output (workerd.log, the Node runtime's app.log, the microVM console) instead of request records")
 	object := f.String("object", "", "only this object (object ID, Class/name, Class or name)")
 	status := f.String("status", "", "only this status (404) or class (5xx)")
 	outcome := f.String("outcome", "", "only this outcome: ok, exception, canceled, … (wrangler tail's --status)")

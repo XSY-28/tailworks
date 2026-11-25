@@ -39,4 +39,14 @@ Last update: 2026-11-24. Flag groups and hidden flags in `--help` (#463), tw dev
 
 ## Tests
 
-See the PR's Tests section.
+- `go test ./cmd/tw ./docs`: ok (new `TestFlagGroupsResolve`,
+  `TestFlagHelpLayout`, `TestYesFlagWording`).
+- `make cli-docs`: docs/cli.md regenerated (about 130 lines shorter).
+- `make lint`: ok (before and after merging origin/master).
+- `make test`: everything passed except `TestCLIOAuth` (cmd/tw) and
+  `TestR2Binding` (hostd), on a machine at load ~200; both pass on their
+  own (`go test ./cmd/tw -run '^TestCLIOAuth$'`, `go test ./hostd -run
+  '^TestR2Binding$'`). Neither reads help text.
+- After merging origin/master: `make cli-docs`, `go test ./cmd/tw ./docs
+  ./agent`: ok.
+- No extra suites apply (help text and flag registration only).

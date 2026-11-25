@@ -165,9 +165,16 @@ func cmdAgentSetup(args []string, remove bool) error {
 			show()
 		}
 		fmt.Printf("✓ %d files changed\n", plan.Pending())
+		if !remove {
+			fmt.Println(agentMCPNext)
+		}
 	})
 	return nil
 }
+
+// agentMCPNext follows tw agent setup and tw agent ls: the skills teach
+// the CLI; the MCP server is registered separately (issue #467).
+const agentMCPNext = "next: register tailworks' MCP server with your agent: tw mcp --config"
 
 type agentSetupResult struct {
 	*twagent.Plan
@@ -263,6 +270,7 @@ func cmdAgentLs(args []string) error {
 			fmt.Printf("  %-12s %s\n", d.Name, st)
 		}
 		fmt.Println("install them: tw agent setup --dry-run, then tw agent setup")
+		fmt.Println(agentMCPNext)
 	})
 	return nil
 }

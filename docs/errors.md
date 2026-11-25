@@ -125,10 +125,10 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 1 · cli. **When:** `tw doctor` had at least one failing check. **Fix:** each failing line prints its own `fix:`.
 
 ### egress_unenforced
-409 · hostd. **When:** a `"runtime": "node"` deployment on a host with no process sandbox that already serves other tenants: the Node tier's egress proxy is cooperative there, which would be a cross-tenant SSRF vector. **Fix:** use the workerd runtime, a single-tenant host, Linux with Landlock, or (tenants not isolated) `tw up --insecure-shared-host`.
+409 · hostd. **When:** a `"runtime": "node"` deployment on a host with no process sandbox that already serves other tenants: the Node runtime's egress proxy is cooperative there, which would be a cross-tenant SSRF vector. **Fix:** use the workerd runtime, a single-tenant host, Linux with Landlock, or (tenants not isolated) `tw up --insecure-shared-host`.
 
 ### exists
-409 · mgmt, cli. **When:** create of an ID that already exists (`tw host add <id>` for a known host). **Fix:** `tw host rm <id> --drain`, then add again; or pick another ID.
+409 · mgmt, cli. **When:** create of an ID that already exists (`tw host add <id>` for a known host). **Fix:** `tw host rm <id> --force`, then add again; or pick another ID.
 
 ### exit_node_unavailable
 503 · netd. **When:** a Worker, Node app or container called an internet destination on a host whose internet path is a tailnet exit node (`tw up --worker-internet=exit-node=<node>`, or `tw-hostd -worker-internet=exit-node=<node>`), and the exit node can't be used right now: it isn't in the host node's netmap, it isn't offered to the host as an exit node (no approved exit routes, or no `autogroup:internet` grant for `tag:tw-host`), it is offline, the dial through it failed, or it refuses to answer DNS for the host's node. The detail says which. tailworks never falls back to the host's own network. **Fix:** `tw doctor` on the host. Advertise and approve exit routes on the exit node; grant `tag:tw-host` → `autogroup:internet` in the tailnet policy; for an exit node that refuses DNS for tagged peers, add `dns=<resolver ip>` to the setting (`exit-node=<node>,dns=1.1.1.1`) so names resolve at that resolver through the exit node ([tailworks-jsonc.md](tailworks-jsonc.md#tailnetegressvia)). Egress that is turned off by config is [`internet_egress_unavailable`](#internet_egress_unavailable) instead.
@@ -155,7 +155,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 1 · cli. **When:** `tw up` (single process): the host agent embedded in tw-mgmt failed to start or to register with mgmt. Also the supervisor's exit error (in `supervisor.log`) when tw-hostd (two processes) kept exiting and the supervisor gave up; it exits 1 so the service manager restarts it. **Fix:** the detail has the cause; `tw logs --component hostd` and `tw doctor`, then `tw up` again (under `tw up --service` it restarts on its own).
 
 ### host_holds_leases
-409 · mgmt, cli. **When:** `tw host rm <id>` while the host still holds namespace leases. **Fix:** `tw host rm <id> --drain`.
+409 · mgmt, cli. **When:** `tw host rm <id>` while the host still holds namespace leases. **Fix:** `tw host drain <id>` moves its workloads off first. If the host is gone for good, `tw host rm <id> --force` kills its objects and releases the leases; whatever they kept on that host is lost. (`--drain` is a deprecated spelling of `--force`.)
 
 ### host_identity_mismatch
 403 · mgmt. **When:** a `tag:tw-host` node claims a host ID bound to another node. **Fix:** each host needs its own ID (`tw host add <new-id>`); a replaced machine needs `tw host rm` first.
@@ -206,7 +206,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 410 · netd, mgmt, cli. **When:** the object was killed: in-flight flows were RST, the node closed, and its tombstone answers new requests for the tombstone window; `tw kill` of an object that is already killed. **Fix:** a killed name stays killed while its workload is deployed (redeploys and rollbacks keep the kill). To use the name again, `tw undeploy <workload>` and deploy it again: that releases every name the workload had (the release is audited as `purge`). `tw down --purge` releases every killed name of the tenant on this machine.
 
 ### lease_held
-409 · mgmt. **When:** another host holds the namespace lease a host tried to take. **Fix:** nothing; placement picks the lease holder. If the holder is dead, `tw host rm <id> --drain`.
+409 · mgmt. **When:** another host holds the namespace lease a host tried to take. **Fix:** nothing; placement picks the lease holder. To move a workload off a live holder, redeploy with `--replace` (or `tw host drain <id>` to move everything off that host). If the holder is gone for good, `tw host rm <id> --force`.
 
 ### lease_lost
 409 · mgmt, hostd, netd (SDK). **When:** the host's lease epoch was fenced: the store knows a newer holder (after a partition or a restart race). **Fix:** hostd re-acquires on its own; persistent `lease_lost` means two hosts with the same host ID.

@@ -143,9 +143,21 @@ Register it with your agent through the CLI's stdio bridge. It works on
 the tailworks host and on any `tw link`ed machine, and needs no credentials:
 
 ```sh
-tw mcp --config                       # the commands for your agents, and your tools
-claude mcp add tw -- tw mcp          # Claude Code; other agents: command "tw", args ["mcp"]
+tw mcp --config                         # the command or config for each agent, and your tools
+claude mcp add -s user tw -- tw mcp     # Claude Code
+codex mcp add tw -- tw mcp              # Codex
+gemini mcp add -s user tw tw mcp        # Gemini CLI
 ```
+
+Cursor and OpenCode take JSON in their config files (`~/.cursor/mcp.json`,
+`~/.config/opencode/opencode.json`); `tw mcp --config` prints it, and for
+any other agent the server is command `"tw"`, args `["mcp"]`. Agents
+installed on this machine are listed first.
+
+Run on a terminal, `tw mcp` prints the same help as `tw mcp --config`
+rather than wait for JSON-RPC: your agent runs it with stdin a pipe. To
+talk to the bridge by hand, pipe into it:
+`printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | tw mcp`.
 
 An agent on a tailnet machine without the tailworks CLI can use the URL
 `tw mcp --config` prints (`http://tw-mgmt.<tailnet>.ts.net/mcp`).
@@ -165,7 +177,7 @@ Destructive tools need the grant to name them, even for admins:
 A tool you don't have answers `cap_missing`, with the grant to add as its
 `snippet`. On the tailworks host itself the bridge runs as the operator: it is
 read-only unless you enable more when you register it, for example
-`claude mcp add tw -- tw mcp --allow kill,undeploy`.
+`claude mcp add -s user tw -- tw mcp --allow kill,undeploy`.
 
 `deploy` over MCP needs a bundle, which only `tw deploy` builds, so in
 practice an MCP agent redeploys or re-places what's running; new code

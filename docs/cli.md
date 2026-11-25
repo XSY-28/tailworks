@@ -295,7 +295,7 @@ Same flags as [tw docs ls](#tw-docs-ls).
 tailworks' MCP server for coding agents (stdio)
 
 ```text
-tw mcp: tailworks' MCP server for coding agents, over stdio (a bridge to mgmt's /mcp; tools: whoami status ls logs audit, and deploy kill undeploy when allowed); --config prints how to register it
+tw mcp: tailworks' MCP server for coding agents, over stdio (a bridge to mgmt's /mcp; tools: whoami status ls logs audit, and deploy kill undeploy when allowed); --config prints how to register it with each agent, and is what tw mcp does on a terminal or with --json
 
 usage: tw mcp [--allow deploy,kill,undeploy] | mcp --config
 
@@ -303,7 +303,7 @@ flags:
   -allow string
     	also allow these tools: deploy, kill, undeploy (comma-separated). On the tw host this is what enables them; from a linked machine your github.com/rosskukulinski/tailworks/cap/mcp grant decides, and this only narrows
   -config
-    	print how to register tailworks' MCP server with a coding agent, and exit
+    	print how to register tailworks' MCP server with a coding agent, and exit (the default on a terminal and with --json)
 
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 ```
@@ -983,7 +983,7 @@ flags:
   -component string
     	mgmt | hostd | supervisor: the daemons' logs
   -console
-    	the app's raw output (workerd.log, the node tier's app.log, the microVM console) instead of request records
+    	the app's raw output (workerd.log, the Node runtime's app.log, the microVM console) instead of request records
   -errors
     	only errors (status ≥ 400, an outcome other than ok, or an exception)
   -f	follow
@@ -1446,7 +1446,9 @@ Same flags as [tw host cordon](#tw-host-cordon).
 ```text
 flags:
   -drain
-    	kill the host's objects and release its leases first
+    	deprecated: same as --force
+  -force
+    	kill the host's objects and release its leases first (their data on that host is lost; to move them instead, tw host drain)
   -yes
     	skip the confirmation before deleting; needed without a terminal and with --json
 
