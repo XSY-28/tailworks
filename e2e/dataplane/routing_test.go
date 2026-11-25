@@ -1034,7 +1034,8 @@ func (n *rnemesis) fault(name, wl, h string) string {
 		}
 		return fmt.Sprintf("gate listed=%v on %s epoch %d, %s", gate, d.Host, d.Epoch, how)
 	case "revoke-binding":
-		// Undeploy B (the binding's target), wait, deploy it again.
+		// Undeploy B (the binding's target), wait, deploy it again on the
+		// same host.
 		tg := c.tgs["rt-b"]
 		id := tg.get().DeploymentID
 		st, b, err := c.try("DELETE", "/v1/deployments/"+id+"?reason=chaos", nil, nil)
@@ -1043,7 +1044,7 @@ func (n *rnemesis) fault(name, wl, h string) string {
 			return fmt.Sprintf("FAILED: undeploy %s: %d %s %v", id, st, b, err)
 		}
 		time.Sleep(n.between(8*time.Second, 12*time.Second))
-		to := c.hosts[n.rnd.Intn(len(c.hosts))]
+		to := h // the host it was undeployed from: another one may still have its purged node (#593)
 		d, how, err := c.moveW("rt-b", c.bundles["rt-b"], to, false, 60*time.Second)
 		c.h.add("revoke", rtRevoke{At: at, Restored: time.Now()})
 		if err != nil {

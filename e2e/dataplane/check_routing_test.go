@@ -314,6 +314,16 @@ func checkN4(h *rhist) result {
 		}
 		return "", false
 	}
+	// changing: a route change is under way at t, or applied less than
+	// pathBound ago (the deployment watcher can record it a poll late).
+	changing := func(t time.Time) bool {
+		for _, f := range h.faults {
+			if f.Kind == "paths" && !t.Before(f.Start) && !t.After(f.End.Add(pathBound)) {
+				return true
+			}
+		}
+		return false
+	}
 	late, gateOps := 0, 0
 	for _, o := range h.ops {
 		if o.Path != "gate" || o.Status == 0 {
@@ -321,7 +331,7 @@ func checkN4(h *rhist) result {
 		}
 		gateOps++
 		ver, settled := listed(o.Sent)
-		if !settled || inFault(h.faultEvs(), o.Sent, 0) {
+		if !settled || inFault(h.faultEvs(), o.Sent, 0) || changing(o.Sent) {
 			continue
 		}
 		switch {
