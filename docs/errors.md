@@ -500,7 +500,7 @@ Thrown in the Worker · platform. **When:** a service binding RPC call (`env.<bi
 404 · mgmt, cli. **When:** no tenant with that tailnet or ID. **Fix:** `tw tenant ls`.
 
 ### unknown_workload
-404 · cli, mgmt. **When:** `tw logs`, `tw undeploy` or `tw host vmcheck` named a workload with no deployment; `tw d1 execute|export|migrations` named a workload that isn't running (a D1 database is reached through the running deployment that binds it). **Fix:** `tw ls`; `tw deploy`.
+404 · cli, mgmt. **When:** `tw logs`, `tw undeploy` or `tw host vmcheck` named a workload with no deployment (`tw ls <workload>`: no deployment and no objects either); `tw d1 execute|export|migrations` named a workload that isn't running (a D1 database is reached through the running deployment that binds it). **Fix:** `tw ls`; `tw deploy`.
 
 ### unsupported
 1 · cli. **When:** `tw host setup` on an OS without the microVM tier (it needs Linux with KVM). **Fix:** nothing to set up; every workload runs in the process tier here.

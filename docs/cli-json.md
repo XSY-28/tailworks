@@ -203,6 +203,16 @@ coming until the command is stopped.
 `tw doctor` reports the same count in its `node_budget` check, with
 `status: "warn"` near a limit.
 
+## Listings (`tw ls`)
+
+`tw ls --json` lists the live objects (`pending`, `minted`, `assigned`,
+`ready`) and the deployments that aren't stopped; `--all` adds killed
+objects and stopped deployments. `tw ls <workload>` keeps that workload,
+its previews and its replicas (`namespaces[].previewOf`, `replicaOf`).
+At most 5000 objects are listed (`--limit N`, `0` for no ceiling), and
+`truncated` is `true` when more matched. `nodes.tenant.total` is always
+the tenant's whole live count.
+
 ## Confirmations
 
 `--json` never prompts. Commands that ask before acting (`tw up`,
