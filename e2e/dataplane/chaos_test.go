@@ -270,8 +270,17 @@ func TestDataplane(t *testing.T) {
 		final[id] = true
 	}
 
+	// D7: no workerd outlives its hostd's restart (#432).
+	d7 := result{ID: "D7", Pass: true}
+	c.mu.Lock()
+	for _, p := range c.orphans {
+		d7.fail("workerd pid %d still running after its hostd crashed and restarted", p)
+	}
+	d7.Summary = fmt.Sprintf("%d workerds outlived a hostd restart", len(c.orphans))
+	c.mu.Unlock()
+
 	h.mu.Lock()
-	res := []result{checkD1(h), checkReg(h), checkD2(h), checkD3(h), checkD4(h, final, ferr), d5, checkD6(h)}
+	res := []result{checkD1(h), checkReg(h), checkD2(h), checkD3(h), checkD4(h, final, ferr), d5, checkD6(h), d7}
 	writeJSON(rdir, "faults.json", h.faults)
 	writeJSON(rdir, "store.json", fs.Snapshot())
 	h.mu.Unlock()
