@@ -1,6 +1,6 @@
 ---
 kind: feature
-upgrade: []
+upgrade: [cli-json]
 ---
 `tw expose names` lists the public names a tenant owns, and
 `tw expose release <name>` gives one up once nothing serves it, so any
