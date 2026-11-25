@@ -47,7 +47,7 @@ change can be tried without a new run.
 - One workload, `testdata/dp`, holds every primitive, so one lease and one
   fault cover them all: a queue producer and consumer (with a dead-letter
   queue), the lock template, `Reg` (a DO counter), `Pulse` (a DO whose alarm
-  makes an egress call every 250 ms), and a D1 database.
+  makes an egress call every 250 ms), a D1 database and a KV namespace.
 - Tailnet nodes: `dp-cli` (the client and the prober), `dp-lka` and
   `dp-lkb` (two lock clients), `dp-store` (the fenced store of
   docs/locks.md), `dp-rec` (the recorder). The consumer and Pulse report
@@ -65,16 +65,25 @@ change can be tried without a new run.
 | `pause-hostd-takeover` | the same, stopping only hostd (workerd keeps running) |
 | `cut-short` | cut the host off from mgmt for 3–20 s |
 | `cut-takeover` | cut it off, take over elsewhere, reconnect it |
+| `skew` | step the host's wall clock (hostd and its workerds) 1–6 min forward or back, within ±8 min, and leave it there for the faults that follow (H3). Linux only: `fencing` and `mixed` get it where the preload library builds |
 | `move` | `deploy --replace --force-takeover` of the live workload to another host |
 | `restart-mgmt` | SIGKILL or SIGTERM mgmt, restart it after 0.5–5 s |
 
 Scenarios are fault mixes: `queues`, `fencing`, `d1`, `mixed`
 (`nemesis_test.go`). The nemesis always targets the current lease holder.
 
-Not yet: wall-clock skew on a host. `TW_TEST_WALL_CLOCK_OFFSET` only exists
-in `tw-mgmt` (and with SQLite mgmt uses the local clock). hostd fences on its
-monotonic clock and workerd reads the wall clock directly, so skewing a
-host needs a hook in both. Multiple mgmt replicas on Postgres are covered by
+Clock skew: the hosts are a test build (`-tags twtestclock`,
+`internal/wallclock`). Each hostd follows the offset in `<work>/<host>/clock`
+for its wall-clock reads (tickets, caller seals, MAC timestamps, cron), and
+its workerds run with `internal/wallclock/testdata/skewclock.c` preloaded,
+which shifts `CLOCK_REALTIME`, `gettimeofday` and `time` by the same
+offset. Monotonic clocks aren't shifted. Before the nemesis starts, the
+harness checks that the workload's `Date.now()` follows a +90 s step
+(`/clock`). The library is Linux only, so on macOS the skew fault is left
+out and a seed runs a different fault sequence than on Linux. mgmt (SQLite)
+keeps the true clock.
+
+Not yet: multiple mgmt replicas on Postgres are covered by
 `e2e/multimgmt`. Joining that harness here is the next step.
 
 ## Workloads and the history
@@ -84,8 +93,8 @@ Every client op is tagged with a unique ID and timed on the client
 to `history.jsonl` as they happen. The ops are queue sends (every 7th one
 is retried once, every 23rd is poison), Reg increments and reads, probes of
 every endpoint ever seen (to catch a copy that should be fenced), D1
-inserts, and lock acquire/renew/release with a fenced-store write after
-each grant and renew.
+inserts, KV puts and gets (`kv_test.go`), and lock acquire/renew/release
+with a fenced-store write after each grant and renew.
 
 ## Invariants (`check_test.go`)
 
@@ -96,6 +105,7 @@ each grant and renew.
 | D2 | Fencing: two lock holders never overlap within an epoch, or across a takeover of a stalled or cut-off host. Tokens only go up. The store never accepts a token lower than one it has accepted |
 | D3 | Queues: every acknowledged send is delivered. No two deliveries of a message carry the same `attempts`. Outside a fault window, no attempt is counted for a delivery that never reached `queue()`. Retried messages come back. Poison stops at `max_retries + 1` and reaches the dead-letter queue |
 | D4 | Every acknowledged D1 insert is there at the end |
+| KV | Only what docs/kv.md documents: a read sees the workload's own last acknowledged write (or a later one) and nothing never written, across restarts, moves and takeovers, and after healing. A key put with `expirationTtl` 60 s is there until it expires and gone after, in real time shifted by the writer's and reader's clock offsets |
 | D5 | Convergence: after healing, the deployment is active and serving within 60 s, both queues drain within 120 s, and the lock answers |
 | D6 | Availability: reported. Gated only outside fault windows (+60 s): ≥ 90% of ops succeed |
 | D7 | No workerd outlives its hostd: 10 s after a `crash-hostd` restart, none of the crashed hostd's workerds is still running (#432) |
