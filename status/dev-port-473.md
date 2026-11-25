@@ -15,4 +15,14 @@ Last update: 2026-11-25 PT. tw dev honours wrangler `dev.port` (#473).
 
 ## Tests
 
-See the PR's Tests section.
+- `make lint`: pass.
+- `make test`: the mbp offload ran `./netd/... ./internal/... ./cmd/... ./mgmt/...`
+  (all pass) before it hit its 30 min limit (mostly waiting for a slot); the rest
+  (`./hostd/... ./security/... ./guest/... ./agent/... ./docs/... ./schema/... .`
+  with -race, and `make test-js`) ran locally: all pass.
+- `make e2e-wrangler`: pass (TestDevWrangler, TestDevViteRedirect).
+- Manual, with 8787 held by another process: `tw dev --once` fell back to a
+  free port with one stderr line; `--port 8787` failed with the `--port 0`
+  fix; `dev.port: 8787` failed naming wrangler.jsonc; `dev.port: 18899` plus
+  `dev.ip` served on 18899 and warned only about `dev.ip`.
+- `make e2e-compat`: skipped (needs tailnet credentials, ~60 min).
