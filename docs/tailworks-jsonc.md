@@ -51,7 +51,7 @@ schema. `tw init` writes this line for you:
 |---|---|---|---|
 | `$schema` | string | | the schema, for your editor; tailworks ignores it |
 | `name` | string | wrangler `name`, then the directory name | the workload name, a DNS label. `tw deploy --name` overrides it. Leave it out when the wrangler config has a `name` (the templates do); when both set one and they differ, this one wins and `tw` says so |
-| `runtime` | `"workerd"` \| `"node"` | `"workerd"` | `"node"` runs a Node.js app in the Node process tier ([node-tier.md](node-tier.md)); then there is no `wrangler.jsonc` |
+| `runtime` | `"workerd"` \| `"node"` | `"workerd"` | `"node"` runs a Node.js app on the Node runtime ([node-tier.md](node-tier.md)); then there is no `wrangler.jsonc` |
 | `main` | string | | `runtime: "node"` only: the entry file, e.g. `"src/server.ts"` |
 | `node` | object | | `runtime: "node"` only: `env` (string map), `listen`, `health`, `args` ([node-tier.md](node-tier.md)) |
 | `tier` | `"process"` \| `"microvm"` | the tenant's tier | `"microvm"` runs the workload in a Firecracker VM, on a Linux host with KVM ([INSTALL.md](INSTALL.md#linux-the-microvm-tier-firecracker-kvm)) |

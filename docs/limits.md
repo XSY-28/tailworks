@@ -79,7 +79,7 @@ See [Limits that don't exist](#limits-that-dont-exist) for duration, body and CP
 | Wait for a running instance during a redeploy | 15 s (the 10 s drain plus 5 s), then `upstream_unavailable` | no | `hostd/http.go:#redeploy-wait` |
 | Wait for an object's node (`identity_pending` after) | 30 s | no | `hostd/host.go:ReadyTimeout` |
 | `Retry-After` on `identity_pending` | 1 s | no | `mgmt/server.go:#identity-pending-retry-after` |
-| Node-tier caller header clock skew | 60 s | `maxSkewMs` in `@tailworks/node` | `js/packages/node/src/index.ts:DEFAULT_MAX_SKEW_MS` |
+| Node-runtime caller header clock skew | 60 s | `maxSkewMs` in `@tailworks/node` | `js/packages/node/src/index.ts:DEFAULT_MAX_SKEW_MS` |
 | Open `connect()` sockets per object (the workload node counts as one, for the Worker and plain-DO objects), per instance | 256, then `socket_limit` | no | `hostd/connect.go:maxSocketsPerObject` |
 | Time for the platform to authenticate a `connect()` tunnel | 10 s | no | `hostd/connect.go:connectPreambleTimeout` |
 | `connect()` dial (and `tls: "netd"` handshake) | 30 s, as an object's node wait | no | `hostd/host.go:ReadyTimeout` |
@@ -99,7 +99,7 @@ other crash.
 | Limit | Value | Configurable? | Source |
 |---|---|---|---|
 | V8 heap of each isolate in a workerd (the Worker, each Durable Object class) | 1024 MiB | `-workerd-heap-mib` (-1: no cap) | `hostd/limits.go:DefaultWorkerdHeapMiB` |
-| V8 heap of a Node-tier app (`--max-old-space-size`) | 2048 MiB | `-node-heap-mib` (-1: no cap); the app's own `--max-old-space-size` in `node.args` or `NODE_OPTIONS` wins | `hostd/limits.go:DefaultNodeHeapMiB` |
+| V8 heap of a Node-runtime app (`--max-old-space-size`) | 2048 MiB | `-node-heap-mib` (-1: no cap); the app's own `--max-old-space-size` in `node.args` or `NODE_OPTIONS` wins | `hostd/limits.go:DefaultNodeHeapMiB` |
 | Process memory beyond the heap, CPU | none | — | [Limits that don't exist](#limits-that-dont-exist) |
 
 ## Durable Objects
@@ -436,8 +436,8 @@ heartbeat, 12 s kill tombstone).
 | Namespace lease (a DO's host) | 45 s | no | `mgmt/types.go:NamespaceLeaseTTL` |
 | Host lease | 10 s | no | `mgmt/types.go:HostLeaseTTL` |
 | Killed node keeps refusing connections | 10 s | `-kill-tombstone` | `cmd/tw-hostd/main.go:-kill-tombstone` |
-| Node-tier restart backoff | 250 ms doubling to 10 s, never gives up | no | `hostd/node.go:#node-restart-backoff` |
-| Node-tier stop: SIGTERM to SIGKILL | 3 s | no | `hostd/node.go:#node-stop-grace` |
+| Node-runtime restart backoff | 250 ms doubling to 10 s, never gives up | no | `hostd/node.go:#node-restart-backoff` |
+| Node-runtime stop: SIGTERM to SIGKILL | 3 s | no | `hostd/node.go:#node-stop-grace` |
 | Warm keys per (tenant, tag set) | 5 | `tw-mgmt -warm-keys` | `internal/mgmtd/mgmtd.go:DefaultWarmKeys` |
 | Warm key lifetime | 30 min | `tw-mgmt -warm-key-ttl` | `mgmt/warmkeys.go:DefaultWarmKeyTTL` |
 

@@ -82,7 +82,7 @@
   </div></div>
   <div class="tbl">
   <table>
-    <thead><tr><th>Host</th><th>Status</th><th>Last heartbeat</th><th>Nodes (live / capacity)</th><th>Tiers</th><th>Pool</th><th>Push</th><th>Leases</th><th>Node ID</th></tr></thead>
+    <thead><tr><th>Host</th><th>Status</th><th>Last heartbeat</th><th>Nodes (live / capacity)</th><th>Offers</th><th>Pool</th><th>Push</th><th>Leases</th><th>Node ID</th></tr></thead>
     <tbody>
     {{range .Hosts}}<tr>
       <td class="mono"><a href="/ui/hosts/{{.HostID}}"><b>{{.HostID}}</b></a>{{if .DNSName}}<div class="sub-line">{{.DNSName}}</div>{{end}}</td>
