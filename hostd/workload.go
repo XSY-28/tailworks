@@ -436,6 +436,10 @@ func (h *Host) undeploy(w *workload, reason string) {
 	// Withdraw the Service before stopping, so control stops routing new
 	// callers here while the instance goes away.
 	h.syncService(w, false)
+	fence := t != nil && w.fences()
+	if fence {
+		h.closeNodes(w, t, reason) // fencedrain.go (#572): before workerd drains
+	}
 	if inst != nil {
 		inst.stop()
 	}
@@ -448,18 +452,8 @@ func (h *Host) undeploy(w *workload, reason string) {
 	if t == nil {
 		return
 	}
-	for _, o := range h.objectsOf(w.tenantID, w.name) {
-		h.mu.Lock()
-		live := o.live
-		o.live = false
-		if o.Status == statusReady || o.Status == statusPending {
-			o.Status = statusPending
-			o.readyCh = make(chan struct{})
-		}
-		h.mu.Unlock()
-		if live {
-			t.reg.Kill(context.Background(), o.NetdID, netd.KillOptions{Reason: reason, KeepState: true, SkipDelete: true})
-		}
+	if !fence {
+		h.closeNodes(w, t, reason)
 	}
 	h.log.Warn("workload stopped", "workload", w.name, "reason", reason)
 }
