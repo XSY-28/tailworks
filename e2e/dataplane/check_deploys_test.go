@@ -135,6 +135,37 @@ func checkV2(d *deploysRun) result {
 	return r
 }
 
+// createdTimes is when each deployment was created, on the test's clock.
+// mgmt stamps records with the store's clock (on Postgres the database's,
+// in a container VM that can be seconds off the test's), so: the time the
+// op that created it was sent (a lower bound), or, for a record no op
+// acknowledged, its stamp shifted by the median offset between stamps and
+// acknowledged ops, less a second.
+func createdTimes(d *deploysRun) map[string]time.Time {
+	ops := okOps(d)
+	var offs []int64
+	for id, o := range ops {
+		if x, ok := d.recs[id]; ok {
+			mid := o.Sent.Add(o.Recv.Sub(o.Sent) / 2)
+			offs = append(offs, x.CreatedAt-mid.UnixMilli())
+		}
+	}
+	sort.Slice(offs, func(i, j int) bool { return offs[i] < offs[j] })
+	var off int64
+	if len(offs) > 0 {
+		off = offs[len(offs)/2]
+	}
+	out := map[string]time.Time{}
+	for id, x := range d.recs {
+		if o, ok := ops[id]; ok {
+			out[id] = o.Sent
+		} else {
+			out[id] = time.UnixMilli(x.CreatedAt - off - 1000)
+		}
+	}
+	return out
+}
+
 // copyInfo is one copy of the Durable Object (its inst ID) as the probes
 // saw it, and the deployment it belongs to.
 type copyInfo struct {
@@ -152,7 +183,7 @@ type copyInfo struct {
 // workload's current one on the host, so the previous copy answers at the
 // new epoch while a redeploy on the same host starts the new one.
 func copies(d *deploysRun) map[string]*copyInfo {
-	out := map[string]*copyInfo{}
+	out, created := map[string]*copyInfo{}, createdTimes(d)
 	for _, o := range d.dh.obs {
 		if !o.OK || o.Inst == "" {
 			continue
@@ -170,7 +201,7 @@ func copies(d *deploysRun) map[string]*copyInfo {
 	for _, c := range out {
 		for _, x := range d.recs {
 			if x.Workload != c.wl || x.Host != c.host || d.labelOf[x.BundleSHA256] != c.build ||
-				x.CreatedAt > c.first.UnixMilli() || x.Epoch > c.minEpoch {
+				created[x.DeploymentID].After(c.first) || x.Epoch > c.minEpoch {
 				continue
 			}
 			c.deps = append(c.deps, x)
@@ -317,7 +348,7 @@ func checkV4(d *deploysRun, final infoObs, scan []string) result {
 	r := result{ID: "V4", Pass: true}
 	recs := recIndex(d)
 	ws := secretWrites(d)
-	checked, bad, cs := 0, 0, copies(d)
+	checked, bad, cs, created := 0, 0, copies(d), createdTimes(d)
 	what := func(n, dg string) string {
 		if dg == "-" {
 			return n + " unset"
@@ -337,7 +368,7 @@ func checkV4(d *deploysRun, final infoObs, scan []string) result {
 		}
 		x := c.dep
 		checked++
-		start := time.UnixMilli(x.CreatedAt)
+		start := created[x.DeploymentID]
 		for _, n := range secretNames {
 			dg := o.Sec[n]
 			if o.WSec[n] != dg {
@@ -346,7 +377,7 @@ func checkV4(d *deploysRun, final infoObs, scan []string) result {
 			}
 			why := justified(ws[n], dg, start, o.Recv)
 			for _, y := range c.deps { // a rollback's copy: any deployment of its bundle there
-				if why != "" && justified(ws[n], dg, time.UnixMilli(y.CreatedAt), o.Recv) == "" {
+				if why != "" && justified(ws[n], dg, created[y.DeploymentID], o.Recv) == "" {
 					why = ""
 				}
 			}
@@ -368,7 +399,7 @@ func checkV4(d *deploysRun, final infoObs, scan []string) result {
 		x, ok := recs[dpdWL][final.Epoch]
 		start := time.Now()
 		if ok {
-			start = time.UnixMilli(x.CreatedAt)
+			start = created[x.DeploymentID]
 		}
 		for _, n := range secretNames {
 			if why := justified(ws[n], final.Sec[n], start, final.Recv); why != "" {

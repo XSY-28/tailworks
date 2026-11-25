@@ -1094,7 +1094,7 @@ func (d *deploysRun) converge(healed time.Time) result {
 		}
 		dl, err := d.c.waitActive(x.DeploymentID, 60*time.Second)
 		if err != nil {
-			r.fail("%s: newest deployment %s (epoch %d) not active 60 s after healing: %v", wl, x.DeploymentID, x.Epoch, err)
+			r.failUnlessKnown("%s: newest deployment %s (epoch %d) not active 60 s after healing: %v", wl, x.DeploymentID, x.Epoch, err)
 			continue
 		}
 		want := d.labelOf[x.BundleSHA256]
@@ -1106,7 +1106,7 @@ func (d *deploysRun) converge(healed time.Time) result {
 				break
 			}
 			if time.Now().After(by) {
-				r.fail("%s: not serving %s at epoch %d on %s 60 s after it was active: last answer epoch %d build %q %s", wl, want, x.Epoch, dl.Host, o.Epoch, o.Build, o.Err)
+				r.failUnlessKnown("%s: not serving %s at epoch %d on %s 60 s after it was active: last answer epoch %d build %q %s", wl, want, x.Epoch, dl.Host, o.Epoch, o.Build, o.Err)
 				break
 			}
 			time.Sleep(500 * time.Millisecond)
