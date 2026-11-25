@@ -228,7 +228,7 @@ flags:
   -once
     	start, make one request (GET /; for an MCP app an initialize to its route), print it and exit (smoke test)
   -port int
-    	local port (127.0.0.1) (default 8787)
+    	local port on 127.0.0.1 (default: wrangler dev.port, else 8787, else a free port when 8787 is busy; 0 picks a free one) (default 8787)
   -test-scheduled
     	serve /__scheduled?cron=<expr>[&time=<ms>] on the local port: run a cron trigger's scheduled() now
   -wrangler
@@ -567,10 +567,13 @@ global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · -
 open or close a workload's public routes
 
 ```text
-tw expose: open or close a workload's public (Funnel) routes; survives redeploys (tailworks.jsonc "public", ADR-029)
+tw expose: open or close a workload's public (Funnel) routes; survives redeploys (tailworks.jsonc "public", ADR-029). names lists the public names the tenant owns (it keeps one across undeploys); release frees one nothing serves
 
 subcommands:
   tw expose on|off <workload>
+  tw expose names
+  tw expose release <name>
+  common flags: [--tenant <tailnet>]
 
 flags:
   (none besides the global ones)
@@ -578,11 +581,19 @@ flags:
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · --tenant <tailnet|id> (default: the tw up tenant)
 ```
 
+#### tw expose names
+
+Same flags as [tw expose](#tw-expose).
+
 #### tw expose off
 
 Same flags as [tw expose](#tw-expose).
 
 #### tw expose on
+
+Same flags as [tw expose](#tw-expose).
+
+#### tw expose release
 
 Same flags as [tw expose](#tw-expose).
 
@@ -636,7 +647,7 @@ subcommands:
   tw d1 create <db>
   tw d1 ls
   tw d1 rm <db> [--yes]
-  tw d1 execute <db> --command <sql> | --file <file>
+  tw d1 execute <db> [--command <sql> | --file <file>]
   tw d1 export <db> [--output <file>]
   tw d1 repair <db> --skip <seq> [--yes]
   tw d1 migrations create <db> <message>
@@ -662,7 +673,7 @@ flags:
   -command string
     	SQL to run (one or more statements, run as one batch)
   -file string
-    	a file of SQL to run as one batch
+    	a file of SQL to run as one batch (with neither flag, the SQL is read from stdin: tw d1 execute <db> < file.sql)
   -workload string
     	workload whose database it is (default: the app in the current directory, as tw deploy names it)
 

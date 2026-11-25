@@ -236,7 +236,7 @@ Details: [d1.md](d1.md#limits).
 | Database | 1 GiB | no | `hostd/gen/js/store-d1.js:D1_LIMITS.databaseBytes` |
 | One write (statement or batch), encoded | 2 MiB | no | `hostd/gen/js/store-d1.js:D1_LIMITS.entryBytes` |
 | Journal (every write, no compaction yet) | 1 GiB | no | `mgmt/stores.go:StoreMaxBytes` |
-| `tw d1 execute` / migration body | 8 MiB | no | `mgmt/d1.go:d1BodyLimit` |
+| `tw d1 execute` / migration body | 8 MiB | no | `mgmt/d1.go:D1BodyLimit` |
 | Query duration | none | — | |
 
 ## R2
@@ -525,5 +525,5 @@ operator console) and the local socket are not limited.
 | Request rate per host | 1000 requests/s, bursts of 2000 | `tw-mgmt -api-host-rps` (-1: off) | `mgmt/ratelimit.go:DefaultAPIHostRPS` |
 | Concurrent requests from non-host tailnet callers, all together (hosts are not counted) | 256, then `rate_limited` | `tw-mgmt -api-inflight` (-1: off) | `mgmt/ratelimit.go:DefaultAPIInFlight` |
 | List page | default 50, at most 500 | `limit` query parameter | `mgmt/page.go:PageDefaultLimit`, `mgmt/page.go:PageMaxLimit` |
-| D1 SQL body | 8 MiB | no | `mgmt/d1.go:d1BodyLimit` |
+| D1 SQL body | 8 MiB | no | `mgmt/d1.go:D1BodyLimit` |
 | Upgrade artifact upload | 2 GiB | no | `mgmt/v1_upgrades.go:maxArtifactBytes` |

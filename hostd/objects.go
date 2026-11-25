@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rosskukulinski/tailworks/hostd/mgmtapi"
@@ -492,10 +493,18 @@ func (h *Host) retryNode(o *object, fails int) {
 	})
 }
 
+// closeOnceMu makes closeOnce's check and close one step: a kill and the
+// node join that it races (awaitNode) each close the object's readyCh
+// outside h.mu, and two unguarded check-then-close calls panicked hostd
+// with "close of closed channel".
+var closeOnceMu sync.Mutex
+
 func closeOnce(ch chan struct{}) {
 	if ch == nil {
 		return
 	}
+	closeOnceMu.Lock()
+	defer closeOnceMu.Unlock()
 	select {
 	case <-ch:
 	default:

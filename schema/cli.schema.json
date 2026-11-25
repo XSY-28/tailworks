@@ -2323,6 +2323,67 @@
         "exposed"
       ]
     },
+    "expose names": {
+      "type": "object",
+      "description": "the public names the tenant owns (ADR-029)",
+      "properties": {
+        "tenantID": {
+          "type": "string"
+        },
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tailnet": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "tenantID": {
+                "type": "string"
+              },
+              "claimedAt": {
+                "type": "integer"
+              },
+              "claimedBy": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "tailnet",
+              "name",
+              "tenantID",
+              "claimedAt"
+            ]
+          }
+        }
+      },
+      "required": [
+        "tenantID",
+        "names"
+      ]
+    },
+    "expose release": {
+      "type": "object",
+      "properties": {
+        "tenantID": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "released": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "tenantID",
+        "name",
+        "released"
+      ]
+    },
     "secret put": {
       "type": "object",
       "description": "never contains the value",

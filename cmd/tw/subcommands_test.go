@@ -39,7 +39,7 @@ func TestSubcommandHelp(t *testing.T) {
 		"queues":    {"create", "ls", "info", "rm", "purge", "messages", "send"},
 		"upgrade":   {"fleet|status|pause|resume|abort", "import", "releases", "rollback"},
 		"telemetry": {"set", "rm"},
-		"expose":    {"on|off"},
+		"expose":    {"on|off", "names", "release"},
 		"custody":   {"migrate"},
 		"up":        nil,
 		"deploy":    nil,
@@ -78,7 +78,7 @@ func TestSubcommandHelp(t *testing.T) {
 		t.Fatalf("tw d1 --help: exit %d", code)
 	}
 	for _, want := range []string{
-		"\n  tw d1 execute <db> --command <sql> | --file <file>\n",
+		"\n  tw d1 execute <db> [--command <sql> | --file <file>]\n",
 		"\n  tw d1 migrations apply <db>\n  common flags: [--workload <workload>] [--tenant <tailnet>]\n",
 	} {
 		if !strings.Contains(so.String(), want) {
