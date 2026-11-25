@@ -14,11 +14,11 @@ multimgmt harness move to a small non-test package both suites use.
   - `Start` / `Postgres`: the throwaway `postgres:17-alpine` container (name,
     port or a free one, docker context, `postgres.log` on cleanup), `Restart`,
     `Dump` (pg_dump, for a "no secret value in the store" check).
-  - `Proxy`: the per-replica fault proxy (pass, delay, blackhole, reset).
+  - (The per-replica fault proxy is `e2e/chaoskit`'s, which landed meanwhile.)
   - `FakeSetec`: the shared custody (put, activate, get, delete).
   - `ViaProxy`, `Host`, `WaitReady`.
-- `e2e/multimgmt` uses them through thin wrappers (`startPG`, `pgProxy`,
-  `viaProxy`, `newFakeSetec`, `setecDelete*`), so none of its tests changed.
+- `e2e/multimgmt` uses them through thin wrappers (`startPG`,
+  `newFakeSetec`, `setecDelete*`), so none of its tests changed.
 
 ## Tests
 

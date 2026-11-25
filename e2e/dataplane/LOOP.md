@@ -71,6 +71,9 @@ change can be tried without a new run.
 Scenarios are fault mixes: `queues`, `fencing`, `d1`, `mixed`
 (`nemesis_test.go`). The nemesis always targets the current lease holder.
 
+Workflows and approvals (#418) have their own test, workload and checkers
+(W1–W5): see [ledger/workflows.md](ledger/workflows.md).
+
 Not yet: wall-clock skew on a host. `TW_TEST_WALL_CLOCK_OFFSET` only exists
 in `tw-mgmt` (and with SQLite mgmt uses the local clock). hostd fences on its
 monotonic clock and workerd reads the wall clock directly, so skewing a
@@ -99,6 +102,16 @@ each grant and renew.
 | D5 | Convergence: after healing, the deployment is active and serving within 60 s, both queues drain within 120 s, and the lock answers |
 | D6 | Availability: reported. Gated only outside fault windows (+60 s): ≥ 90% of ops succeed |
 | D7 | No workerd outlives its hostd: 10 s after a `crash-hostd` restart, none of the crashed hostd's workerds is still running (#432) |
+
+## R2 (`TestR2`, issue #420)
+
+The same cluster runs `testdata/r2` with the `fs` or an `s3` backend (a
+Garage container, so Docker is needed), in the scenarios `r2-fs`, `r2-s3`
+and `r2-replicas`, with three more faults (`cut-s3`, `slow-s3`,
+`kill-mid-put`) and invariants R1–R6. `make e2e-dataplane-r2` runs all
+three (nightly too); `TW_DP_SCENARIO=r2-s3` and the other `TW_DP_*`
+variables pick one, as above, with `-run TestR2`. The rig, the invariants
+and the results are in [ledger/r2.md](ledger/r2.md).
 
 ## Each iteration
 

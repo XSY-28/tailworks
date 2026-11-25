@@ -1,7 +1,7 @@
 // Package mgmtpg is the shared Postgres side of the hermetic multi-replica
 // tw-mgmt harnesses (e2e/multimgmt and e2e/dataplane's TW_DP_MGMT=pg3): a
-// throwaway Postgres container, a fault-injecting proxy between each
-// replica and Postgres, and a fake setec custody the replicas share. It is
+// throwaway Postgres container and a fake setec custody the replicas share
+// (the fault proxy between each replica and Postgres is e2e/chaoskit's). It is
 // test support only; nothing here touches a real tailnet.
 package mgmtpg
 
@@ -113,7 +113,7 @@ func WaitReady(dsn string, timeout time.Duration) error {
 	}
 }
 
-// ViaProxy rewrites a postgres:// DSN to go through addr (a Proxy).
+// ViaProxy rewrites a postgres:// DSN to go through addr (a chaoskit.Proxy).
 func ViaProxy(t testing.TB, dsn, addr string) string {
 	u, err := url.Parse(dsn)
 	if err != nil {
@@ -123,7 +123,7 @@ func ViaProxy(t testing.TB, dsn, addr string) string {
 	return u.String()
 }
 
-// Host is dsn's host:port (a Proxy's target).
+// Host is dsn's host:port (a proxy's target).
 func Host(t testing.TB, dsn string) string {
 	u, err := url.Parse(dsn)
 	if err != nil {

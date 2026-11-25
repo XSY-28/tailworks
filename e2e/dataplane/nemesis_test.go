@@ -143,6 +143,11 @@ var faults = map[string]fault{
 	"cut-takeover": {"cut-takeover", func(n *nemesis, h string) string {
 		return n.takeover(h, func() { n.c.proxies[h].cut(true) }, func() { n.c.proxies[h].cut(false) })
 	}},
+	// R2's S3 backend (r2_test.go): cut off from one host, or slow.
+	"cut-s3":  {"cut-s3", r2CutS3},
+	"slow-s3": {"slow-s3", r2SlowS3},
+	// SIGKILL a host in the middle of a large R2 put (r2_test.go).
+	"kill-mid-put": {"kill-mid-put", r2KillMidPut},
 	// A move of the live workload under load (deploy --replace
 	// --force-takeover: a stateful workload can't move without it). The old
 	// host stops at its next heartbeat; the new copy starts empty
@@ -155,6 +160,7 @@ var faults = map[string]fault{
 		}
 		return fmt.Sprintf("%s → %s epoch %d, %s", h, d.Host, d.Epoch, how)
 	}},
+	"redeploy": redeployFault, // workflows_test.go
 	// mgmt crashes (SIGKILL) or restarts (SIGTERM) and comes back.
 	"restart-mgmt": {"restart-mgmt", func(n *nemesis, h string) string {
 		crash := n.rnd.Intn(2) == 0
@@ -183,10 +189,19 @@ func (n *nemesis) takeover(h string, fail, heal func()) string {
 }
 
 var scenarios = map[string][]string{
+	// R2 (TestR2, r2_test.go): fs and s3 backends, and two replicas on s3.
+	"r2-fs":       {"kill-host", "crash-hostd", "kill-mid-put", "cut-short", "cut-takeover", "pause-takeover", "move", "restart-mgmt"},
+	"r2-replicas": {"kill-host", "crash-hostd", "kill-workerd", "kill-mid-put", "cut-short", "cut-s3", "slow-s3", "restart-mgmt"},
+	"r2-s3":       {"kill-host", "crash-hostd", "kill-mid-put", "cut-short", "cut-takeover", "cut-s3", "slow-s3", "pause-takeover", "move", "restart-mgmt"},
+
 	"queues":  {"kill-host", "crash-hostd", "kill-workerd", "pause-short", "cut-short", "move", "restart-mgmt"},
 	"fencing": {"pause-takeover", "pause-hostd-takeover", "cut-takeover", "move"},
 	"d1":      {"move", "kill-host", "pause-takeover", "restart-mgmt"},
 	"mixed":   {"kill-host", "crash-hostd", "kill-workerd", "pause-short", "pause-takeover", "pause-hostd-takeover", "cut-short", "cut-takeover", "move", "restart-mgmt"},
+
+	// TestDataplaneWorkflows (workflows_test.go).
+	"workflows":      {"kill-host", "crash-hostd", "kill-workerd", "pause-short", "cut-short", "redeploy", "restart-mgmt"},
+	"workflows-move": {"move", "pause-takeover", "cut-takeover", "redeploy", "kill-host"},
 }
 
 // runNemesis applies faults from the scenario until the deadline, with a
