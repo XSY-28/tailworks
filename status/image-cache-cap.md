@@ -34,4 +34,12 @@ the visible default honest.
   `-run 'Container|Ctr|Image|Limits|Docs' ./hostd/ ./cmd/tw/` ok.
 - `make cli-docs`: no change (docs/cli.md doesn't list tw-hostd flags).
 - `make changes-check`: ok (no upgrade-relevant paths).
-- `make lint test`: see the PR.
+- `make lint test` (load ~80): lint passed; tests passed except 4 mgmt
+  tests (TestRedeployAfterUndeploy, TestAPIIdentityScope,
+  TestWarmKeysRevokedOnCloseInParallel, TestWarmKeyRefillRespectsThrottle)
+  and 2 hostd tests (TestR2Streaming, TestWorkersKV) that timed out under
+  load; all six pass rerun on their own (`go test -run ... ./mgmt/`,
+  `./hostd/`). None touches the image cache.
+- Skipped: `make e2e-upgrade` (changes-check: no upgrade-relevant paths);
+  container e2e suites (need KVM / Mac virtualization with a container
+  kernel).
