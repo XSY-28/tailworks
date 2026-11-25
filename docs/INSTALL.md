@@ -355,7 +355,7 @@ tw link tw-mgmt.<tailnet>.ts.net       # https first, then http on :80; or just 
 tw init support --template agent        # or hello, mcp, static-site; tw init --list for every template
 cd support && tw dev                    # optional: run it locally against an embedded control plane
 tw deploy                               # bundles here (built-in esbuild), uploads to mgmt over the tailnet, waits until the node is ready
-tw ls · tw audit <object> · tw kill <object> --cascade
+tw ls · tw audit <object> · tw kill <object>
 ```
 
 `tw link` calls mgmt's `GET /v1/whoami` over your own Tailscale
@@ -502,7 +502,7 @@ one for a new app; the
 [quick start](../README.md#quick-start)
 shows it, and `tw deploy` prints it with the tagOwners for new tags). If
 the first deploy doesn't answer, see [troubleshooting.md](troubleshooting.md).
-Day 2: `tw ls`, `tw logs support`, `tw kill <object> --cascade`,
+Day 2: `tw ls`, `tw logs support`, `tw kill <object>`,
 `tw audit <object>`, `tw status`.
 
 #### A second tenant (another tailnet) on the same Mac

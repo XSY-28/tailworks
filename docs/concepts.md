@@ -75,8 +75,7 @@ plan's device limit; a class with `"node": false` adds none
 
 ### Sub-agent
 An object created by another object with `ctx.tailnet.spawn()`. It gets
-at most its parent's grants, and `tw kill --cascade` kills it with its
-parent.
+at most its parent's grants, and `tw kill` kills it with its parent.
 
 ## How it runs
 
@@ -129,5 +128,6 @@ tailnet ([INSTALL.md](INSTALL.md#try-it-without-a-tailnet)).
 
 ### Kill
 `tw kill <object>` takes an object's node off the tailnet and leaves a
-tombstone: later requests get `410 killed`. With `--cascade` it kills the
-object's sub-agents too.
+tombstone: later requests get `410 killed`. It kills the object's
+sub-agents too (`--cascade=false` leaves them to the reaper, which kills
+the sub-agents of a dead parent within seconds).

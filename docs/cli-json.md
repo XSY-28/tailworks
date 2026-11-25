@@ -175,8 +175,9 @@ line (`$defs/logs.line`):
 {"event": "log", "ts": "…", "workload": "hello-mcp", "line": "…"}
 ```
 
-`workload` is set for `tw logs <workload> --console`, `component` for
-`--component mgmt|hostd|supervisor`. From a machine linked with `tw link`,
+`workload` is set for `tw logs <workload> --console` (and for a bare
+`tw logs`, which picks the app in the current directory, else the only
+workload), `component` only for `--component mgmt|hostd|supervisor`. From a machine linked with `tw link`,
 replica lines also carry the `host` they came from. With `-f`, lines keep
 coming until the command is stopped.
 

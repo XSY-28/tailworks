@@ -377,7 +377,7 @@ Thrown in the Worker · platform. **When:** app code sent an event of type `appr
 1 · cli. **When:** `tw upgrade` on a `tw up` machine refused a release (a download or `--from`) that has no `SHA256SUMS.sig` or no `SHA256SUMS` inside it. Nothing in the release ran. **Fix:** upgrade to a published release (`tw upgrade [<version>]`). For a build you made yourself (`make release`), add `--allow-unsigned` (or set `TW_ALLOW_UNSIGNED=1`).
 
 ### remote_unsupported
-400 · cli. **When:** a command that runs only on the host that runs `tw up` (`tw logs`, `tw tenant add`, `tw backup`, `tw restore`) was run on a linked developer machine. **Fix:** run it on the host.
+400 · cli. **When:** a command that runs only on the host that runs `tw up` (`tw logs --component`, `tw tenant add`, `tw backup`, `tw restore`) was run on a linked developer machine. **Fix:** run it on the host. A workload's log works from a linked machine: `tw logs <workload>`.
 
 ### queue_limit
 400 · mgmt, hostd. **When:** a queue send is too big: a message over 128 KB, a `sendBatch` over 100 messages or 256 KB, a `delaySeconds` over 43200, or a queue over 1 GiB of kept messages. In a Worker, `send()` throws `Error: [queue_limit] … (400)`. **Fix:** send smaller messages (store large payloads elsewhere and send a reference), or let consumers drain the queue.
