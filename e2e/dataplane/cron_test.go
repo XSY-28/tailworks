@@ -171,6 +171,19 @@ type cronRig struct {
 	sl  *cronWL
 	sf  *cronWL
 	cli *http.Client
+
+	// clock is the hosts' wall-clock offset file (internal/wallclock's
+	// TW_TEST_WALL_CLOCK_FILE): every host follows it.
+	clock string
+}
+
+// setClock steps every host's wall clock to offset (hostd's, and on Linux
+// its workerds' too) and waits for them to read it (polled every 100 ms).
+func (r *cronRig) setClock(offset time.Duration) {
+	tmp := r.clock + ".tmp"
+	os.WriteFile(tmp, []byte(offset.String()), 0o600)
+	os.Rename(tmp, r.clock)
+	time.Sleep(300 * time.Millisecond)
 }
 
 // buildCron bundles a cron workload twice: as written (schedule A) and with
@@ -306,6 +319,46 @@ func pauseBoundary(n *nemesis, h string) string {
 	return fmt.Sprintf("paused %v from %s", d, next.Add(-lead).Format("15:04:05"))
 }
 
+// clockBack steps the hosts' wall clock back 70–150 s, across minutes that
+// already ran, holds it 70–100 s and steps it forward again. hostd must not
+// rerun a minute (cronLast) or backfill the ones it skipped (C1). Half the
+// time hostd is SIGKILLed and restarted while the clock is back.
+func clockBack(n *nemesis, h string) string {
+	return clockStep(n, h, -n.between(70*time.Second, 150*time.Second))
+}
+
+// clockForward steps it forward 70–150 s, holds, and steps it back: the
+// future minutes that ran early must not run again when the true clock
+// reaches them.
+func clockForward(n *nemesis, h string) string {
+	return clockStep(n, h, n.between(70*time.Second, 150*time.Second))
+}
+
+func clockStep(n *nemesis, h string, d time.Duration) string {
+	r := n.cron
+	if r == nil || r.clock == "" {
+		return "skipped: not the cron loop"
+	}
+	d = d.Round(time.Second)
+	hold := n.between(70*time.Second, 100*time.Second)
+	restart := n.rnd.Intn(2) == 0
+	r.setClock(d)
+	detail := fmt.Sprintf("clock %v for %v", d, hold)
+	if restart {
+		time.Sleep(hold / 2)
+		n.c.stop(h, true)
+		time.Sleep(time.Second)
+		n.c.startHost(h)
+		n.c.waitHostsLive(h)
+		detail += fmt.Sprintf(", hostd on %s restarted half way", h)
+		time.Sleep(hold / 2)
+	} else {
+		time.Sleep(hold)
+	}
+	r.setClock(0)
+	return detail
+}
+
 // arm starts the stateful workload's alarm chains and agent schedule on
 // every new epoch's copy (storage doesn't move with the workload).
 func (r *cronRig) arm(stop chan struct{}, wg *sync.WaitGroup) {
@@ -402,7 +455,16 @@ func runCron(t *testing.T, wd, scenario string, names []string, seed int64, dur 
 		t.Fatal(err)
 	}
 	t.Cleanup(ctl.Close)
-	c := &cluster{t: t, bin: cliflow.BuildBinaries(t), dir: rdir, work: work, ctl: ctl, tsURL: fakeTS(t).URL,
+	// A test build of the binaries, so the clock faults can step every
+	// host's wall clock (internal/wallclock). Production builds can't.
+	clock := filepath.Join(work, "clock")
+	t.Setenv("TW_TEST_WALL_CLOCK_FILE", clock)
+	if lib, why := cliflow.BuildClockPreload(t); lib != "" {
+		t.Setenv("TW_TEST_CLOCK_PRELOAD", lib)
+	} else {
+		t.Logf("clock faults step hostd's clock only (workerd keeps the true one): %s", why)
+	}
+	c := &cluster{t: t, bin: cliflow.BuildBinariesTags(t, "twtestclock"), dir: rdir, work: work, ctl: ctl, tsURL: fakeTS(t).URL,
 		sock: filepath.Join(work, "mgmt.sock"), workerd: wd, hosts: []string{"h1", "h2", "h3"},
 		proxies: map[string]*sockProxy{}, pids: pids, procs: map[string]*proc{}, stopped: map[string]bool{}}
 	t.Cleanup(c.stopAll)
@@ -440,7 +502,7 @@ func runCron(t *testing.T, wd, scenario string, names []string, seed int64, dur 
 	}
 	c.waitHostsLive(c.hosts...)
 
-	r := &cronRig{c: c, ch: ch, cli: nodes["dpc-cli"].HTTPClient(5 * time.Second)}
+	r := &cronRig{c: c, ch: ch, cli: nodes["dpc-cli"].HTTPClient(5 * time.Second), clock: clock}
 	for _, w := range []struct {
 		wl  **cronWL
 		nm  string
@@ -472,6 +534,7 @@ func runCron(t *testing.T, wd, scenario string, names []string, seed int64, dur 
 	n := &nemesis{c: c, h: h, tg: r.sf.tg, rnd: rand.New(rand.NewSource(seed)), cron: r}
 	n.run(names, time.Now().Add(dur), t.Logf)
 
+	r.setClock(0)
 	for _, id := range c.hosts {
 		c.proxies[id].cut(false)
 		c.resume(id)

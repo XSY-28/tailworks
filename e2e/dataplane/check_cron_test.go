@@ -29,6 +29,16 @@ const (
 	faultGrace  = 30 * time.Second // a host is serving its triggers again this long after a fault ends
 )
 
+// decided is when hostd decided to start the run, on the true clock: its
+// scheduledTime, unless a clock fault had the host's clock off, when it is
+// taken from the start report's receipt (at most reportDelay after).
+func (r cronRunInfo) decided() time.Time {
+	if r.Start.IsZero() || !r.skewed {
+		return r.St
+	}
+	return r.Start.Add(-reportDelay)
+}
+
 // cronRunInfo is one run, from all its reports.
 type cronRunInfo struct {
 	WL, Cron, ID, Host string
@@ -36,6 +46,9 @@ type cronRunInfo struct {
 	Epoch              int64
 	Start              time.Time // the start report's receipt (zero if lost)
 	First, Last        time.Time // first and last report of any phase
+
+	// skewed: the run started while a clock fault had the hosts' clock off.
+	skewed bool
 }
 
 func (r cronRunInfo) String() string {
@@ -64,6 +77,13 @@ func cronRuns(ch *cronHist) []*cronRunInfo {
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].First.Before(out[j].First) })
+	for _, r := range out {
+		for _, f := range ch.h.faults {
+			if strings.HasPrefix(f.Kind, "clock-") && !r.First.Before(f.Start) && !r.First.After(f.End.Add(reportDelay)) {
+				r.skewed = true
+			}
+		}
+	}
 	return out
 }
 
@@ -160,31 +180,70 @@ func matches(expr string, m time.Time) bool {
 
 func checkCron(ch *cronHist) []result {
 	runs := cronRuns(ch)
-	return []result{checkC1(runs), checkC2(ch, runs), checkC3(ch, runs), checkC4(ch, runs), checkA1(ch)}
+	return []result{checkC1(ch, runs), checkC2(ch, runs), checkC3(ch, runs), checkC4(ch, runs), checkA1(ch)}
 }
 
 // checkC1 — at most one run per (trigger, scheduled minute), across all
 // hosts.
-func checkC1(runs []*cronRunInfo) result {
+func checkC1(ch *cronHist, runs []*cronRunInfo) result {
 	r := result{ID: "C1", Pass: true}
 	by := map[string][]*cronRunInfo{}
 	for _, x := range runs {
 		k := fmt.Sprintf("%s %q %d", x.WL, x.Cron, x.St.UnixMilli())
 		by[k] = append(by[k], x)
 	}
-	dups := 0
+	dups, known := 0, 0
 	for k, xs := range by {
-		if len(xs) > 1 {
-			dups++
-			var d []string
-			for _, x := range xs {
-				d = append(d, x.String())
-			}
-			r.fail("%s ran %d times: %s", k, len(xs), strings.Join(d, "; "))
+		if len(xs) < 2 {
+			continue
+		}
+		var d []string
+		for _, x := range xs {
+			d = append(d, x.String())
+		}
+		msg := fmt.Sprintf("%s ran %d times: %s", k, len(xs), strings.Join(d, "; "))
+		if restartedUnderClockStep(ch.h.faults, xs) {
+			known++
+			r.note("known (#594): %s", msg)
+			continue
+		}
+		dups++
+		r.fail("%s", msg)
+	}
+	r.Summary = fmt.Sprintf("%d runs of %d (trigger, minute) pairs, %d run more than once, %d known (#594: hostd restarted while the clock was stepped)",
+		len(runs), len(by), dups, known)
+	return r
+}
+
+// restartedUnderClockStep: every run of xs is on one host, whose hostd
+// restarted between the first and the last of them, with a clock step in
+// between too (#594: cronLast doesn't survive a restart).
+func restartedUnderClockStep(faults []faultEv, xs []*cronRunInfo) bool {
+	first, last := xs[0].First, xs[0].First
+	for _, x := range xs {
+		if x.Host != xs[0].Host {
+			return false
+		}
+		if x.First.Before(first) {
+			first = x.First
+		}
+		if x.First.After(last) {
+			last = x.First
 		}
 	}
-	r.Summary = fmt.Sprintf("%d runs of %d (trigger, minute) pairs, %d run more than once", len(runs), len(by), dups)
-	return r
+	restarted, stepped := false, false
+	for _, f := range faults {
+		if f.Start.Before(first) || f.Start.After(last) {
+			continue
+		}
+		if strings.HasPrefix(f.Kind, "clock-") {
+			stepped = true
+		}
+		if f.Host == xs[0].Host && (f.Kind == "kill-host" || f.Kind == "crash-hostd" || strings.Contains(f.Detail, "restarted")) {
+			restarted = true
+		}
+	}
+	return restarted && stepped
 }
 
 // checkC2 — no two runs of one trigger overlap: no run reports anything
@@ -240,12 +299,12 @@ func checkC3(ch *cronHist, runs []*cronRunInfo) result {
 		}
 		for _, f := range faults {
 			if (f.Kind == "cut-short" || f.Kind == "cut-takeover") && f.Host == x.Host &&
-				x.St.After(f.Start.Add(fenceAfter+time.Second)) && x.St.Before(f.End) {
+				x.decided().After(f.Start.Add(fenceAfter+time.Second)) && x.decided().Before(f.End) {
 				fenced++
 				r.fail("started past the fence: %s, cut off since %s (%s)", x, f.Start.Format("15:04:05.000"), f.Kind)
 			}
 		}
-		decided := x.St
+		decided := x.decided()
 		if lb := x.Start.Add(-reportDelay); lb.After(decided) {
 			decided = lb
 		}
@@ -315,7 +374,7 @@ func checkC4(ch *cronHist, runs []*cronRunInfo) result {
 				until = ss[i+1].Sent
 			}
 			for _, x := range runs {
-				if x.WL == wl && x.St.After(s.Active) && x.St.Before(until) && !slices.Contains(s.Crons, x.Cron) {
+				if x.WL == wl && x.decided().After(s.Active) && x.decided().Before(until) && !slices.Contains(s.Crons, x.Cron) {
 					old++
 					r.fail("not in the schedule active since %s: %s", s.Active.Format("15:04:05.000"), x)
 				}

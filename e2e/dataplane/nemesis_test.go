@@ -89,6 +89,10 @@ var faults = map[string]fault{
 		n.c.waitHostsLive(h)
 		return fmt.Sprintf("down %v", down)
 	}},
+	// Step every host's wall clock back, or forward, and later back to
+	// true (cron_test.go).
+	"clock-back":    {"clock-back", clockBack},
+	"clock-forward": {"clock-forward", clockForward},
 	// SIGKILL hostd alone, as an OOM kill or a panic would: its workerds
 	// (each in a process group of its own) survive it. Restart hostd and
 	// record which of the old workerds are still alive afterwards.
@@ -194,7 +198,7 @@ func (n *nemesis) takeover(h string, fail, heal func()) string {
 
 var scenarios = map[string][]string{
 	"alarms":  {"kill-host", "kill-workerd", "pause-short", "pause-takeover", "pause-hostd-takeover", "cut-takeover", "move", "restart-mgmt"},
-	"cron":    {"kill-host", "crash-hostd", "kill-workerd", "pause-boundary", "pause-takeover", "cut-short", "cut-takeover", "move", "reschedule", "restart-mgmt"},
+	"cron":    {"clock-back", "clock-forward", "kill-host", "crash-hostd", "kill-workerd", "pause-boundary", "pause-takeover", "cut-short", "cut-takeover", "move", "reschedule", "restart-mgmt"},
 	"queues":  {"kill-host", "crash-hostd", "kill-workerd", "pause-short", "cut-short", "move", "restart-mgmt"},
 	"fencing": {"pause-takeover", "pause-hostd-takeover", "cut-takeover", "move"},
 	"d1":      {"move", "kill-host", "pause-takeover", "restart-mgmt"},
