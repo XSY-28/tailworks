@@ -8,7 +8,7 @@ Issues #482 and #484 from the interface-simplification audit (#434).
 
 **#484, docs split.**
 
-- `docs/INSTALL.md` (1207 → ~890 lines) keeps prerequisites, npm vs the
+- `docs/INSTALL.md` (1207 → 922 lines) keeps prerequisites, npm vs the
   tarball, verify a release, PATH, the OAuth client's operator paragraphs
   (apply semantics, what `tw up` checks, automation, rotation), `tw link`,
   transport, Headscale, the service, upgrade, `~/.tailworks`, backup,
@@ -64,7 +64,7 @@ Issues #482 and #484 from the interface-simplification audit (#434).
   `autogroup:member` grant sources on the Headscale profile, is left out.
   It changes what `tw deploy --apply-policy` writes on a Headscale tailnet
   and needs `make e2e-headscale` (Docker), which this machine doesn't
-  have. Filed as a follow-up.
+  have. Filed as #552.
 - #481 (the policy-write default on a terminal) and #483 (README quick
   start) belong to other branches; README.md is untouched.
 

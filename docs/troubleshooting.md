@@ -10,8 +10,10 @@ offline.
 
 ## `tw up` fails
 
-Nothing is minted until `tw up` has checked the credential and the policy,
-so after fixing the cause, run `tw up` again.
+`tw up` checks the OAuth client, and the policy if the client can read
+it, before it mints anything
+([what it checks](INSTALL.md#the-oauth-client)).
+After fixing the cause, run `tw up` again.
 
 - `mint_mode_required`: no credential was given; pass
   `--oauth-client-file` ([errors.md](errors.md#mint_mode_required); the
