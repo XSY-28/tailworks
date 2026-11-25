@@ -34,6 +34,26 @@ Note for users: in workerd, a Durable Object's console.log can show up on
 a different invocation's record when requests to that object overlap.
 This is workerd behaviour, not something tailworks adds.
 
+## Found while verifying: hostd panics on "close of closed channel"
+
+A stress run of `TestAuditChainAcrossRestart` (on #427's branch) crashed
+the test binary:
+
+```
+panic: close of closed channel
+hostd.closeOnce (objects.go:502)
+hostd.(*Host).awaitNode (objects.go:461)
+```
+
+`closeOnce` checked whether the channel was closed and then closed it.
+The kill path (it sets `statusKilled` and closes `readyCh` after it
+releases `h.mu`) and `awaitNode` (it checked the status earlier and
+closes the same channel after it releases `h.mu`) can both pass the check
+at the same time. A kill that lands while a node is joining could
+therefore crash hostd. `closeOnce` now does the check and the close under
+its own mutex. `TestCloseOnceConcurrent` panics without the fix (4
+goroutines, 2,000 rounds) and passes with it.
+
 ## Tests
 
 See the PR body.
