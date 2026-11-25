@@ -37,24 +37,33 @@ func TestCreateTailworksRenamesLikeInit(t *testing.T) {
 			continue
 		}
 		tmpl := e.Name()
-		t.Run(tmpl, func(t *testing.T) {
-			// Upper case and an underscore exercise workloadLabel.
-			want := filepath.Join(t.TempDir(), "My_App-2")
-			if _, err := captureStdout(t, func() error { return cmdInit([]string{want, "--template", tmpl}) }); err != nil {
-				t.Fatal(err)
-			}
-			got := filepath.Join(t.TempDir(), "My_App-2")
-			cmd := exec.Command(node, filepath.Join(ct, "bin", "create-tailworks.js"), got, "--template", tmpl)
-			cmd.Env = append(os.Environ(), "PATH="+bin)
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				t.Fatalf("create-tailworks: %v\n%s", err, out)
-			}
-			if !strings.Contains(string(out), `(workload "my-app-2")`) {
-				t.Errorf("create-tailworks output lacks the workload name:\n%s", out)
-			}
-			createTwCompareTrees(t, want, got)
-		})
+		for _, tc := range []struct{ name, dir, label string }{
+			{"ascii", "My_App-2", "my-app-2"},
+			{"dotted-i", "İDemo__Project---1234567890123456789012345678901234567890",
+				"idemo-project-12345678901234567890123456"},
+		} {
+			t.Run(tmpl+"/"+tc.name, func(t *testing.T) {
+				want := filepath.Join(t.TempDir(), tc.dir)
+				if _, err := captureStdout(t, func() error { return cmdInit([]string{want, "--template", tmpl}) }); err != nil {
+					t.Fatal(err)
+				}
+				got := filepath.Join(t.TempDir(), tc.dir)
+				args := []string{filepath.Join(ct, "bin", "create-tailworks.js"), got}
+				if tmpl != "hello" || tc.name != "dotted-i" {
+					args = append(args, "--template", tmpl)
+				}
+				cmd := exec.Command(node, args...)
+				cmd.Env = append(os.Environ(), "PATH="+bin)
+				out, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Fatalf("create-tailworks: %v\n%s", err, out)
+				}
+				if !strings.Contains(string(out), `(workload "`+tc.label+`")`) {
+					t.Errorf("create-tailworks output lacks the workload name:\n%s", out)
+				}
+				createTwCompareTrees(t, want, got)
+			})
+		}
 	}
 }
 

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -52,10 +51,12 @@ func appTags(raw []byte, wl string) ([]byte, map[string]string, error) {
 			}
 		}
 	}
+	// Replace original tags together so generated tags are not rewritten.
+	pairs := make([]string, 0, 2*len(rename))
 	for old, nu := range rename {
-		raw = bytes.ReplaceAll(raw, []byte(`"`+old+`"`), []byte(`"`+nu+`"`))
+		pairs = append(pairs, `"`+old+`"`, `"`+nu+`"`)
 	}
-	return raw, rename, nil
+	return []byte(strings.NewReplacer(pairs...).Replace(string(raw))), rename, nil
 }
 
 // initTags lists the tags of the app in dir, for tw init's summary.

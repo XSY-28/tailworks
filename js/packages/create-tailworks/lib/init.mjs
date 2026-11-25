@@ -11,7 +11,8 @@ import { stripJSONC } from "./build.mjs";
 // workloadLabel is cmd/tw/app.go's: lowercase, runs of anything but
 // [a-z0-9-] to "-", trimmed, at most 40 characters.
 export function workloadLabel(s) {
-  s = s.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "");
+  // Go lowercases U+0130 to i without the combining dot that JS adds.
+  s = s.replaceAll("\u0130", "i").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "");
   if (s.length > 40) s = s.slice(0, 40).replace(/-+$/, "");
   return s;
 }
