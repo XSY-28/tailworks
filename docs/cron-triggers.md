@@ -69,7 +69,10 @@ Delivery is best effort. Like Cloudflare's, it is not exactly once.
   mgmt may have moved the workload, and the new host runs its triggers. So
   a partition doesn't run them twice. At worst it skips a few minutes.
 - **At most once per minute** per trigger. If the wall clock steps
-  backwards, minutes that already ran are not run again. If it steps
+  backwards, minutes that already ran are not run again, even across a
+  hostd restart: the host keeps the last minute it ran in its data dir. It
+  ignores a stored minute more than 15 minutes ahead of its clock, because
+  that means the clock was fast and has been corrected. If the clock steps
   forwards (or the host sleeps), the missed minutes are not backfilled;
   only the current minute runs.
 - **No overlap.** If a trigger's previous run is still going when it comes
