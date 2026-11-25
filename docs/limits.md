@@ -85,7 +85,8 @@ See [Limits that don't exist](#limits-that-dont-exist) for duration, body and CP
 | `connect()` dial (and `tls: "netd"` handshake) | 30 s, as an object's node wait | no | `hostd/host.go:ReadyTimeout` |
 | A service binding RPC call's encoded arguments, or its result | 32 MiB (`RangeError` / `bad_request` over it) | no | `hostd/gen/js/svc.js:RPC_MAX_BYTES` |
 | How long hostd reuses a service binding's resolved target | 5 s (dropped sooner when netd can't reach it) | no | `hostd/servicebind.go:svcTargetTTL` |
-| Wait for mgmt to know the calling node before a named-entrypoint or RPC call | 15 s, then the call goes anyway | no | `hostd/servicebind.go:#binding-ready-wait` |
+| Wait for mgmt to accept a new object's ready report (and so issue its node certificate) before its first outbound call | 20 s, then `identity_pending` (a failed report is re-sent at most every 5 s) | no | `hostd/egressgate.go:#egress-report-wait`, `hostd/egressgate.go:rereportEvery` |
+| How long a receiver reuses a caller's node certificate; a "not a tailworks object" answer | 60 s; 2 s | no | `hostd/certs.go:certCacheTTL`, `hostd/certs.go:#cert-no-cert-ttl` |
 
 ## Process tier
 

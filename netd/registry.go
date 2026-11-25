@@ -85,6 +85,10 @@ type Config struct {
 	// ReadyTimeout bounds how long egress waits for a pending object before
 	// failing with identity_pending. Default 30 s.
 	ReadyTimeout time.Duration
+
+	// EgressGate, if set, is asked before each egress once the node is up
+	// (egressgate.go, issue #331); an error refuses it.
+	EgressGate func(ctx context.Context, objectID, stableNodeID string) error
 	// Ephemeral and Tags are defaults for objects that don't override them.
 	Ephemeral bool
 	Tags      []string
