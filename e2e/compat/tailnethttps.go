@@ -2,6 +2,8 @@ package compat
 
 import (
 	"context"
+	"crypto/tls"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -33,4 +35,39 @@ func deployedClient(dial func(ctx context.Context, network, addr string) (net.Co
 		Proxy:               nil,
 		MaxIdleConnsPerHost: 8,
 	}}
+}
+
+// tailnetHTTPSCertWait bounds waitTailnetCert: a new node name's first
+// ts.net certificate takes 30–100 s, sometimes minutes (netd/certprefetch.go).
+const tailnetHTTPSCertWait = 5 * time.Minute
+
+// waitTailnetCert waits until a TLS handshake with the workload's :443
+// listener completes for name, i.e. its certificate has been issued, so
+// the probe's 60 s request timeout measures the app and not certificate
+// issuance (#614). It returns how long that took.
+func waitTailnetCert(ctx context.Context, dial func(ctx context.Context, network, addr string) (net.Conn, error), ip, name string) (time.Duration, error) {
+	name = strings.TrimSuffix(name, ".")
+	st := time.Now()
+	ctx, cancel := context.WithTimeout(ctx, tailnetHTTPSCertWait)
+	defer cancel()
+	var last error
+	for {
+		actx, acancel := context.WithTimeout(ctx, 30*time.Second)
+		c, err := dial(actx, "tcp", net.JoinHostPort(ip, "443"))
+		if err == nil {
+			tc := tls.Client(c, &tls.Config{ServerName: name})
+			err = tc.HandshakeContext(actx)
+			tc.Close()
+		}
+		acancel()
+		if err == nil {
+			return time.Since(st), nil
+		}
+		last = err
+		select {
+		case <-ctx.Done():
+			return time.Since(st), fmt.Errorf("no TLS handshake with %s within %s: %v", name, tailnetHTTPSCertWait, last)
+		case <-time.After(2 * time.Second):
+		}
+	}
 }

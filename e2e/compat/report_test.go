@@ -75,8 +75,13 @@ func TestVerify(t *testing.T) {
 		},
 		"an outcome the project doesn't expect": func(p *Published) {
 			r := p.Deployed.Results["ag-cross-domain"]
-			r.Outcome = "PASS"
+			r.Outcome = "XFAIL"
 			p.Deployed.Results["ag-cross-domain"] = r
+		},
+		"a tw dev outcome the project doesn't expect (ExpectDev)": func(p *Published) {
+			r := p.Dev.Results["ag-cross-domain"]
+			r.Outcome = "PASS"
+			p.Dev.Results["ag-cross-domain"] = r
 		},
 		"a result for an unpublished project": func(p *Published) {
 			p.Dev.Results["c3-hello-world"] = Recorded{Outcome: "PASS", Source: "x"}

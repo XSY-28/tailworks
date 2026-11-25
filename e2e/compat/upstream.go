@@ -67,7 +67,7 @@ func upstreamProjects() []*Project {
 		agentsUp("ag-cross-domain", "cross-domain", func(p *Project) {
 			p.What = "Agent behind onBeforeConnect / onBeforeRequest token checks: HTTP and WebSocket"
 			p.Exercises = []string{"agents-sdk", "websockets"}
-			p.Expect = importedEnv
+			p.ExpectDev = importedEnv
 			p.Probe = probeCrossDomain
 		}),
 		agentsUp("ag-github-webhook", "github-webhook", func(p *Project) {
@@ -90,7 +90,7 @@ func upstreamProjects() []*Project {
 			p.Exercises = []string{"agents-sdk", "mcp", "do-storage"}
 			p.AddDeps = map[string]string{"@modelcontextprotocol/server": MCPServerVersion}
 			p.Workarounds = append(p.Workarounds, mcpPeer)
-			p.Expect = importedEnv
+			p.ExpectDev = importedEnv
 			p.Probe = probeElicitation
 		}),
 		agentsUp("ag-mcp-elicitation-mrtr", "mcp-elicitation-mrtr", func(p *Project) {
@@ -316,9 +316,12 @@ func upstreamProjects() []*Project {
 	}
 }
 
-// importedEnv: the example reaches its agents through the module-level env.
+// importedEnv: the example reaches its agents through the module-level
+// env. Deployed it passes: the agents' classes aren't in tailnet.objects,
+// so they have no node and need no create admission (#359). tw dev's
+// built-in mgmt declares every class, so there each agent is a node class.
 var importedEnv = Expect{Kind: ExpectProbeFail, Compat: "do-identity",
-	Why: "the example passes the imported env (`import { env } from \"cloudflare:workers\"`) to the Agents SDK; tailworks creates a new object only through the `env` it hands the handler, so the first request for a new agent is `403 create_not_admitted` ([#355](https://github.com/rosskukulinski/tailworks/issues/355)). With the handler's `env` (a one-line change) it runs"}
+	Why: "the example passes the imported env (`import { env } from \"cloudflare:workers\"`) to the Agents SDK. `tw dev` gives every Durable Object class a node, and creates a new one only through the `env` it hands the handler, so the first request for a new agent is `403 create_not_admitted` ([#355](https://github.com/rosskukulinski/tailworks/issues/355)). Deployed, a class not in `tailnet.objects` has no node and needs no create admission ([#359](https://github.com/rosskukulinski/tailworks/issues/359)). With the handler's `env` (a one-line change) it runs under `tw dev` too"}
 
 const mcpPeer = "@modelcontextprotocol/server@" + MCPServerVersion + " added: a peer of `agents` that the monorepo hoists"
 

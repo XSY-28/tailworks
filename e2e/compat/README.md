@@ -120,7 +120,7 @@ What the published result means:
   entry, a scripted model). `Workarounds` are install mechanics (a
   workspace dependency pinned to its published version, `npm install`
   outside the monorepo) and don't make a pass "with change".
-- **fail**: an `Expect` (both modes) or `ExpectDeployed` (deployed only),
+- **fail**: an `Expect` (both modes), `ExpectDeployed` (deployed only) or `ExpectDev` (`tw dev` only),
   with the issue it is tied to. The run stays green while it fails the
   expected way, and reports XPASS when it starts passing.
 - **not run**: `UpstreamNotRun()`.
@@ -140,10 +140,13 @@ Responses API calls with a scripted stream. That is listed as a change.
    an object, `env.X` had only `getByName`, so `getAgentByName`'s
    `env.X.get(env.X.idFromName(name))` passed a pending RPC result to
    `get()`. All 9 pass now.
-2. **Open ([#355](https://github.com/rosskukulinski/tailworks/issues/355)): agents reached through the imported env are not created.**
+2. **Open under `tw dev` ([#355](https://github.com/rosskukulinski/tailworks/issues/355)): agents reached through the imported env are not created.**
    `cross-domain` and `mcp-elicitation` pass
    `import { env } from "cloudflare:workers"` to the Agents SDK and get
-   `create_not_admitted`.
+   `create_not_admitted` under `tw dev`, which gives every class a node.
+   Deployed they pass since [#359](https://github.com/rosskukulinski/tailworks/issues/359):
+   a class not in `tailnet.objects` has no node and needs no create
+   admission (`Project.ExpectDev`).
 3. **Fixed ([#356](https://github.com/rosskukulinski/tailworks/issues/356)): the built-in bundler and CommonJS `require()` of a Node builtin.**
    A Worker with `dotenv` in it bundled and then couldn't start. With
    `nodejs_compat` the built-in bundler now turns such a `require()` into
@@ -249,10 +252,11 @@ additions and clean up by ID. The only policy entries the run may add are:
 
 ```jsonc
 "tagOwners": { "tag:tw-wl-compat": ["autogroup:admin", "tag:tw"] },
-"grants":    [{ "src": ["tag:ttest"], "dst": ["tag:tw-wl-compat"], "ip": ["tcp:80"] }]
+"grants":    [{ "src": ["tag:ttest"], "dst": ["tag:tw-wl-compat"], "ip": ["tcp:80", "tcp:443"] }]
 ```
 
-If anything else is missing, the run refuses to write the policy. Every
+`tcp:443` is for the projects deployed with `tailnet.https`
+(`ag-mcp-worker-auth`). If anything else is missing, the run refuses to write the policy. Every
 node it creates is named `ttest-compat-<run>-*` / `tw-compat-<run>-*`; the
 cleanup deletes them by ID and fails the run if any are left.
 

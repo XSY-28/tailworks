@@ -342,6 +342,12 @@ func RenderSection(section string, pub *Published) string {
 			if len(p.Changes) > 0 {
 				note += ". Under `tw dev`: " + changes(p)
 			}
+		case p.ExpectDev.Kind != ExpectPass:
+			result, shown = "fail", "**fail** under `tw dev` ("+passed+" deployed)"
+			note = "Under `tw dev`: " + p.ExpectDev.Why
+			if len(p.Changes) > 0 {
+				note += ". Deployed: " + changes(p)
+			}
 		}
 		counts[result]++
 		dir := p.Dir

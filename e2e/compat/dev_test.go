@@ -107,7 +107,7 @@ func TestCompatDev(t *testing.T) {
 				case "PASS", "XFAIL":
 					t.Logf("%s: %s", r.Outcome, r.Detail)
 				case "XPASS":
-					t.Errorf("XPASS: %s is expected to fail (COMPAT.md #%s) but passed: update COMPAT.md and the project", p.ID, p.Expect.Compat)
+					t.Errorf("XPASS: %s is expected to fail (COMPAT.md #%s) but passed: update COMPAT.md and the project", p.ID, p.ExpectIn("dev").Compat)
 				default:
 					t.Errorf("FAIL: %s", r.Detail)
 				}
@@ -216,15 +216,16 @@ func runDev(pr *Prepared, tw, state string) Result {
 		d.stop()
 	}
 	defer d.stop()
-	if p.Expect.Kind == ExpectRefused {
+	ex := p.ExpectIn("dev")
+	if ex.Kind == ExpectRefused {
 		// It must not start, and the error must name the surface.
 		if err == nil {
 			r.Outcome, r.Detail = "XPASS", "tw dev started it"
 			return r
 		}
 		msg := errorLines(strings.Join(d.lines(), "\n") + "\n" + d.errb.String())
-		if !strings.Contains(strings.ToLower(msg), strings.ToLower(p.Expect.Error)) {
-			return fail("tw dev didn't start it, but its error doesn't mention %q: %v", p.Expect.Error, err)
+		if !strings.Contains(strings.ToLower(msg), strings.ToLower(ex.Error)) {
+			return fail("tw dev didn't start it, but its error doesn't mention %q: %v", ex.Error, err)
 		}
 		r.Outcome, r.Detail = "XFAIL", "refused as expected: "+tail(msg, 400)
 		return r
@@ -249,10 +250,10 @@ func runDev(pr *Prepared, tw, state string) Result {
 	perr := p.Probe(run)
 	r.ProbeMS, r.Steps = time.Since(t1).Milliseconds(), run.Steps
 	switch {
-	case p.Expect.Kind == ExpectProbeFail && perr == nil:
+	case ex.Kind == ExpectProbeFail && perr == nil:
 		r.Outcome, r.Detail = "XPASS", "probe passed"
-	case p.Expect.Kind == ExpectProbeFail:
-		r.Outcome, r.Detail = "XFAIL", "failed as expected ("+p.Expect.Why+"): "+tail(perr.Error(), 300)
+	case ex.Kind == ExpectProbeFail:
+		r.Outcome, r.Detail = "XFAIL", "failed as expected ("+ex.Why+"): "+tail(perr.Error(), 300)
 	case perr != nil:
 		ls := d.lines()
 		r.Steps = append(r.Steps, "tw dev output (tail): "+tail(strings.Join(ls[max(0, len(ls)-40):], "\n"), 3000))
