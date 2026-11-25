@@ -167,7 +167,7 @@ func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
 var pages = []string{
 	"/ui/",
 	"/ui/objects",
-	"/ui/objects?tenant=tn_1&workload=w&status=ready&tag=a&caller=ross&page=2",
+	"/ui/objects?tenant=tn_1&workload=w&status=ready&tag=a&human=ross&page=2",
 	"/ui/approvals",
 	"/ui/approvals?tenant=tn_1&all=1",
 	"/ui/audit?tenant=tn_1&kind=kill&workload=w&cursor=c1",

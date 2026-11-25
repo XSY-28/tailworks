@@ -35,7 +35,7 @@ func TestObjectsSearch(t *testing.T) {
 	}
 	api.routes["GET /v1/objects"] = pageOf(objs...)
 	h := serve(t, api)
-	body := get(t, h, "/ui/objects?tenant=tn_1&workload=w&status=ready&tag=b&caller=ROSS").Body.String()
+	body := get(t, h, "/ui/objects?tenant=tn_1&workload=w&status=ready&tag=b&human=ROSS").Body.String()
 	if !api.called("state=ready") || !api.called("workload=w") || !api.called("tenant=tn_1") {
 		t.Fatalf("server-side filters not sent: %v", api.calls)
 	}
@@ -46,9 +46,18 @@ func TestObjectsSearch(t *testing.T) {
 	if i, j := strings.Index(body, "host-119"), strings.Index(body, "host-117"); i < 0 || j < 0 || i > j {
 		t.Fatalf("not newest first")
 	}
-	body = get(t, h, "/ui/objects?tenant=tn_1&workload=w&status=ready&tag=b&caller=ROSS&page=2").Body.String()
+	body = get(t, h, "/ui/objects?tenant=tn_1&workload=w&status=ready&tag=b&human=ROSS&page=2").Body.String()
 	if !strings.Contains(body, "Showing 51–60 of 60") || !strings.Contains(body, "← Newer") || strings.Contains(body, "Older →") || !strings.Contains(body, "host-001") {
 		t.Fatalf("page 2: %s", body)
+	}
+	// The acting-for filter's key is human, as on /ui/audit and in the API;
+	// the paging links carry it.
+	if !strings.Contains(body, "human=ROSS") || !strings.Contains(body, `name="human" value="ROSS"`) {
+		t.Fatalf("human filter not kept: %s", body)
+	}
+	// caller, its name before issue #449, still filters.
+	if body = get(t, h, "/ui/objects?caller=nobody").Body.String(); !strings.Contains(body, `<span class="count">0</span>`) || !strings.Contains(body, `value="nobody"`) {
+		t.Fatalf("legacy caller key: %s", body)
 	}
 }
 
