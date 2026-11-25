@@ -144,6 +144,13 @@ The format:
 
 The templates' `.gitignore` lists `.dev.vars`.
 
+To have [`tw types`](wrangler.md#types-tw-types) declare a secret's name
+on every machine, commit a `.dev.vars.example` with the same names and
+placeholder values only, never real secrets, or list the names under the
+wrangler config's `secrets.required`. `tw types` reads names only from
+these local files, not from mgmt; `tw secret ls --json` lists the secrets
+a deployed workload has.
+
 ## Where values live
 
 - **At rest:** mgmt's custody, one sealed entry per workload

@@ -35,10 +35,9 @@ type Options struct {
 	KillTombstone  time.Duration
 	HeartbeatEvery time.Duration
 	Verbose        bool
-	// VM, DefaultTier and VMDebug are passed to hostd (microVM tier).
-	VM          sandbox.Backend
-	DefaultTier string
-	VMDebug     bool
+	// VM and VMDebug are passed to hostd (microVM tier).
+	VM      sandbox.Backend
+	VMDebug bool
 	// Sandbox is hostd's process-tier sandbox ("" = none unless
 	// $TW_TEST_SANDBOX is set, "auto", "seatbelt", "landlock", "none").
 	Sandbox string
@@ -203,7 +202,7 @@ func hostConfig(o Options, dir, wd string, log *slog.Logger, hc *mgmtapi.Client)
 		HostID: "h1", Mgmt: hc, DataDir: filepath.Join(dir, "data"), RunDir: filepath.Join(dir, "run"),
 		WorkerdBin: wd, HeartbeatEvery: o.HeartbeatEvery, Ephemeral: o.Ephemeral, ControlURL: o.ControlURL,
 		KillTombstone: o.KillTombstone, HostnamePrefix: o.HostnamePrefix, Logger: log,
-		VM: o.VM, DefaultTier: o.DefaultTier, VMDebug: o.VMDebug, Sandbox: testSandbox(o.Sandbox), InsecureSharedHost: o.InsecureSharedHost, HostSockets: o.HostSockets, AllowSiblingEgress: o.AllowSiblingEgress,
+		VM: o.VM, VMDebug: o.VMDebug, Sandbox: testSandbox(o.Sandbox), InsecureSharedHost: o.InsecureSharedHost, HostSockets: o.HostSockets, AllowSiblingEgress: o.AllowSiblingEgress,
 		Containers: o.Containers, Images: o.Images, ContainerIdle: o.ContainerIdle, ContainerGrace: o.ContainerGrace,
 		ContainerCapacity: o.ContainerCapacity, ContainerQuota: o.ContainerQuota, ContainerMaxLife: o.ContainerMaxLife,
 		ContainerInternet: o.ContainerInternet, FenceAfter: o.FenceAfter, WorkerInternet: o.WorkerInternet,

@@ -148,9 +148,6 @@ type Config struct {
 	// (default: mgmt's /v1/container-reservations through Mgmt; tests: a
 	// fake).
 	ContainerQuota ContainerQuota
-	// DefaultTier applies when neither the deployment (tailworks.jsonc "tier")
-	// nor the tenant names one. Default "process".
-	DefaultTier string
 	// VMDebug enables guest diagnostics (connectivity probes; tests).
 	VMDebug bool
 	// VMVolumeMiB sizes new DO volumes (microVM tier; sparse; default 1024).
@@ -455,9 +452,6 @@ func New(cfg Config) (*Host, error) {
 	}
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.DiscardHandler)
-	}
-	if cfg.DefaultTier == "microvm" && cfg.VM == nil && !cfg.ForceProcessTier {
-		return nil, errors.New("hostd: default tier microvm needs a microVM backend (Linux + KVM + tw-vmhelper: `sudo tw host setup --microvm`); without one, use -default-tier process")
 	}
 	sb, err := ResolveSandbox(cfg.Sandbox)
 	if err != nil {

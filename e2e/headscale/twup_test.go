@@ -101,7 +101,7 @@ func testTwUp(t *testing.T, extra []string) {
 	}
 
 	app := filepath.Join(e.WorkDir, "hello")
-	e.MustJSON(nil, "init", app, "--template", "hello", "--keep-tags")
+	e.MustJSON(nil, "init", app, "--template", "hello")
 	editFile(t, filepath.Join(app, "tailworks.jsonc"), func(s string) string {
 		return strings.Replace(s, `"connects": ["tag:db"]`, `"connects": []`, 1)
 	})
@@ -144,7 +144,7 @@ func testTwUp(t *testing.T, extra []string) {
 
 	// tailnet.service needs Tailscale Services.
 	svc := filepath.Join(e.WorkDir, "svc")
-	e.MustJSON(nil, "init", svc, "--template", "hello", "--keep-tags")
+	e.MustJSON(nil, "init", svc, "--template", "hello")
 	editFile(t, filepath.Join(svc, "tailworks.jsonc"), func(s string) string {
 		s = strings.Replace(s, `"connects": ["tag:db"]`, `"connects": []`, 1)
 		return strings.Replace(s, `"tailnet": {`, `"tailnet": { "service": true,`, 1)
