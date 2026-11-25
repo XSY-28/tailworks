@@ -109,7 +109,7 @@ func cmdUp(args []string) error {
 	tailnet := f.String("tailnet", "", "the tailnet to serve (oauth: read from the client's devices or mgmt's node; headscale: required, the dns.base_domain). Overrides discovery")
 	oauthFile := f.String("oauth-client-file", "", "mint mode \"oauth\" (Tailscale): file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (an OAuth client with Auth Keys write, tag tag:tw; tightened to 0600). Default on the default state dir: ~/.config/tailworks/oauth.env, asked for and saved on the first tw up")
 	keyFile := f.String("api-key-file", "", "--control=headscale only: 0600 file with HEADSCALE_API_KEY=… (read at use, never copied). Tailscale API keys are not a mint mode: use --oauth-client-file")
-	yes := yesFlagBefore(f, "--apply-policy writes the policy (tw up asks nothing else)")
+	yes := yesFlagBefore(f, "--apply-policy writes the policy")
 	apply := f.Bool("apply-policy", false, "write the tagOwners and grants tailworks needs to the tailnet policy instead of printing them (additive, validated first, written with If-Match); tw up shows the lines and asks first (--yes to skip). Tailscale: the OAuth client needs Policy File write. Headscale: needs policy.mode database")
 	control := f.String("control-url", prodControl, "coordination server for the tailnet's nodes")
 	profileF := f.String("control", controlTailscale, "control-plane profile: tailscale, or headscale (ADR-015: a Headscale server, tw up --control=headscale --control-url <url> --tailnet <base_domain> --api-key-file <file>; the file holds HEADSCALE_API_KEY=…, --tailnet is its dns.base_domain; docs/headscale.md)")
