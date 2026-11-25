@@ -28,3 +28,15 @@ whether or not tailworks.jsonc exists.
 ## Tests
 
 See the PR body.
+
+- `make lint`: ok (after merging origin/master).
+- `make test` (mbp): all ok except `hostd TestContainerFenceInheritance`
+  (timing: fenced container stopped 4.5 s after the partition, under
+  load); passes on a local rerun. hostd is unchanged on this branch.
+- `make test-sdk`, `make e2e-upgrade` (new unlisted-class storage case),
+  `make e2e-wrangler`: pass.
+- `make e2e-compat` with `TW_COMPAT_ONLY` on the DO projects
+  (hello-world-do, durable-chat, workflows-starter, mcp-agent,
+  ag-github-webhook, ag-workflows, ag-mcp-elicitation): pass (elicitation
+  XPASSed, see above); then ag-cross-domain + ag-mcp-elicitation under
+  `make e2e-compat-dev` and `make e2e-compat`: pass.
