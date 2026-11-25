@@ -78,7 +78,7 @@ func TestSubcommandHelp(t *testing.T) {
 		t.Fatalf("tw d1 --help: exit %d", code)
 	}
 	for _, want := range []string{
-		"\n  tw d1 execute <db> --command <sql> | --file <file>\n",
+		"\n  tw d1 execute <db> [--command <sql> | --file <file>]\n",
 		"\n  tw d1 migrations apply <db>\n  common flags: [--workload <workload>] [--tenant <tailnet>]\n",
 	} {
 		if !strings.Contains(so.String(), want) {
