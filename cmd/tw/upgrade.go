@@ -50,7 +50,7 @@ func cmdUpgrade(args []string) error {
 	f := newFlags("upgrade")
 	from := f.String("from", "", "install this release tarball (tw-<v>-<os>-<arch>.tar.gz, with SHA256SUMS next to it) or extracted release directory instead of downloading")
 	planOnly := f.Bool("plan", false, "print the plan and change nothing")
-	yes := f.Bool("yes", false, "don't ask for confirmation")
+	yes := yesFlagBefore(f, "upgrading")
 	fleet := f.Bool("fleet", false, "upgrade the fleet through tw-mgmt (an upgrade run) even on a tw up machine")
 	hosts := f.String("hosts", "", "fleet: only these hosts (comma-separated)")
 	canary := f.String("canary", "", "fleet: the canary host (default: the first)")
