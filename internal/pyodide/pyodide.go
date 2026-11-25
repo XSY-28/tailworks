@@ -19,6 +19,7 @@ package pyodide
 import (
 	"context"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -26,6 +27,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -40,13 +43,36 @@ type Bundle struct {
 	Size   int64
 }
 
-// Bundles are the bundles workerd 1.20261121.1 asks for (one per line,
-// oldest first).
-var Bundles = []Bundle{
-	{File: "pyodide_0.26.0a2_2024-03-01_91.capnp.bin", SHA256: "37273cc289599d7fc4cd2eb352e50d33c70fd5f02e391d02e05d2957ea4afc83", Size: 22473136},
-	{File: "pyodide_0.28.2_2025-01-16_22.capnp.bin", SHA256: "ad0dafa91dd0e98f845ccd6298d92b969e6cc208b9648170b596fab7bbe9c8da", Size: 17501408},
-	{File: "pyodide_314.0.6_2026-08-17_12.capnp.bin", SHA256: "b95469bc5c223ce884686e4fb0547a3a909a0513706f5c1dc659717550284a04", Size: 13717056},
+//go:embed bundles.txt
+var bundlesTxt string
+
+// Bundles are the bundles the pinned workerd asks for (bundles.txt, which
+// guest/build-image.sh reads too), oldest first.
+var Bundles = parseBundles(bundlesTxt)
+
+// parseBundles reads bundles.txt: "<file> <sha256> <size>" per line, # comments.
+func parseBundles(s string) []Bundle {
+	var out []Bundle
+	for _, l := range strings.Split(s, "\n") {
+		f := strings.Fields(l)
+		if len(f) == 0 || strings.HasPrefix(f[0], "#") {
+			continue
+		}
+		if len(f) != 3 {
+			panic("pyodide: bad bundles.txt line: " + l)
+		}
+		n, err := strconv.ParseInt(f[2], 10, 64)
+		if err != nil {
+			panic("pyodide: bad bundles.txt size: " + l)
+		}
+		out = append(out, Bundle{File: f[0], SHA256: f[1], Size: n})
+	}
+	return out
 }
+
+// GuestDir is where the microVM guest image carries the bundles
+// (guest/build-image.sh), read-only.
+const GuestDir = "/usr/share/tailworks/pyodide"
 
 // Missing returns the pinned bundles not in dir (by name and size; Ensure
 // checks the digest when it writes one).

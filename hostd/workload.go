@@ -545,9 +545,6 @@ func (h *Host) tierFor(app *bundle.App, t *tenant) (string, error) {
 		h.log.Info("microvm tier requested; running it in the process tier (ForceProcessTier: explicit local development)", "app", app.Name)
 		return bundle.TierProcess, nil
 	}
-	if app.Python {
-		return "", errPythonMicroVM(app.Name) // pyodide.go
-	}
 	if h.cfg.VM == nil {
 		return "", errTierUnavailable(app.Name)
 	}
@@ -572,7 +569,7 @@ func (h *Host) startInstance(w *workload, depID string, app *bundle.App, tier st
 		return h.startNodeInstance(w, depID, app, n)
 	}
 	dir := h.instanceDir(n)
-	pyDir, err := h.pyodideFor(app) // pyodide.go
+	pyDir, err := h.pyodideFor(app, tier) // pyodide.go
 	if err != nil {
 		return nil, err
 	}
@@ -675,7 +672,7 @@ func (h *Host) startInstance(w *workload, depID string, app *bundle.App, tier st
 		inst.spec = sandbox.Spec{
 			ID:          fmt.Sprintf("i%d", n),
 			AppDir:      dir,
-			WorkerdArgs: []string{"serve", "config.capnp", "--experimental"},
+			WorkerdArgs: append([]string{"serve", "config.capnp", "--experimental"}, guestPyodideArgs(app)...), // pyodide.go
 			HealthCF:    string(hc),
 			Debug:       h.cfg.VMDebug,
 			Volume:      vol,

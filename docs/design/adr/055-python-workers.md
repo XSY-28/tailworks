@@ -4,6 +4,8 @@
 **Status:** Accepted (2026-11-24; built on branch `python-support-292`; drafted as `ADR-python-workers`;
 issue #292). Amended 2026-11-24 (branch `python-cron-queues-assets`):
 cron triggers, Queues and static assets work for Python (decision 8).
+Amended 2026-11-24 (branch `python-microvm`): Python Workers run on the
+microVM tier (decision 9).
 
 ## Context
 
@@ -109,7 +111,8 @@ cron triggers, Queues and static assets work for Python (decision 8).
    is refused by hostd with `tier_unavailable`, never run in the process
    tier instead (ADR-032 D5b). `--wrangler` / `--from-wrangler-out` are
    refused for Python. esbuild's "no loader" message no longer appears.
-   (Amended by decision 8: crons, Queues and assets are no longer refused.)
+   (Amended by decision 8: crons, Queues and assets are no longer refused;
+   by decision 9: the microVM tier is no longer refused.)
 8. **Cron triggers, Queues and static assets go through the front.**
    hostd delivers a cron run and a queue batch to the tenant's default
    export, which for a Python app is the front, so the wrapper still
@@ -124,6 +127,21 @@ cron triggers, Queues and static assets work for Python (decision 8).
    router (ADR-050) wraps the front's default export unchanged, and
    `tenant-py` gets `env.<assets.binding>`, the router without props, as a
    JavaScript tenant does.
+9. **The microVM guest image carries the pinned bundles.** The pins move
+   to `internal/pyodide/bundles.txt`, read by the Go package and by
+   `guest/build-image.sh`, which fetches each one (sha256-checked, like
+   every guest input) into `/usr/share/tailworks/pyodide` on the image's
+   read-only root, and lists them in `manifest.json`. On the microVM tier
+   hostd fetches nothing and passes the guest workerd
+   `--pyodide-bundle-disk-cache-dir /usr/share/tailworks/pyodide` with the
+   app's load (`WorkerdArgs`), so warm-pool VMs and snapshot restores, which
+   start workerd before an app is assigned, are unchanged. The image grows
+   by the bundles (about 53 MB) for every microVM host, Python or not: a
+   second, optional disk would save that, at the cost of a new drive on
+   both VM backends; not worth it at this size. Measured on the vz backend:
+   a Python Worker's VM is active about 4 s after the deploy, and its first
+   request takes about 50 ms; workerd with one Python Worker and one object
+   is about 250 MiB, inside the default 512 MiB guest.
 
 ## Consequences
 
@@ -139,8 +157,7 @@ cron triggers, Queues and static assets work for Python (decision 8).
   53 MB together) once.
 - Python Durable Objects can't have their own tailnet identity, egress or
   public routes until the per-object wrapper can wrap them; that is the
-  main follow-up, with Workflows and the microVM tier (bake the bundles into the guest image, pass the flag in
-  `WorkerdArgs`).
+  main follow-up, with Workflows.
 
 ## Alternatives considered
 

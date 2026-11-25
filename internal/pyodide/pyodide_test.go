@@ -72,3 +72,9 @@ func TestEnsure(t *testing.T) {
 		t.Fatal("a bundle with the wrong digest was kept")
 	}
 }
+
+func TestParseBundles(t *testing.T) {
+	if len(Bundles) != 3 || Bundles[1].File != "pyodide_0.28.2_2025-01-16_22.capnp.bin" || Bundles[1].Size != 17501408 || len(Bundles[1].SHA256) != 64 {
+		t.Fatalf("bundles.txt: %+v", Bundles)
+	}
+}

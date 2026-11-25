@@ -108,43 +108,6 @@ func TestPythonWorkerSandboxed(t *testing.T) {
 	}
 }
 
-// TestPythonMicroVMRefused: a Python Worker that resolves to the microVM
-// tier (the tenant's default) is refused, not run in the process tier.
-func TestPythonMicroVMRefused(t *testing.T) {
-	t.Parallel()
-	if testing.Short() {
-		t.Skip("short")
-	}
-	ctl, err := nettest.StartControl()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(ctl.Close)
-	e := hostdtest.Start(t, hostdtest.Options{Fake: fakemgmt.Config{StaticKey: nettest.DummyKey}, Ephemeral: true,
-		PyodideDir: t.TempDir(),
-		Tenant:     mgmtapi.Tenant{Tailnet: "a.ts.net", ControlURL: ctl.URL, MintMode: "static", Tier: "microvm"}})
-	e.DeployFiles(pythonBundle(), "py")
-	deadline := time.Now().Add(30 * time.Second)
-	for time.Now().Before(deadline) {
-		for _, w := range e.Host.Status().Workloads {
-			if w.Workload != "py" {
-				continue
-			}
-			if w.Status == "active" {
-				t.Fatal("a Python Worker ran although its tier is microvm")
-			}
-			if w.Status == "failed" {
-				if !strings.HasPrefix(w.Error, "tier_unavailable:") || !strings.Contains(w.Error, "Python Workers run on the process tier") {
-					t.Fatalf("failed for another reason: %s", w.Error)
-				}
-				return
-			}
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatal("the deployment neither failed nor ran")
-}
-
 const pyQueueEntry = `from workers import WorkerEntrypoint, Response, DurableObject
 import json
 
