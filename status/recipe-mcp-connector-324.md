@@ -39,6 +39,10 @@ tokens from tsidp, everything else tailnet-only.
   three files over that app: `tw types`, `tsc --noEmit` ok; `tw dev`:
   metadata served at both RFC 9728 paths, `whoami` answers `via: tailnet`.
 
+- After merging origin/master: `make lint` ok; `make test` (on mbp) ok;
+  `make lint-docs test-docs` ok; `make templates-typecheck` ok (all
+  templates); `make test-sdk` ok.
+
 ## Not verified
 
 - The real flow (tsidp over Funnel, claude.ai / ChatGPT connector, workload
