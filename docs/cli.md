@@ -66,8 +66,6 @@ Layout and identity:
     	prefix for every object node hostname (default "tw-")
   -mgmt-hostname string
     	mgmt's own tailnet node name (default tw-mgmt)
-  -push-port int
-    	port on this host's own tailnet node where mgmt pushes kills (--separate-host) (default 7474)
   -separate-host
     	run tw-hostd as its own process on its own tag:tw-host tailnet node (the scale-out layout; default: ONE process, the host agent embedded in tw-mgmt, mgmt's node the only infrastructure device). --local-dev implies it
 
@@ -80,12 +78,6 @@ Isolation and egress:
     	how Workers' fetch() reaches internet hosts, subject to each workload's tailnet.egress.internet: direct (this host's network, public addresses only), exit-node=<node>[,dns=<ip[:port]>] (through that tailnet exit node, via this host's own node) or off (default "direct")
 
 Tuning:
-  -device-delete-delay duration
-    	delete a killed object's device this long after the kill (< --kill-tombstone) (default 8s)
-  -heartbeat duration
-    	host heartbeat period (default 1s)
-  -kill-tombstone duration
-    	keep a killed node answering object_killed this long (default 12s)
   -pool-nodes int
     	pre-joined nodes kept per hot class (a create here in the last hour), so a new object is renamed onto one (~0.2 s) instead of joining a new node; each is a device (0 = off) (default 1)
   -port-mapping
@@ -100,6 +92,7 @@ Development and testing:
     	workerd binary (default: $TW_WORKERD, the install's, or PATH)
 
 also accepted, for the test harness: --allow-sibling-egress --local-dev --tsapi-url
+also accepted, deprecated and ignored: --device-delete-delay --heartbeat --kill-tombstone --push-port
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 ```
 

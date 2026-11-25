@@ -36,7 +36,7 @@ process), not on the machine's own interfaces, except the loopback proxy.
 |---|---|---|
 | mgmt's node `tw-mgmt` (`tag:tw-mgmt`) | `tcp:80`, and `tcp:443` when the tailnet has HTTPS certificates | the `/v1` API and the admin console (`/ui`), authorized by WhoIs |
 | `tw-mgmt` | `tcp:9464` | Prometheus `/metrics` (mgmt's, and the embedded host's in the default layout); `tw-mgmt -metrics-port 0` turns it off ([observability.md](observability.md#metrics-get-metrics)) |
-| a host node `tw-host-<id>` (`tag:tw-host`), only with `--separate-host` or a host added with `tw host add` | `tcp:7474` | mgmt pushes kills to the host (`tw up --push-port`) |
+| a host node `tw-host-<id>` (`tag:tw-host`), only with `--separate-host` or a host added with `tw host add` | `tcp:7474` | mgmt pushes kills to the host |
 | a host node | `tcp:9464` | the host's `/metrics` |
 | each workload and object node | `tcp:80` | your app, behind netd's WhoIs and header stripping |
 | a workload node with [public routes](public-ingress.md) | `tcp:443` over Funnel | the paths you opted in, and nothing else |
