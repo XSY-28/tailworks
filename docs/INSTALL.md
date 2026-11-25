@@ -415,9 +415,23 @@ Day 2: `tw ls`, `tw logs support`, `tw kill <object>`,
 #### A second tenant (another tailnet) on the same Mac
 
 ```sh
-tw tenant add <other-tailnet>.ts.net --oauth-client-file ~/.config/tailworks/other-oauth.env   # that tailnet's own OAuth client
+tw tenant add <other-tailnet>.ts.net           # asks for that tailnet's own OAuth client secret
 tw deploy --tenant <other-tailnet>.ts.net      # also: ls, kill, audit, logs --tenant
 tw tenant ls
+```
+
+Like the first `tw up`, `tw tenant add` asks for the OAuth client secret on
+a terminal and saves it to `~/.config/tailworks/tn_<other-tailnet>-oauth.env`
+(0600), reusing that file next time. Create the client in the other
+tailnet's admin console as for `tw up` (Auth Keys write, tag `tag:tw`, and
+`tag:tw` in its `tagOwners`). The tenant's tailnet needs nothing else in
+its policy: tailworks' own nodes stay on your tailnet, and `tw tenant add`
+writes nothing to the other tailnet's policy. In a script, or with `--json`
+or `--state-dir`, pass the file instead:
+
+```sh
+umask 077; printf 'TS_OAUTH_CLIENT_SECRET=tskey-client-…\n' > ~/.config/tailworks/other-oauth.env
+tw tenant add <other-tailnet>.ts.net --oauth-client-file ~/.config/tailworks/other-oauth.env
 ```
 
 Each tenant gets its own netd registry (its tailnet's control plane and

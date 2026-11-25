@@ -218,7 +218,7 @@ func cmdUp(args []string) error {
 		if p := defaultOAuthFile(); p != "" {
 			asked := false
 			if !fileExists(p) && !*f.json {
-				if asked, err = promptOAuthSecret(p, os.Stdout); err != nil {
+				if asked, err = promptOAuthSecret(p, os.Stdout, "tw up", ""); err != nil {
 					return err
 				}
 			}
