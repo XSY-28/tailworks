@@ -88,30 +88,33 @@ func (c *cluster) setClock(host string, d time.Duration) {
 	os.Rename(p+".w", p)
 }
 
-// workerdClock is how far the workload's Date.now() on dns is from ours.
-func (c *cluster) workerdClock(dns string) (time.Duration, error) {
-	var r struct{ Now int64 }
+// workerdClock is how far the workload's Date.now() on dns is from ours,
+// in the Worker and in a Durable Object.
+func (c *cluster) workerdClock(dns string) (worker, obj time.Duration, err error) {
+	var r struct{ Now, Obj int64 }
 	t0 := time.Now()
 	if _, err := getJSON(c.clocks.cli, "http://"+dns+"/clock", &r); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	mid := t0.Add(time.Since(t0) / 2)
-	return time.UnixMilli(r.Now).Sub(mid), nil
+	return time.UnixMilli(r.Now).Sub(mid), time.UnixMilli(r.Obj).Sub(mid), nil
 }
 
-// waitClock waits up to 10 s for the workload on dns to read our clock
-// plus want (±1.5 s), and returns what it read.
+// waitClock waits up to 10 s for the workload on dns (the Worker and a
+// Durable Object) to read our clock plus want (±1.5 s), and returns what
+// the Worker read.
 func (c *cluster) waitClock(dns string, want time.Duration) (time.Duration, error) {
-	var got time.Duration
+	var got, obj time.Duration
 	var err error
 	for i := 0; i < 20; i++ {
-		if got, err = c.workerdClock(dns); err == nil && (got-want).Abs() < 1500*time.Millisecond {
+		got, obj, err = c.workerdClock(dns)
+		if err == nil && (got-want).Abs() < 1500*time.Millisecond && (obj-want).Abs() < 1500*time.Millisecond {
 			return got, nil
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
 	if err == nil {
-		err = fmt.Errorf("workerd's clock is %v off, want %v", got.Round(time.Millisecond), want)
+		err = fmt.Errorf("workerd's clock is %v off (a Durable Object's %v), want %v", got.Round(time.Millisecond), obj.Round(time.Millisecond), want)
 	}
 	return got, err
 }

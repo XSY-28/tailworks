@@ -11,7 +11,7 @@
 //   GET /d1/all             → 200 {ids: [...]}
 //   GET /kv/put?k=&v=[&ttl=] → KV.put(k, v[, {expirationTtl}]); 200 {epoch}
 //   GET /kv/get?k=          → KV.get(k); 200 {v (null if missing), epoch}
-//   GET /clock              → 200 {now: Date.now()} (the skew fault's check)
+//   GET /clock              → 200 {now, obj}: Date.now() here and in the Reg DO (the skew check)
 //   /pulse/start?url=...    → Pulse DO: an egress call every 250 ms
 //   /locks/...              → the lock template
 import { DurableObject } from "cloudflare:workers";
@@ -50,8 +50,9 @@ export class Pulse extends DurableObject {
 export class Reg extends DurableObject {
   async fetch(req) {
     const u = new URL(req.url);
+    if (u.pathname.endsWith("/clock")) return Response.json({ now: Date.now() });
     const epoch = await epochOf(this.ctx);
-    let v = (await this.ctx.storage.get("v")) ?? 0;
+    let v =(await this.ctx.storage.get("v")) ?? 0;
     if (u.pathname.endsWith("/incr")) {
       v += 1;
       await this.ctx.storage.put("v", v);
@@ -94,7 +95,10 @@ export default {
         const v = await env.KV.get(u.searchParams.get("k"));
         return Response.json({ v, epoch: await epochOf(ctx) });
       }
-      if (p === "/clock") return Response.json({ now: Date.now() });
+      if (p === "/clock") {
+        const obj = await (await env.REG.getByName("r").fetch("http://dp/reg/clock")).json();
+        return Response.json({ now: Date.now(), obj: obj.now });
+      }
       if (p === "/d1/all") {
         const db = await d1(env);
         const { results } = await db.prepare("SELECT id FROM ops").all();

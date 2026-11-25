@@ -148,14 +148,23 @@ func checkKV(h *history) result {
 			p := ps[0]
 			// The host that wrote it stamped expiry on its own clock, and the
 			// host that reads it compares with its own: their offsets shift
-			// when it expires, in real time.
+			// when it expires, in real time. Once some holder saw it expire
+			// (and its alarm journaled the delete), a later step back doesn't
+			// bring it back: it must still be there only while no holder's
+			// clock, sampled by every KV op in between, had reached expiry.
 			adj := p.Off - g.Off
+			maxOff := max(p.Off, g.Off)
+			for _, o := range h.kvs {
+				if !o.Sent.Before(p.Sent) && !o.Sent.After(g.Recv) {
+					maxOff = max(maxOff, o.Off)
+				}
+			}
 			switch {
 			case g.V != 0 && g.Sent.After(p.Recv.Add(kvTTL+adj+slack)):
 				expiredSeen++
 				r.fail("expired key served: %s put at %s (on %s, clock %+v), read at %s (on %s, clock %+v), %.1fs after the put",
 					g.K, p.Recv.Format("15:04:05.000"), p.Host, p.Off, g.Sent.Format("15:04:05.000"), g.Host, g.Off, g.Sent.Sub(p.Recv).Seconds())
-			case g.V == 0 && g.Recv.Before(p.Sent.Add(kvTTL-time.Second+adj-slack)):
+			case g.V == 0 && g.Recv.Before(p.Sent.Add(kvTTL-time.Second+p.Off-maxOff-slack)):
 				lostTTL++
 				r.fail("acknowledged key missing before its expiry: %s put at %s (on %s, clock %+v), read at %s (on %s, clock %+v), %.1fs after the put",
 					g.K, p.Recv.Format("15:04:05.000"), p.Host, p.Off, g.Sent.Format("15:04:05.000"), g.Host, g.Off, g.Sent.Sub(p.Recv).Seconds())
