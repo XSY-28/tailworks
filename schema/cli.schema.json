@@ -1242,6 +1242,77 @@
         "timingsMs"
       ]
     },
+    "uninstall": {
+      "type": "object",
+      "description": "tw uninstall: the plan (with --dry-run) or what it did",
+      "properties": {
+        "stateDir": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "keepState": {
+          "type": "boolean"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "remove": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "skills": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "kept": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "manual": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "killed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "devicesDeleted": {
+          "type": "integer"
+        },
+        "done": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "stateDir",
+        "keepState",
+        "dryRun",
+        "steps",
+        "remove",
+        "skills",
+        "kept",
+        "manual",
+        "done"
+      ]
+    },
     "link": {
       "type": "object",
       "description": "tw link (with --unlink: unlinked is true)",
