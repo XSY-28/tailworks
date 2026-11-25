@@ -201,3 +201,35 @@ func TestDeployPolicyAskFirst(t *testing.T) {
 		t.Fatalf("y: %d policy writes", n)
 	}
 }
+
+// TestTenantPolicyAskFirst (issues #481, #475): on a terminal without the
+// flag, tw tenant add asks before writing a Headscale tenant's owner tag
+// ("n" leaves it to paste); a Tailscale tenant's policy is never written
+// and never asked about.
+func TestTenantPolicyAskFirst(t *testing.T) {
+	const pol = `{"tagOwners": {"tag:db": []}}`
+	e := newUpApplyEnv(t, pol)
+	policyAskTerminal(t, true, "n\n")
+	var res tenantAddResult
+	if err := tenantPolicy(context.Background(), newFlags("tenant add"), &res, e.c, []byte(pol), true, controlHeadscale, "tag:tw", false, false); err != nil || res.Applied || res.PolicyOK {
+		t.Fatalf("headscale, n: %v %+v", err, res)
+	}
+	if _, _, posts := e.now(); posts != 0 {
+		t.Fatalf("headscale, n: %d POST /acl", posts)
+	}
+	policyAskTerminal(t, true, "y\n")
+	res = tenantAddResult{}
+	if err := tenantPolicy(context.Background(), newFlags("tenant add"), &res, e.c, []byte(pol), true, controlHeadscale, "tag:tw", false, false); err != nil || !res.Applied {
+		t.Fatalf("headscale, y: %v %+v", err, res)
+	}
+
+	e = newUpApplyEnv(t, pol)
+	policyAskTerminal(t, true, "y\n")
+	res = tenantAddResult{}
+	if err := tenantPolicy(context.Background(), newFlags("tenant add"), &res, e.c, []byte(pol), true, controlTailscale, "tag:tw", false, false); err != nil || res.Applied {
+		t.Fatalf("tailscale: %v %+v", err, res)
+	}
+	if _, _, posts := e.now(); posts != 0 {
+		t.Fatalf("tailscale tenant: %d POST /acl", posts)
+	}
+}

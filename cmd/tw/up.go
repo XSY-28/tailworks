@@ -219,7 +219,7 @@ func cmdUp(args []string) error {
 		if p := defaultOAuthFile(); p != "" {
 			asked := false
 			if !fileExists(p) && !*f.json {
-				if asked, err = promptOAuthSecret(p, os.Stdout); err != nil {
+				if asked, err = promptOAuthSecret(p, os.Stdout, "tw up", ""); err != nil {
 					return err
 				}
 			}
@@ -1218,59 +1218,91 @@ func cmdDown(args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	if (*purge || s.Cfg.Ephemeral) && s.Cfg.TenantID != "" && s.mgmtHealthy(ctx) {
-		// No new objects from here on (no pool refill, no create from a
-		// request arriving meanwhile) and none in flight, so the list below
-		// is complete (hostd/teardown.go). An older hostd without the route
-		// answers 404: carry on as before.
-		s.hostd().Do(ctx, "POST", "/v1/teardown", nil, nil)
-		// Every tenant this host serves (each kill goes to its own tailnet).
-		var objs []mgmt.Object
-		for _, tn := range s.tenants() {
-			o, err := s.objectsOf(ctx, tn.TenantID)
-			if err == nil {
-				objs = append(objs, o...)
-			}
-		}
-		{
-			live := map[string]bool{}
-			for _, o := range objs {
-				if o.Status != "killed" && o.Status != "failed" && o.Status != "transferred" {
-					live[o.ID] = true
-				}
-			}
-			for _, o := range objs {
-				if !live[o.ID] || live[o.ParentID] {
-					continue // dead, or killed with its root (cascade)
-				}
-				var kr struct {
-					Killed []string `json:"killed"`
-				}
-				if err := s.mgmt().DoHeaders(ctx, "DELETE", "/v1/objects/"+o.ID+"?cascade=true&reason="+url.QueryEscape("tw down --purge"), nil,
-					&kr, map[string]string{"Tw-Actor": actor()}); err == nil {
-					res.Killed = append(res.Killed, kr.Killed...)
-				}
-			}
-		}
-		var fr struct {
-			Deleted []string `json:"deleted"`
-		}
-		s.mgmt().Do(ctx, "POST", "/v1/device-delete-runs", nil, &fr)
-		res.Flushed = len(fr.Deleted)
-		// Forget the killed objects (mgmt rows, hostd tombstones) so the
-		// same workload deploys again on this state dir.
-		for _, tn := range s.tenants() {
-			var pr mgmt.PurgeResult
-			if err := s.mgmt().Do(ctx, "DELETE", "/v1/tenants/"+tn.TenantID+"/objects", nil, &pr); err == nil {
-				res.Purged += len(pr.Purged)
-			}
-		}
-		s.hostd().Do(ctx, "POST", "/v1/purge", nil, nil)
+		downPurge(ctx, s, &res)
 		res.Timings["purge"] = ms(time.Since(t0))
 	}
+	if err := downStop(s, *service, &res, t0); err != nil {
+		return err
+	}
+	res.Timings["total"] = ms(time.Since(t0))
+	emit(f, res, func() {
+		if len(res.Killed) > 0 || res.Purged > 0 {
+			fmt.Printf("✓ purged   %d objects killed · %d devices deleted · %d killed objects forgotten\n", len(res.Killed), res.Flushed, res.Purged)
+		}
+		what := "tw-hostd, tw-mgmt"
+		if s.Cfg.single() {
+			what = "tw-mgmt with the embedded host"
+		}
+		fmt.Printf("✓ stopped  %s (%.1fs) · state kept in %s\n", what, res.Timings["total"]/1000, s.Dir)
+		if res.ServiceRemoved {
+			fmt.Println("✓ removed  " + serviceUnitPath() + " (disabled)")
+		} else if res.ServiceStopped {
+			fmt.Println("› service  " + serviceUnit + " stopped but still installed (starts at next login/boot); `tw down --service` removes it")
+		}
+	})
+	return nil
+}
+
+// downPurge is tw down --purge's first half (also tw uninstall's): kill
+// every live object of every tenant this host serves, delete their devices
+// and forget them. mgmt must be healthy.
+func downPurge(ctx context.Context, s *state, res *downResult) {
+	// No new objects from here on (no pool refill, no create from a
+	// request arriving meanwhile) and none in flight, so the list below
+	// is complete (hostd/teardown.go). An older hostd without the route
+	// answers 404: carry on as before.
+	s.hostd().Do(ctx, "POST", "/v1/teardown", nil, nil)
+	// Every tenant this host serves (each kill goes to its own tailnet).
+	var objs []mgmt.Object
+	for _, tn := range s.tenants() {
+		o, err := s.objectsOf(ctx, tn.TenantID)
+		if err == nil {
+			objs = append(objs, o...)
+		}
+	}
+	{
+		live := map[string]bool{}
+		for _, o := range objs {
+			if o.Status != "killed" && o.Status != "failed" && o.Status != "transferred" {
+				live[o.ID] = true
+			}
+		}
+		for _, o := range objs {
+			if !live[o.ID] || live[o.ParentID] {
+				continue // dead, or killed with its root (cascade)
+			}
+			var kr struct {
+				Killed []string `json:"killed"`
+			}
+			if err := s.mgmt().DoHeaders(ctx, "DELETE", "/v1/objects/"+o.ID+"?cascade=true&reason="+url.QueryEscape("tw down --purge"), nil,
+				&kr, map[string]string{"Tw-Actor": actor()}); err == nil {
+				res.Killed = append(res.Killed, kr.Killed...)
+			}
+		}
+	}
+	var fr struct {
+		Deleted []string `json:"deleted"`
+	}
+	s.mgmt().Do(ctx, "POST", "/v1/device-delete-runs", nil, &fr)
+	res.Flushed = len(fr.Deleted)
+	// Forget the killed objects (mgmt rows, hostd tombstones) so the
+	// same workload deploys again on this state dir.
+	for _, tn := range s.tenants() {
+		var pr mgmt.PurgeResult
+		if err := s.mgmt().Do(ctx, "DELETE", "/v1/tenants/"+tn.TenantID+"/objects", nil, &pr); err == nil {
+			res.Purged += len(pr.Purged)
+		}
+	}
+	s.hostd().Do(ctx, "POST", "/v1/purge", nil, nil)
+}
+
+// downStop stops the supervisor (through the service manager when one runs
+// it; service: also remove the service) and waits for it to exit.
+func downStop(s *state, service bool, res *downResult, t0 time.Time) error {
 	pid := s.supervisorPID()
 	inst, act := serviceOf(s) // never another state dir's service (e.g. the real ~/.tailworks while tests run)
 	switch {
-	case *service && inst:
+	case service && inst:
 		// disable --now stops it (the supervisor's own SIGTERM path) and
 		// keeps it from starting again at login/boot.
 		removed, err := removeService()
@@ -1296,22 +1328,6 @@ func cmdDown(args []string) error {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	res.Timings["total"] = ms(time.Since(t0))
-	emit(f, res, func() {
-		if len(res.Killed) > 0 || res.Purged > 0 {
-			fmt.Printf("✓ purged   %d objects killed · %d devices deleted · %d killed objects forgotten\n", len(res.Killed), res.Flushed, res.Purged)
-		}
-		what := "tw-hostd, tw-mgmt"
-		if s.Cfg.single() {
-			what = "tw-mgmt with the embedded host"
-		}
-		fmt.Printf("✓ stopped  %s (%.1fs) · state kept in %s\n", what, res.Timings["total"]/1000, s.Dir)
-		if res.ServiceRemoved {
-			fmt.Println("✓ removed  " + serviceUnitPath() + " (disabled)")
-		} else if res.ServiceStopped {
-			fmt.Println("› service  " + serviceUnit + " stopped but still installed (starts at next login/boot); `tw down --service` removes it")
-		}
-	})
 	return nil
 }
 

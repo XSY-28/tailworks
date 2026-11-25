@@ -2,8 +2,9 @@
 kind: feature
 upgrade: [protocol]
 ---
-On a terminal, plain `tw up`, `tw tenant add` and `tw deploy` now offer to
-write the tailnet policy lines tailworks needs: they show the lines and
+On a terminal, plain `tw up`, `tw deploy` and (for a Headscale tenant)
+`tw tenant add` now offer to write the tailnet policy lines tailworks
+needs (a Tailscale tenant's policy is still never written): they show the lines and
 ask `[y/N]`, as `--apply-policy` does. They ask only when the control
 plane would accept the write (an OAuth client with Policy File › Read is
 never asked). "n" goes on as before: `tw up` prints the lines (and still

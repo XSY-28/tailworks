@@ -52,11 +52,16 @@ func isDefaultStateDir(dir string, flagVal string) bool {
 // promptOAuthSecret asks for the OAuth client secret on a terminal and saves
 // it 0600 at path. The client ID is the secret's third segment, so the
 // secret alone is enough. ok is false when there is no terminal to ask on.
-func promptOAuthSecret(path string, out io.Writer) (ok bool, err error) {
+// cmd is the command asking ("tw up"); tailnet names the tailnet whose
+// client it needs ("" for the operator's own: "your tailnet").
+func promptOAuthSecret(path string, out io.Writer, cmd, tailnet string) (ok bool, err error) {
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return false, nil
 	}
-	fmt.Fprintln(out, "tw up needs a Tailscale OAuth client of your tailnet (its secret stays in a 0600 file on this machine). In the admin console:")
+	if tailnet == "" {
+		tailnet = "your tailnet"
+	}
+	fmt.Fprintln(out, cmd+" needs a Tailscale OAuth client of "+tailnet+" (its secret stays in a 0600 file on this machine). In the admin console:")
 	for _, s := range oauthConsoleSteps() { // oauth.go
 		fmt.Fprintln(out, "  "+s)
 	}
@@ -69,7 +74,7 @@ func promptOAuthSecret(path string, out io.Writer) (ok bool, err error) {
 	secret := strings.TrimSpace(string(b))
 	if !strings.HasPrefix(secret, tsapi.OAuthSecretPrefix) {
 		return true, fail("bad_request", "that is not an OAuth client secret (it starts with "+tsapi.OAuthSecretPrefix+")").
-			withFix("copy the Client Secret (not the Client ID) from the Trust credentials page, then tw up again")
+			withFix("copy the Client Secret (not the Client ID) from the Trust credentials page, then " + cmd + " again")
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return true, err

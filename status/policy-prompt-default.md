@@ -11,8 +11,10 @@ Last update: 2026-11-25 PT. Issue #481: prompt to write the policy by default on
   when the policy is readable and the control plane validates the merge;
   "n" or a refusal runs print-only tw up's check (`oauthNeededCheck`,
   split out of `oauthPreflight`).
-- `tw up` Headscale, the Headscale profile check, `tw tenant add`:
-  `bootstrapPolicyGate`. Headscale keeps its hard stop on "n".
+- `tw up` Headscale, the Headscale profile check, `tw tenant add` on a
+  Headscale tenant (`tenant_policy.go`, after merging #623: a Tailscale
+  tenant's policy is never written, #475): `bootstrapPolicyGate`.
+  Headscale keeps its hard stop on "n".
 - `tw deploy` (`deployAskPolicy`, one call in app.go): plan; ask only when
   mgmt's plan says `canWrite`; "n", a refused plan (tenant admin), a
   read-only client or a failed write falls back to `acl_denied`'s snippet.

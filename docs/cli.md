@@ -114,6 +114,28 @@ flags:
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
 ```
 
+### tw uninstall
+
+remove tailworks from this machine
+
+```text
+tw uninstall: remove tailworks from this machine in one go: kill every object and delete its device, stop tailworks and remove its service, delete mgmt's own node, remove the coding agents' skills, the install and the state dir (--keep-state keeps the state dir's data); it prints what it removes and asks first
+
+usage: tw uninstall [--keep-state] [--dry-run] [--yes] [--force]
+
+flags:
+  -dry-run
+    	print what it would do and delete, and change nothing
+  -force
+    	go on when tailworks is set up here but tw-mgmt isn't running or healthy (the objects' devices are then left: delete them in the admin console)
+  -keep-state
+    	keep the state dir's data (tw.json, mgmt/, hostd/, backups/, …): remove the install, service, devices and skills only
+  -yes
+    	skip the confirmation before deleting; needed without a terminal and with --json
+
+global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json
+```
+
 ### tw link
 
 use a remote tw-mgmt from this machine
@@ -1364,7 +1386,7 @@ serve, list, update or remove tenants
 tw tenant: serve another tenant (its own tailnet) from this host; list, update (PATCH) or remove tenants
 
 subcommands:
-  tw tenant add <tailnet> --oauth-client-file <file> [--apply-policy [--yes]] [--owner-tag <tag> --name-prefix <p>]
+  tw tenant add <tailnet> [--oauth-client-file <file>] [--apply-policy [--yes]] [--owner-tag <tag> --name-prefix <p>]
   tw tenant ls
   tw tenant set <tenant> [--<setting> <value>]…  (tw tenant set --help; docs/limits.md)
   tw tenant rm <tenant> [--force]
@@ -1380,7 +1402,7 @@ flags:
   -api-key-file string
     	--control=headscale only: 0600 file with HEADSCALE_API_KEY=…; read at use, never copied
   -apply-policy
-    	write the base policy snippet to the tailnet policy instead of printing it (additive, validated first, written with If-Match); shows the lines and asks first. Without the flag it asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes
+    	--control=headscale: write the owner tag's tagOwners entry ("tag:tw": []) when it is missing instead of printing it (additive, validated first, written with If-Match); shows the line and asks first. Without the flag it asks only on a terminal (not with --json or --yes); --apply-policy=false never asks or writes. A Tailscale tenant's policy is never written
   -control string
     	control-plane profile: tailscale, or headscale (ADR-015: a Headscale server at --control-url; the tailnet argument is its dns.base_domain) (default "tailscale")
   -control-url string
@@ -1388,11 +1410,9 @@ flags:
   -name-prefix string
     	with --owner-tag: goes in front of every tailnet name tw makes for this tenant (up to 11 of a-z, 0-9, -)
   -oauth-client-file string
-    	this tailnet's OAuth client (mint mode "oauth"): 0600 file with TS_OAUTH_CLIENT_ID=… and TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:tw); read at use, never copied
+    	this tailnet's OAuth client (mint mode "oauth"): 0600 file with TS_OAUTH_CLIENT_SECRET=tskey-client-… (Auth Keys write, tag tag:tw); read at use, never copied. Omitted on a terminal: asked for and saved to ~/.config/tailworks/<tenant>-oauth.env
   -owner-tag string
     	another team's tenant on a tailnet that already has one (docs/teams.md): the tag that owns its tags, e.g. tag:tw-t-payments; its --oauth-client-file must be scoped to it
-  -registrations-per-minute int
-    	this tenant's node registration throttle (default 200/min)
   -yes
     	skip the confirmation before --apply-policy writes the policy; needed without a terminal and with --json
 

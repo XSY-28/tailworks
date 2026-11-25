@@ -90,6 +90,11 @@ tw tenant add hs.example.net --control=headscale \
   --control-url https://headscale.example.net --api-key-file ~/.config/tailworks/headscale.env
 ```
 
+That tailnet's policy needs only `"tag:tw": []` in `tagOwners` (its nodes
+are workloads; tailworks' own nodes stay on the operator's tailnet).
+`tw tenant add` prints the line when it is missing, and `--apply-policy`
+writes it after asking.
+
 ## Deploy
 
 Deploying works as usual. Each tag in `tailworks.jsonc` must be in Headscale's
