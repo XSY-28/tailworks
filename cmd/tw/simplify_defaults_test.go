@@ -179,7 +179,7 @@ func TestAuditBareNewest(t *testing.T) {
 	}
 	// Human: the footer and the pointer to the complete, verified listing.
 	_, out, err := run("-n", "2")
-	if err != nil || !strings.Contains(out, "chain verified: 2 records") || !strings.Contains(out, "older records: tw audit --all") {
+	if err != nil || !strings.Contains(out, "2 records · chain verified\n") || !strings.Contains(out, "older records: tw audit --all") {
 		t.Fatalf("tw audit -n 2: %v\n%s", err, out)
 	}
 	// --all stays complete whatever -n says.

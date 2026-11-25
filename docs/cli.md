@@ -1049,10 +1049,10 @@ global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · -
 
 ### tw audit
 
-the hash-chained audit trail
+who did what, when and why
 
 ```text
-tw audit: show the hash-chained audit trail: the newest -n records, or every record of an object (and its descendants), a principal, a trace or the tenant (--all)
+tw audit: show who did what, when and why (the tamper-evident audit trail): the newest -n records, or every record of an object (and its descendants), a principal, a trace or the tenant (--all)
 
 usage: tw audit [-n 50] | <object> | --human <login> | --trace <id> | --all
 

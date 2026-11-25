@@ -496,8 +496,13 @@ func cmdAudit(args []string) error {
 			}
 			fmt.Printf("%s  %-13s %-34s %s%s\n", tsafe(ts), tsafe(kind), tsafe(orDash(l.Node)), tsafe(l.Text), tsafe(src))
 		}
+		// Verification speaks up only when it fails: a verified trail is
+		// one quiet line, plus any retention note (#406).
 		var cs []string
 		for _, c := range res.Chains {
+			if res.Verified && !(c.OK && c.PrunedThrough > 0) {
+				continue
+			}
 			st := "ok"
 			if !c.OK {
 				st = fmt.Sprintf("BROKEN at %d (%s)", c.BrokenAt, tsafe(c.Error))
@@ -509,11 +514,11 @@ func cmdAudit(args []string) error {
 			}
 			cs = append(cs, fmt.Sprintf("%s %s", tsafe(c.Chain), st))
 		}
-		v := "verified"
-		if !res.Verified {
-			v = "NOT VERIFIED"
+		if res.Verified {
+			fmt.Printf("%d records · chain verified%s\n", len(res.Lines), strings.Join(append([]string{""}, cs...), " · "))
+		} else {
+			fmt.Printf("chain NOT VERIFIED: %d records · %s\n", len(res.Lines), strings.Join(cs, " · "))
 		}
-		fmt.Printf("chain %s: %d records · %s\n", v, len(res.Lines), strings.Join(cs, " · "))
 		if res.Truncated {
 			fmt.Println("older records: tw audit --all (verifies every chain)")
 		}
