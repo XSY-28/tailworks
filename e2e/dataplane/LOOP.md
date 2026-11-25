@@ -86,8 +86,14 @@ sequence than on Linux. mgmt (SQLite) keeps the true clock.
 Workflows and approvals (#418) have their own test, workload and checkers
 (W1–W5): see [ledger/workflows.md](ledger/workflows.md).
 
-Not yet: multiple mgmt replicas on Postgres are covered by
-`e2e/multimgmt`. Joining that harness here is the next step.
+**mgmt replicas.** `TW_DP_MGMT=pg3` (or `pg2`) runs mgmt as replicas on a
+throwaway Postgres container (docker context `PG_CTX`, default `orbstack`),
+each behind its own fault proxy, with a shared fake setec: the pieces of
+`e2e/multimgmt`, from `e2e/internal/mgmtpg` and `e2e/chaoskit` (`mgmtpg_test.go`). The
+cluster's mgmt socket spreads connections over the running replicas, so
+hosts fail over when one dies; `restart-mgmt` then restarts one replica,
+and `pg-fault` blackholes, slows or resets one replica's path to Postgres.
+The deploys scenarios use `pg3` unless `TW_DP_MGMT` says otherwise.
 
 ## Workloads and the history
 
@@ -144,7 +150,7 @@ mgmt waits out the old host's lease. Four extra faults:
 
 | ID | Invariant |
 |---|---|
-| C1 | At most one run per (workload, trigger, scheduled minute), across all hosts. Notes, not failures: a rerun after hostd restarted under a clock step (#594), and a rerun on the host a workload moved to, with a clock step between (#600) |
+| C1 | At most one run per (workload, trigger, scheduled minute), across all hosts. Note, not failure: a rerun on the host a workload moved to, with a clock step between (#600). A rerun after hostd restarted under a clock step fails (#594, fixed) |
 | C2 | No two runs of one trigger overlap: no run reports anything more than 1 s after a later run of the trigger started |
 | C3 | No run starts on a host cut off from mgmt for more than `FenceAfter` (by `scheduledTime`), or on a host after the workload was seen active elsewhere (5 s for a live move). Every due minute runs, unless the trigger's previous run is in flight or the minute is in a fault window (+30 s) |
 | C4 | After a schedule change is active, a trigger only the old schedule has never fires, and a new one fires at its first matching minute |
@@ -159,6 +165,48 @@ Not yet: hosts whose clocks *differ* (each host its own offset). The
 harness gives every process the same environment, so the clock faults step
 every host together. #600 already shows the cross-host rerun.
 
+## Deploys (issue #421)
+
+`TW_DP_SCENARIO=deploys-hosts|deploys-mgmt|deploys-mixed` (`make
+e2e-dataplane-deploys`, nightly with the date as the seed) runs another
+workload, `testdata/deploys` (`dpd`): one Durable Object class, so the
+lease fences. Every answer to `GET /info` carries the epoch, the bundle's
+`BUILD` var, a random ID of the Durable Object copy, and the first 16 hex
+digits of the SHA-256 of each secret value, as both the Worker and the
+Durable Object see them. Values never leave the Worker; the history holds
+digests. State: `ledger/deploys.md`.
+
+- **Clients**, each one op at a time, mostly through its own replica:
+  three deployers (sticky deploys, rollbacks naming an earlier deployment
+  that ran, preview deploys with aliases `pa` and `pb`, promotions with and
+  without `keepPreview`), and two secret writers (SEC_A and SEC_B one writer
+  each, SEC_C both; puts and deletes; one writer also puts SEC_P on a
+  preview's own name, which no deployment may get). Every deploy uploads a
+  bundle of its own (`BUILD` = `b2.17`), so an answer names its deploy.
+- **Probes** ask every endpoint ever seen every 400 ms; a watcher lists
+  every workload's history every second.
+- **Faults** (`deploys_test.go`): `deploy-kill-host`, `deploy-pause-host`
+  and `deploy-cut` start a deploy and break its host 0–1.5 s later;
+  `deploy-pause-takeover` and `deploy-cut-takeover` also take over on
+  another host with a deploy or rollback `--force-takeover`; `deploy-move`
+  is a live `--replace --force-takeover` move with a new bundle;
+  `deploy-race` fires a deploy and a rollback through two replicas at
+  once; `deploy-kill-mgmt` SIGKILLs the replica serving a deploy 0–300 ms
+  after sending it; plus `kill-workerd`, `restart-mgmt` and `pg-fault`.
+  The `skew` fault (Linux) is not in the deploys mix yet (ledger H2).
+
+| ID | Invariant (`check_deploys_test.go`) |
+|---|---|
+| V1 | One active deployment per workload: once an epoch has answered, no older epoch answers a request sent after that, on any host (a live move is allowed 5 s) |
+| V2 | Epochs are unique and grow with creation per workload; each acknowledged deploy has its own; an epoch answers only from the host its deployment is on |
+| V3 | Every answer comes from a copy of a deployment created before that copy answered, running that deployment's bundle; once a newer copy answered on a host, no older copy there answers a later request. The previous copy answering at the new epoch while the new one starts is a reported handover |
+| V4 | Secrets: an answer holds no value overwritten or deleted (and acknowledged) before its deployment was created; Worker and Durable Object agree; SEC_P never appears; every `secret_release` audit went to the host holding that workload's epoch (previews: with `previewOf`); a redeploy after the last write sees the last acknowledged values; no value is in any log, audit record, or mgmt's store (`pg_dump`) |
+| V5 | History: records never vanish or change; a rollback's record names the deployment the client named and has its bundle; every acknowledged op is in the history and every record comes from an op; every record has its `deploy`/`rollback`/`promote` audit |
+| V6 | Convergence: after healing, each workload's newest deployment is active and serves its bundle at its epoch within 60 s |
+
+`TW_DP_REPLAY=<results dir> go test -tags e2edataplane -run
+TestReplayDeploys ./e2e/dataplane/` re-runs V1–V5 on a recorded run.
+
 ## R2 (`TestR2`, issue #420)
 
 The same cluster runs `testdata/r2` with the `fs` or an `s3` backend (a
@@ -168,6 +216,50 @@ and `r2-replicas`, with three more faults (`cut-s3`, `slow-s3`,
 three (nightly too); `TW_DP_SCENARIO=r2-s3` and the other `TW_DP_*`
 variables pick one, as above, with `-run TestR2`. The rig, the invariants
 and the results are in [ledger/r2.md](ledger/r2.md).
+
+## Routing (issue #422)
+
+`TestRouting` (`routing_test.go`, `check_routing_test.go`) runs the same
+cluster with three stateful workloads (`testdata/routing`): `rt-a` (public
+routes, and a service binding to B), `rt-b` (the binding's target, fetch
+and RPC) and `rt-ws` (a Durable Object echoing on hibernatable
+WebSockets). Every answer carries the answering copy's (host, epoch, ver).
+Its ledger is [ledger/routing.md](ledger/routing.md).
+
+```sh
+make e2e-dataplane-routing                       # routing, 4 min, today's seed
+TW_DP_SCENARIO=bindings TW_DP_SEED=3 make e2e-dataplane-routing
+TW_DP_REPLAY=<results dir> go test -tags e2edataplane -run TestRoutingReplay ./e2e/dataplane/
+```
+
+- **Clients:** a public client that drives netd's public listener directly
+  (`tw-hostd -test-public-listen-dir`, `-local-dev` only: each public node
+  listens on loopback and its conns are Funnel conns; Funnel itself is out
+  of scope), a tailnet caller `rt-cli` (A, B, the binding paths, the
+  WebSockets, probes of every endpoint and listener ever seen), and
+  `rt-rec`, which A tells about every `/gate` request before answering.
+- **Faults:** the table above's host faults, run against the host of one
+  of the scenario's workloads, plus `move` (of A, B or the DO workload),
+  `paths` (redeploy A with `/gate/*` added to or removed from its public
+  routes), `revoke-binding` (undeploy B, redeploy it 8–12 s later) and
+  `hibernate` (the WebSocket clients go quiet past the object's idle
+  eviction).
+- **Scenarios:** `public`, `bindings`, `websockets`, `routing` (all of
+  them). `TW_DP_WORKLOADS=rt-b` narrows which workloads the faults hit.
+- **Testcontrol names:** a background loop keeps MagicDNS names unique in
+  testcontrol, as real control does (mgmt's device deletes don't reach it,
+  and a node rejoining from saved state can come back as a new node).
+  Without it a binding call after a move back could reach a dead node.
+
+| ID | Invariant |
+|---|---|
+| N1 | No request (public, tailnet, binding, WebSocket) is answered by a copy past its fence: once a newer epoch of a workload has answered, an older one doesn't answer a request sent after that (live moves: 5 s). After B moves, binding calls reach its new copy within the 5 s cache TTL + 15 s of it answering directly |
+| N2 | A revoked binding (B undeployed) stops answering within the cache TTL (5 s) + 1 s |
+| N3 | B sees the calling A copy's node on every binding call (fetch and RPC) and `rt-cli` on direct calls; A sees `rt-cli` on tailnet requests and a public requester on public ones |
+| N4 | An unlisted public path never reaches workerd; a tailnet-only path over the public listener is always `404 not_public`; a route change applies within 10 s |
+| N5 | Per WebSocket: replies in order, no duplicates, none skipped (hibernation included); a message left unanswered has its connection closed within 45 s, or 15 s after its host's stall or cut ends |
+| N6 | Availability per path, reported; ≥ 90% outside fault windows (+60 s). Recovery time per path after each fault is in the notes |
+| N0 | Convergence: after healing, every workload active and every path answering within 60 s |
 
 ## Each iteration
 

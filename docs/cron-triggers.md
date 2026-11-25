@@ -69,7 +69,10 @@ Delivery is best effort. Like Cloudflare's, it is not exactly once.
   mgmt may have moved the workload, and the new host runs its triggers. So
   a partition doesn't run them twice. At worst it skips a few minutes.
 - **At most once per minute** per trigger. If the wall clock steps
-  backwards, minutes that already ran are not run again. If it steps
+  backwards, minutes that already ran are not run again, even across a
+  hostd restart: the host keeps the last minute it ran in its data dir. It
+  ignores a stored minute more than 15 minutes ahead of its clock, because
+  that means the clock was fast and has been corrected. If the clock steps
   forwards (or the host sleeps), the missed minutes are not backfilled;
   only the current minute runs.
 - **No overlap.** If a trigger's previous run is still going when it comes
@@ -99,10 +102,10 @@ new host's next run of that trigger can overlap it. A stateful workload's
 run stops with the fence. For a job that must never overlap, use a stateful
 workload or a [lock](locks.md).
 
-**Known gaps (#594, #600).** hostd remembers the last minute it ran in
-memory and per host. If the clock steps back and hostd restarts (#594), or
-the workload moves to a host whose clock is behind the old one's (#600), a
-minute that already ran can run again. Keep host clocks in sync (NTP), and
+**Known gap (#600).** hostd remembers the last minute it ran per host (in
+`<data-dir>/cron-last.json`, so a restart keeps it: #594). If the workload
+moves to a host whose clock is behind the old one's, a minute that already
+ran can run again. Keep host clocks in sync (NTP), and
 make a job idempotent per `controller.scheduledTime` if a rerun would hurt.
 
 These rules are tested at two levels. `hostd:TestCronDueOncePerMinute`,

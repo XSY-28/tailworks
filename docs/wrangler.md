@@ -529,6 +529,14 @@ const n = await env.ADMIN.countUsers();       // RPC to the Admin entrypoint
   promise pipelining, a request and response streaming at the same time
   (each streams on its own), and, in `tw dev`, a binding to another
   workload.
+- **When the target moves**, calls follow it: the target is resolved
+  again at most 5 s after its last lookup (sooner when its old node is
+  gone), plus the time to reach a new node. While a takeover is waiting
+  for the old host's lease to run out, calls fail or wait. Once the target
+  is undeployed (or killed), calls stop reaching it within those 5 s. The
+  caller the target sees is the calling copy's own node, across moves of
+  either side. The data-plane chaos loop checks all of this under faults
+  (`e2e/dataplane:TestRouting`, scenario `bindings`).
 
 `tw types` types each binding as `Fetcher`.
 

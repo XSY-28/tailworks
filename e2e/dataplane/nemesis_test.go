@@ -28,6 +28,9 @@ type nemesis struct {
 
 	// cron is the cron loop's rig (cron_test.go); nil in the dp scenarios.
 	cron *cronRig
+
+	// dep is the deploys loop (deploys_test.go), nil in other scenarios.
+	dep *deploysRun
 }
 
 func (n *nemesis) between(lo, hi time.Duration) time.Duration {
@@ -118,6 +121,15 @@ var faults = map[string]fault{
 		}
 		return fmt.Sprintf("old workerds %v; still alive 10 s after the restart: %v", old, alive)
 	}},
+	// The deploys loop's faults (deploys_test.go, issue #421).
+	"deploy-cut":            {"deploy-cut", faultDeployCut},
+	"deploy-cut-takeover":   {"deploy-cut-takeover", faultDeployCutTakeover},
+	"deploy-kill-host":      {"deploy-kill-host", faultDeployKillHost},
+	"deploy-kill-mgmt":      {"deploy-kill-mgmt", faultDeployKillMgmt},
+	"deploy-move":           {"deploy-move", faultDeployMove},
+	"deploy-pause-host":     {"deploy-pause-host", faultDeployPauseHost},
+	"deploy-pause-takeover": {"deploy-pause-takeover", faultDeployPauseTakeover},
+	"deploy-race":           {"deploy-race", faultDeployRace},
 	// SIGKILL workerd only; hostd restarts it.
 	"kill-workerd": {"kill-workerd", func(n *nemesis, h string) string {
 		k := n.c.killWorkerd(h)
@@ -172,11 +184,17 @@ var faults = map[string]fault{
 		}
 		return fmt.Sprintf("%s → %s epoch %d, %s", h, d.Host, d.Epoch, how)
 	}},
+	// One replica's path to Postgres blackholed, slowed or reset (mgmtpg_test.go).
+	"pg-fault": {"pg-fault", faultPG},
 	"redeploy": redeployFault, // workflows_test.go
 	// Redeploy the cron workloads with the other schedule (cron_test.go).
 	"reschedule": {"reschedule", cronReschedule},
-	// mgmt crashes (SIGKILL) or restarts (SIGTERM) and comes back.
+	// mgmt crashes (SIGKILL) or restarts (SIGTERM) and comes back; with
+	// replicas (TW_DP_MGMT=pg3), one of them.
 	"restart-mgmt": {"restart-mgmt", func(n *nemesis, h string) string {
+		if n.c.pg != nil {
+			return n.restartReplica()
+		}
 		crash := n.rnd.Intn(2) == 0
 		down := n.between(500*time.Millisecond, 5*time.Second)
 		n.c.stop("mgmt", crash)
@@ -203,9 +221,13 @@ func (n *nemesis) takeover(h string, fail, heal func()) string {
 }
 
 var scenarios = map[string][]string{
-	// Cron triggers and alarms (runCron, cron_test.go).
-	"alarms": {"kill-host", "kill-workerd", "pause-short", "pause-takeover", "pause-hostd-takeover", "cut-takeover", "move", "restart-mgmt"},
-	"cron":   {"clock-back", "clock-forward", "kill-host", "crash-hostd", "kill-workerd", "pause-boundary", "pause-takeover", "cut-short", "cut-takeover", "move", "reschedule", "restart-mgmt"},
+	// Redeploy the cron workloads with the other schedule (cron_test.go).
+	"reschedule": {"reschedule", cronReschedule},
+	// The deploys loop (deploys_test.go, issue #421).
+	"deploys-hosts": {"deploy-cut", "deploy-cut-takeover", "deploy-kill-host", "deploy-move", "deploy-pause-host", "deploy-pause-takeover", "deploy-race", "kill-workerd"},
+	"deploys-mgmt":  {"deploy-kill-mgmt", "deploy-race", "pg-fault", "restart-mgmt"},
+	"deploys-mixed": {"deploy-cut", "deploy-cut-takeover", "deploy-kill-host", "deploy-kill-mgmt", "deploy-move", "deploy-pause-host", "deploy-pause-takeover", "deploy-race", "kill-workerd", "pg-fault", "restart-mgmt"},
+
 	// R2 (TestR2, r2_test.go): fs and s3 backends, and two replicas on s3.
 	"r2-fs":       {"kill-host", "crash-hostd", "kill-mid-put", "cut-short", "cut-takeover", "pause-takeover", "move", "restart-mgmt"},
 	"r2-replicas": {"kill-host", "crash-hostd", "kill-workerd", "kill-mid-put", "cut-short", "cut-s3", "slow-s3", "restart-mgmt"},

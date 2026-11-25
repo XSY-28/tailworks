@@ -119,9 +119,9 @@ func staleHost(ch *cronHist, wl, host string, t time.Time, slack time.Duration) 
 	return true, cur, since
 }
 
-// moveSlack: a live move (--replace) or an in-place redeploy lets the old
+// cronMoveSlack: a live move (--replace) or an in-place redeploy lets the old
 // copy run until its next heartbeat (docs/locks.md "Failure modes").
-func moveSlack(faults []faultEv, t time.Time) time.Duration {
+func cronMoveSlack(faults []faultEv, t time.Time) time.Duration {
 	switch faultAt(faults, t) {
 	case "move", "reschedule":
 		return 5 * time.Second
@@ -210,16 +210,15 @@ func checkC1(ch *cronHist, runs []*cronRunInfo) result {
 		dups++
 		r.fail("%s", msg)
 	}
-	r.Summary = fmt.Sprintf("%d runs of %d (trigger, minute) pairs, %d run more than once, %d known (#594, #600: a clock step with a restart or a move)",
+	r.Summary = fmt.Sprintf("%d runs of %d (trigger, minute) pairs, %d run more than once, %d known (#600: a clock step with a move)",
 		len(runs), len(by), dups, known)
 	return r
 }
 
 // knownRerun names the open issue a rerun of one minute falls under, or "":
-// a clock step between the runs, and either one host whose hostd
-// restarted in between (#594: cronLast didn't survive a restart) or two
-// hosts (#600: cronLast is per host, so the host a workload moved to
-// doesn't know what the old one ran).
+// a clock step between the runs on two hosts (#600: cronLast is per host,
+// so the host a workload moved to doesn't know what the old one ran). A
+// rerun on one host after a restart was #594, fixed: it fails.
 func knownRerun(faults []faultEv, xs []*cronRunInfo) string {
 	first, last := xs[0].First, xs[0].First
 	oneHost := true
@@ -232,7 +231,7 @@ func knownRerun(faults []faultEv, xs []*cronRunInfo) string {
 			last = x.First
 		}
 	}
-	restarted, stepped := false, false
+	stepped := false
 	for _, f := range faults {
 		if f.End.Before(first) || f.Start.After(last) {
 			continue
@@ -240,17 +239,12 @@ func knownRerun(faults []faultEv, xs []*cronRunInfo) string {
 		if strings.HasPrefix(f.Kind, "clock-") {
 			stepped = true
 		}
-		if f.Host == xs[0].Host && (f.Kind == "kill-host" || f.Kind == "crash-hostd" || strings.Contains(f.Detail, "restarted")) {
-			restarted = true
-		}
 	}
 	switch {
 	case !stepped:
 		return ""
 	case !oneHost:
 		return "#600"
-	case restarted:
-		return "#594"
 	}
 	return ""
 }
@@ -317,7 +311,7 @@ func checkC3(ch *cronHist, runs []*cronRunInfo) result {
 		if lb := x.Start.Add(-reportDelay); lb.After(decided) {
 			decided = lb
 		}
-		if bad, cur, since := staleHost(ch, x.WL, x.Host, decided, moveSlack(faults, decided)); bad {
+		if bad, cur, since := staleHost(ch, x.WL, x.Host, decided, cronMoveSlack(faults, decided)); bad {
 			stale++
 			r.fail("started on a host that no longer runs it: %s, decided ≥ %s, %s active on %s since %s [fault %s]",
 				x, decided.Format("15:04:05.000"), x.WL, cur, since.Format("15:04:05.000"), faultAt(faults, decided))
@@ -440,7 +434,7 @@ func checkA1(ch *cronHist) result {
 		}
 		fires++
 		h := hostOf(a.Node)
-		if bad, cur, since := staleHost(ch, cronSF, h, a.At, moveSlack(faults, a.At)); bad {
+		if bad, cur, since := staleHost(ch, cronSF, h, a.At, cronMoveSlack(faults, a.At)); bad {
 			stale++
 			r.fail("%s/%s fired on %s at %s (chain %s seq %d), %s active on %s since %s [fault %s]", a.Cls, a.Name, h,
 				a.At.Format("15:04:05.000"), a.Chain, a.Seq, cronSF, cur, since.Format("15:04:05.000"), faultAt(faults, a.At))
@@ -492,7 +486,7 @@ func checkA1(ch *cronHist) result {
 				}
 			}
 		}
-		if bad, _, _ := staleHost(ch, cronSF, hostOf(a.Node), a.At, moveSlack(faults, a.At)); bad {
+		if bad, _, _ := staleHost(ch, cronSF, hostOf(a.Node), a.At, cronMoveSlack(faults, a.At)); bad {
 			continue // set by a copy that should have stopped: its fire is the stale one above
 		}
 		if deadline.After(ch.win.End) || moved(a.At.Add(-time.Second), deadline) || rearmed(a, deadline) {

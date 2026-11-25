@@ -49,7 +49,7 @@ func TestCronCheckers(t *testing.T) {
 			ch.h.faults = []faultEv{{Kind: "clock-back", Host: "h1", Start: min(4).Add(10 * time.Second), End: min(6), Detail: "clock -2m0s for 1m30s"}}
 			ch.runs = append(ch.runs, cronEv{WL: cronSL, Cron: "* * * * *", Run: "again", Phase: "start", St: min(4).UnixMilli(), Node: "h1-cron", At: min(5).Add(30 * time.Second)})
 		}},
-		{"rerun after a restart under a clock step (#594)", "", func(ch *cronHist) {
+		{"rerun after a restart under a clock step (#594, fixed)", "C1", func(ch *cronHist) {
 			ch.h.faults = []faultEv{{Kind: "clock-back", Host: "h1", Start: min(4).Add(10 * time.Second), End: min(6), Detail: "clock -2m0s for 1m30s, hostd on h1 restarted half way"}}
 			ch.runs = append(ch.runs, cronEv{WL: cronSL, Cron: "* * * * *", Run: "again", Phase: "start", St: min(4).UnixMilli(), Node: "h1-cron", At: min(5).Add(30 * time.Second)})
 		}},
