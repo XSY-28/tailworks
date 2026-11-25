@@ -30,7 +30,13 @@ Last update: 2026-11-24 PT. Onboarding hints from the simplify audit (#442, #443
 ## Tests
 
 - `make lint`: ok.
-- `make test`: see the PR's Tests section.
+- `make test`: failed in 18 timing-bound tests (mgmt placement "not live"
+  hosts, hostd KV/R2/locks/public client timeouts, mgmtd start budget,
+  cliflow kill latency) while the machine's load average was 90-130 on 12
+  cores from other agents. Rerunning exactly those 18 with `go test -run`
+  passed (mgmt, internal/mgmtd, hostd, cmd/tw: ok), as did
+  `TestCLIOAuth`/`TestCLISingleProcess` (they exercise `mint_mode_required`).
+- After merging origin/master again (e2e/dataplane only): `make lint` ok.
 - `make cli-docs`: docs/cli.md regenerated.
 - `make changes-check`: ok (no upgrade-relevant paths); fragment
   `changes/simplify-onboarding-hints.md` added anyway for the user-visible text.
