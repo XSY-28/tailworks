@@ -565,10 +565,13 @@ global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · -
 open or close a workload's public routes
 
 ```text
-tw expose: open or close a workload's public (Funnel) routes; survives redeploys (tailworks.jsonc "public", ADR-029)
+tw expose: open or close a workload's public (Funnel) routes; survives redeploys (tailworks.jsonc "public", ADR-029). names lists the public names the tenant owns (it keeps one across undeploys); release frees one nothing serves
 
 subcommands:
   tw expose on|off <workload>
+  tw expose names
+  tw expose release <name>
+  common flags: [--tenant <tailnet>]
 
 flags:
   (none besides the global ones)
@@ -576,11 +579,19 @@ flags:
 global: --state-dir <dir> (default $TW_STATE_DIR or ~/.tailworks) · --json · --tenant <tailnet|id> (default: the tw up tenant)
 ```
 
+#### tw expose names
+
+Same flags as [tw expose](#tw-expose).
+
 #### tw expose off
 
 Same flags as [tw expose](#tw-expose).
 
 #### tw expose on
+
+Same flags as [tw expose](#tw-expose).
+
+#### tw expose release
 
 Same flags as [tw expose](#tw-expose).
 
