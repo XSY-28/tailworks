@@ -1,7 +1,7 @@
 {
   "dev": {
-    "date": "2026-11-24",
-    "commit": "dde4e0f2b761a0bfc0896fad7bab7b4c39eeb4fb",
+    "date": "2026-11-25",
+    "commit": "dab6ceb262fee8c628d6dfe265c01fdd281f2400",
     "platform": "darwin/arm64",
     "results": {
       "ag-cross-domain": {
@@ -102,8 +102,9 @@
         "steps": 4
       },
       "py-assets": {
-        "outcome": "XFAIL",
-        "source": "cloudflare/python-workers-examples/assets@47ec7d69f405"
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/assets@47ec7d69f405",
+        "steps": 2
       },
       "py-binding": {
         "outcome": "PASS",
@@ -116,8 +117,9 @@
         "steps": 4
       },
       "py-cron": {
-        "outcome": "XFAIL",
-        "source": "cloudflare/python-workers-examples/cron@47ec7d69f405"
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/cron@47ec7d69f405",
+        "steps": 1
       },
       "py-durable-objects": {
         "outcome": "PASS",
@@ -145,8 +147,8 @@
     }
   },
   "deployed": {
-    "date": "2026-11-24",
-    "commit": "dde4e0f2b761a0bfc0896fad7bab7b4c39eeb4fb",
+    "date": "2026-11-25",
+    "commit": "dab6ceb262fee8c628d6dfe265c01fdd281f2400",
     "platform": "darwin/arm64",
     "results": {
       "ag-cross-domain": {
@@ -246,8 +248,9 @@
         "steps": 4
       },
       "py-assets": {
-        "outcome": "XFAIL",
-        "source": "cloudflare/python-workers-examples/assets@47ec7d69f405"
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/assets@47ec7d69f405",
+        "steps": 2
       },
       "py-binding": {
         "outcome": "PASS",
@@ -260,8 +263,9 @@
         "steps": 4
       },
       "py-cron": {
-        "outcome": "XFAIL",
-        "source": "cloudflare/python-workers-examples/cron@47ec7d69f405"
+        "outcome": "PASS",
+        "source": "cloudflare/python-workers-examples/cron@47ec7d69f405",
+        "steps": 2
       },
       "py-durable-objects": {
         "outcome": "PASS",

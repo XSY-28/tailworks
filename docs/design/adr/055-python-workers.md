@@ -2,7 +2,8 @@
 
 **Date:** 2026-11-24
 **Status:** Accepted (2026-11-24; built on branch `python-support-292`; drafted as `ADR-python-workers`;
-issue #292).
+issue #292). Amended 2026-11-24 (branch `python-cron-queues-assets`):
+cron triggers, Queues and static assets work for Python (decision 8).
 
 ## Context
 
@@ -108,6 +109,21 @@ issue #292).
    is refused by hostd with `tier_unavailable`, never run in the process
    tier instead (ADR-032 D5b). `--wrangler` / `--from-wrangler-out` are
    refused for Python. esbuild's "no loader" message no longer appears.
+   (Amended by decision 8: crons, Queues and assets are no longer refused.)
+8. **Cron triggers, Queues and static assets go through the front.**
+   hostd delivers a cron run and a queue batch to the tenant's default
+   export, which for a Python app is the front, so the wrapper still
+   handles the run's controller and the batch's create ticket. The front's
+   `scheduled()` calls `tenant-py`'s through workerd's `Fetcher.scheduled()`
+   and carries back `noRetry`; its `queue()` calls `Fetcher.queue()` with
+   the batch's messages and replays the result (explicit acks, per-message
+   retries, `ackAll`, `retryAll`) onto the real batch, then throws if the
+   Python handler did. Both need `service_binding_extra_handlers` on the
+   front: generated code, so the platform sets the flag, as it does on its
+   own worker. `tenant-py` gets the queue producer bindings. The assets
+   router (ADR-050) wraps the front's default export unchanged, and
+   `tenant-py` gets `env.<assets.binding>`, the router without props, as a
+   JavaScript tenant does.
 
 ## Consequences
 
@@ -123,9 +139,7 @@ issue #292).
   53 MB together) once.
 - Python Durable Objects can't have their own tailnet identity, egress or
   public routes until the per-object wrapper can wrap them; that is the
-  main follow-up, with crons and queues (the front could forward
-  `scheduled()` and `queue()` with `service_binding_extra_handlers`), and
-  the microVM tier (bake the bundles into the guest image, pass the flag in
+  main follow-up, with Workflows and the microVM tier (bake the bundles into the guest image, pass the flag in
   `WorkerdArgs`).
 
 ## Alternatives considered

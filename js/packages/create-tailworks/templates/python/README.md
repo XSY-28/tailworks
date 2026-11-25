@@ -26,6 +26,6 @@ runs start in a second or two.
   app by `tw init`.
 
 The Durable Object has no tailnet node of its own (Python objects are
-internal), and cron triggers, Queues, Workflows and static assets aren't
-supported for Python yet. More:
+internal). Cron triggers, Queues and static assets work as in a JavaScript
+Worker; Workflows aren't supported for Python yet. More:
 [docs/python.md](https://github.com/rosskukulinski/tailworks/blob/master/docs/python.md).

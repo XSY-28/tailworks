@@ -80,12 +80,29 @@ func pythonProjects() []*Project {
 			p.Exercises = []string{"python", "fetch"}
 			p.Probe = func(r *Run) error { return r.Get("/").Want(200, `og:title`, "Example Domain") }
 		}),
-		pyRefused("py-cron", "cron", "Python Worker: cron trigger", "triggers.crons: not supported for Python Workers",
-			"cron triggers of Python Workers aren't supported yet (docs/python.md#limits)"),
+		pyEx("py-cron", "cron", func(p *Project) {
+			p.What = "Python Worker: cron trigger every minute"
+			p.Exercises = []string{"python", "cron"}
+			p.Probe = func(r *Run) error {
+				if err := r.Get("/").Want(200, "Hello from Cron Worker"); err != nil {
+					return err
+				}
+				_, err := r.WaitLog("Scheduled task has been executed.", 150*time.Second)
+				return err
+			}
+		}),
 		pyRefused("py-workflows", "workflows", "Python Workflow", "workflows: not supported for Python Workers",
 			"Python Workflows aren't supported yet (docs/python.md#limits)"),
-		pyRefused("py-assets", "assets", "Python Worker + static assets", "assets: not supported for Python Workers",
-			"static assets in front of a Python Worker aren't supported yet (docs/python.md#limits)"),
+		pyEx("py-assets", "assets", func(p *Project) {
+			p.What = "Python Worker serving static assets through env.ASSETS"
+			p.Exercises = []string{"python", "assets"}
+			p.Probe = func(r *Run) error {
+				if err := r.Get("/image.svg").Want(200, "<svg"); err != nil {
+					return err
+				}
+				return r.Get("/favicon.ico").Want(200)
+			}
+		}),
 		pyRefused("py-url-shortener", "url-shortener", "Python Worker on KV, compatibility_date 2026-09-01",
 			"no longer has the `workers` SDK built in",
 			"from compatibility_date 2026-04-21 the `workers` SDK is a package pywrangler vendors (workers-runtime-sdk); tw deploy doesn't run pywrangler, so it asks for `uv run pywrangler sync` first (docs/python.md#packages)"),
