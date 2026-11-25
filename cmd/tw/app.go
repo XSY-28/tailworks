@@ -660,7 +660,8 @@ func printPreflight(a *app, pf mgmt.PreflightResult, applying bool) {
 	}
 	if pf.Service != "" {
 		if pf.ServiceUnapproved {
-			fmt.Printf("› preflight: service %s … ✗ not in autoApprovers.services for the workload tags (control would never route it)\n    add to your tailnet policy:\n    %s\n", pf.Service, pf.ServiceSnippet)
+			fmt.Printf("› preflight: service %s … ✗ not in autoApprovers.services for the workload tags (control would never route it)\n    add to your tailnet policy:\n", pf.Service)
+			printPaste(snippetService(preflightPolicy(pf)), "    ") // policysnippet.go
 		} else {
 			fmt.Printf("✓ preflight  service %s auto-approved for the workload node\n", pf.Service)
 		}
@@ -699,17 +700,12 @@ func printPreflight(a *app, pf mgmt.PreflightResult, applying bool) {
 		}
 	}
 	if len(pf.Missing) > 0 || len(pf.MissingTagOwners) > 0 || len(pf.UndefinedConnects) > 0 {
-		if pf.TagOwnersSnippet != "" {
-			fmt.Printf("  add to your tailnet policy:\n    %s\n", pf.TagOwnersSnippet)
+		if c := snippetConnects(preflightPolicy(pf)); !c.Empty() { // policysnippet.go
+			fmt.Printf("  add to your tailnet policy:\n")
+			printPaste(c, "    ")
 		}
 		if len(pf.MissingTagOwners) > 0 && !applying { // --apply-policy: the plan that follows says what is written
 			printCallerGrant(a.Cfg.Tailnet.Tags, a.Cfg.Tailnet.HTTPS, pf.Service) // callergrant.go
-		}
-		if len(pf.Missing) > 0 {
-			fmt.Printf("  add to \"grants\" in your tailnet policy:\n")
-			for _, g := range pf.MissingGrants() {
-				fmt.Printf("    %s\n", g.Snippet)
-			}
 		}
 	}
 }

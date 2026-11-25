@@ -2,9 +2,8 @@ package main
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 
+	"github.com/rosskukulinski/tailworks/internal/policy"
 	"github.com/rosskukulinski/tailworks/mgmt"
 )
 
@@ -15,18 +14,15 @@ import (
 // 80 (netd's ingress port), and with tailnet.https on 443 too
 // (mgmt.CallerPorts, #360).
 func callerGrant(workloadTags []string, https bool) string {
+	return entryString(callerGrantEntry(workloadTags, https))
+}
+
+// callerGrantEntry is callerGrant as a grant (nil without tags).
+func callerGrantEntry(workloadTags []string, https bool) map[string]any {
 	if len(workloadTags) == 0 {
-		return ""
+		return nil
 	}
-	q := make([]string, len(workloadTags))
-	for i, t := range workloadTags {
-		q[i] = strconv.Quote(t)
-	}
-	ports := mgmt.CallerPorts(https)
-	for i, p := range ports {
-		ports[i] = strconv.Quote(p)
-	}
-	return fmt.Sprintf(`{ "src": ["autogroup:member"], "dst": [%s], "ip": [%s] }`, strings.Join(q, ", "), strings.Join(ports, ", "))
+	return map[string]any{"src": []string{mgmt.CallerSrc}, "dst": workloadTags, "ip": mgmt.CallerPorts(https)}
 }
 
 // serviceCallerGrant is callerGrant for a workload behind a Tailscale
@@ -34,10 +30,24 @@ func callerGrant(workloadTags []string, https bool) string {
 // capabilities on that grant reach caps() on calls through the Service
 // (H22, #155; a grant to the workload tags covers only its node's own name).
 func serviceCallerGrant(service string) string {
+	return entryString(serviceCallerGrantEntry(service))
+}
+
+// serviceCallerGrantEntry is serviceCallerGrant as a grant (nil without a
+// Service).
+func serviceCallerGrantEntry(service string) map[string]any {
 	if service == "" {
+		return nil
+	}
+	return map[string]any{"src": []string{mgmt.CallerSrc}, "dst": []string{service}, "ip": []string{mgmt.CallerPort}}
+}
+
+// entryString is policy.EntryHuJSON, "" for nil.
+func entryString(e map[string]any) string {
+	if e == nil {
 		return ""
 	}
-	return fmt.Sprintf(`{ "src": ["autogroup:member"], "dst": [%s], "ip": ["tcp:80"] }`, strconv.Quote(service))
+	return policy.EntryHuJSON(e)
 }
 
 // printCallerGrant prints callerGrant (and serviceCallerGrant for a

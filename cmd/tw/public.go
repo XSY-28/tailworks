@@ -90,9 +90,7 @@ func printPublicPreflight(pf mgmt.PreflightResult) {
 		fmt.Printf("› preflight: nodeAttrs %s … ✗ missing (the public node could not serve Funnel)\n", m)
 	}
 	fmt.Printf("  add to your tailnet policy:\n")
-	for _, l := range strings.Split(pf.NodeAttrsSnippet, "\n") {
-		fmt.Printf("    %s\n", l)
-	}
+	printPaste(snippetPublic(preflightPolicy(pf)), "    ") // policysnippet.go
 }
 
 // preflightFailure is the typed error for a failed deploy preflight.
@@ -102,40 +100,15 @@ func preflightFailure(pf mgmt.PreflightResult) *cliErr {
 		code, msg = "funnel_required", "preflight failed: this app declares public routes, but the tenant policy does not let "+policy.PublicTag+" use Funnel"
 	}
 	e := fail(code, msg)
-	// The public snippet already owns tag:tw-public; don't print it twice.
-	if needTagOwnersSnippet(pf) {
-		e.Fix = append(e.Fix, "add to your tailnet policy:", "  "+pf.TagOwnersSnippet)
-	}
-	if len(pf.Missing) > 0 {
-		e.Fix = append(e.Fix, `add to "grants" in your tailnet policy:`)
-		for _, g := range pf.MissingGrants() {
-			e.Fix = append(e.Fix, "  "+g.Snippet)
-		}
-	}
-	if len(pf.MissingNodeAttrs) > 0 {
-		e.Fix = append(e.Fix, "add to your tailnet policy (public ingress, ADR-029):")
-		for _, l := range strings.Split(pf.NodeAttrsSnippet, "\n") {
-			e.Fix = append(e.Fix, "  "+l)
-		}
+	if lines := pasteLines(preflightPolicy(pf), nil, "  "); lines != nil { // policysnippet.go
+		e.Fix = append(append(e.Fix, "add to your tailnet policy (admin console › Access controls):"), lines...)
 	}
 	if pf.ServiceUnapproved {
-		e.Fix = append(e.Fix, "let the workload node host "+pf.Service+" (control won't route it otherwise):", "  "+pf.ServiceSnippet)
+		e.Fix = append(e.Fix, "(the autoApprovers entry lets the workload node host "+pf.Service+"; control won't route it otherwise)")
 	}
 	e.Fix = append(e.Fix, "then re-run, or deploy anyway with --allow-missing-grants",
 		"or let tw add them (shows the lines and asks first): tw deploy --apply-policy")
 	return e
-}
-
-// needTagOwnersSnippet: pf.TagOwnersSnippet has something to add that the
-// public nodeAttrs snippet (which owns tag:tw-public) doesn't already.
-func needTagOwnersSnippet(pf mgmt.PreflightResult) bool {
-	if pf.TagOwnersSnippet == "" {
-		return false
-	}
-	if len(pf.UndefinedConnects) > 0 {
-		return true
-	}
-	return len(pf.MissingTagOwners) > 0 && !(len(pf.MissingNodeAttrs) > 0 && onlyPublicTagOwner(pf.MissingTagOwners))
 }
 
 func onlyPublicTagOwner(tags []string) bool {
@@ -301,7 +274,7 @@ func doctorPublic(run func(string, func() (string, string, string)), s *state) {
 			}
 			if !pol.HasNodeAttr(policy.PublicTag, "funnel") {
 				return "fail", policy.PublicTag + " has no funnel nodeAttr: " + d.Workload + "'s public node cannot serve Funnel",
-					"add to your tailnet policy: " + strings.ReplaceAll(policy.PublicSnippet().HuJSON(), "\n", " ")
+					"add to your tailnet policy: " + strings.ReplaceAll(policy.PublicSnippet().Inline(), "\n", " ")
 			}
 			return "ok", "funnel allowed on " + policy.PublicTag, ""
 		})
