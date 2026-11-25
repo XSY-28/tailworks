@@ -40,6 +40,8 @@ export class Box extends DurableObject {
           started,
           epoch: self.epoch,
           magicDNS: self.magicDNS,
+          // pending until the object's node is ready (the DO runs before it)
+          status: self.status,
           hostname: self.hostname,
           objectID: self.objectID,
         };

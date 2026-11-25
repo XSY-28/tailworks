@@ -153,6 +153,7 @@ type ctrRep struct {
 	MagicDNS, ObjectID   string
 	Started              bool
 	ReportedHostnameSelf string `json:"Hostname"`
+	Status               string // ctx.tailnet.self().status when the object read its name
 }
 
 // vmRep is a microVM workload's first random draws, as the recorder got them.

@@ -218,6 +218,9 @@ func checkK2(in kInput) result {
 			}
 			if o.MagicDNS != "" {
 				byDNS[o.MagicDNS] = append(byDNS[o.MagicDNS], o.ObjectID+"("+o.Status+")")
+			} else if o.Status == "ready" && !dupSeen["noname"+o.ObjectID] {
+				dupSeen["noname"+o.ObjectID] = true
+				r.fail("at %s %s is ready in mgmt with no MagicDNS name (fault: %s)", s.At.Format("15:04:05.000"), o.ObjectID, faultAt(in.faults, s.At))
 			}
 		}
 		for sid, ids := range bySID {
@@ -258,7 +261,11 @@ func checkK2(in kInput) result {
 			nodeObjs[rep.StableID] = map[string]bool{}
 		}
 		nodeObjs[rep.StableID][rep.Obj] = true
-		if firstLabel(rep.Node) != firstLabel(rep.MagicDNS) {
+		// A Durable Object runs before its node is ready: self() then says
+		// pending with no name yet, and the report waits for the node
+		// (egress is held until ready, #331). The name read back once ready
+		// must be the node's.
+		if rep.Status == "ready" && firstLabel(rep.Node) != firstLabel(rep.MagicDNS) {
 			misnamed++
 			r.fail("%s reported from node %s but read back MagicDNS name %q (at %s)", rep.Obj, rep.Node, rep.MagicDNS, rep.At.Format("15:04:05.000"))
 		}
