@@ -70,12 +70,19 @@ func Policy() policy.Snippet {
 // BuildBinaries builds tailworks, tw-mgmt and tw-hostd into a temp dir.
 func BuildBinaries(t testing.TB) string {
 	t.Helper()
+	return BuildBinariesTags(t, "")
+}
+
+// BuildBinariesTags is BuildBinaries with build tags, for a test hook that
+// only a test build has (twtestclock: internal/wallclock).
+func BuildBinariesTags(t testing.TB, tags string) string {
+	t.Helper()
 	root, err := nettest.FindRepoRoot()
 	if err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	cmd := exec.Command("go", "build", "-o", dir+"/", "./cmd/tw", "./cmd/tw-mgmt", "./cmd/tw-hostd")
+	cmd := exec.Command("go", "build", "-tags="+tags, "-o", dir+"/", "./cmd/tw", "./cmd/tw-mgmt", "./cmd/tw-hostd")
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local")
 	if b, err := cmd.CombinedOutput(); err != nil {
