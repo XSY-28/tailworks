@@ -92,10 +92,18 @@ func TestKeepEarlyAnswerWithoutConnectionClose(t *testing.T) {
 
 // TestKeepEarlyAnswerNoAnswer: an upstream that closes mid-body without
 // answering still gives the caller a prompt 503.
+//
+// Prompt is measured from the upstream's close, not from the POST: until
+// the upstream goroutine runs and closes, the proxy has nothing to answer,
+// and a loaded machine can delay that goroutine by seconds (#429: a 12 s
+// first POST under `make test`). The proxy itself waits on no timer here:
+// its answer follows the close.
 func TestKeepEarlyAnswerNoAnswer(t *testing.T) {
 	t.Parallel()
+	closed := make(chan time.Time, 1)
 	sock := rawUpstream(t, func(c net.Conn, req *http.Request) {
 		io.CopyN(io.Discard, req.Body, 1000)
+		closed <- time.Now()
 		c.Close()
 	})
 	front := httptest.NewServer(netd.UnixUpstream(sock))
@@ -112,8 +120,14 @@ func TestKeepEarlyAnswerNoAnswer(t *testing.T) {
 		if resp.StatusCode != http.StatusServiceUnavailable || !strings.Contains(string(b), "upstream_unavailable") {
 			t.Fatalf("POST %d: %d %s", i, resp.StatusCode, b)
 		}
-		if d := time.Since(st); d > 5*time.Second {
-			t.Fatalf("POST %d took %v", i, d)
+		var at time.Time
+		select {
+		case at = <-closed:
+		case <-time.After(10 * time.Second):
+			t.Fatalf("POST %d: answered, but the upstream never closed", i)
+		}
+		if d := time.Since(at); d > 5*time.Second {
+			t.Fatalf("POST %d answered %v after the upstream closed (%v in all)", i, d, time.Since(st))
 		}
 	}
 }
