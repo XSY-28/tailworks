@@ -952,6 +952,7 @@ func (inst *instance) spawn() error {
 		logf.Close()
 		return err
 	}
+	inst.h.children.add(cmd.Process.Pid, "workerd "+inst.w.name) // childreap.go
 	ex := make(chan struct{})
 	inst.mu.Lock()
 	inst.cmd, inst.exited, inst.started = cmd, ex, time.Now()
@@ -962,6 +963,8 @@ func (inst *instance) spawn() error {
 		// Nothing of the old workerd may outlive it (restart.go, #43).
 		if err := reapGroup(cmd.Process.Pid); err != nil {
 			inst.h.log.Warn("workerd's process group", "workload", inst.w.name, "err", err)
+		} else {
+			inst.h.children.remove(cmd.Process.Pid)
 		}
 		close(ex)
 		inst.onExit()

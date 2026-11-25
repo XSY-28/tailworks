@@ -1507,17 +1507,17 @@ flags:
 list deployments and objects
 
 ```text
-tw ls: list deployments and objects (paged; --all follows every page and shows killed objects)
+tw ls: list deployments and live objects, or one workload's with its previews and replicas; --all adds killed objects and stopped deployments (at most 5000 objects: --limit N, 0 for no ceiling)
 
-usage: tw ls [--tenant <tailnet>] [--all] [--limit N]
+usage: tw ls [workload] [--tenant <tailnet>] [--all]
 
 flags:
   -all
-    	include killed objects, and fetch every page
+    	also list killed objects and stopped deployments
   -json
     	machine-readable output
   -limit int
-    	at most this many objects (pages of ≤500 are followed up to it; --all lifts the cap) (default 200)
+    	list at most this many objects (0: no ceiling) (default 5000)
   -state-dir string
     	state directory (default $TW_STATE_DIR or ~/.tailworks)
   -tenant string
