@@ -75,8 +75,8 @@ New failures:
 
 Merged origin/master (with #400, #404 and the Python examples), removed
 the expected failures of `ag-next-lifecycle` and `ag-next-routing`, reran
-the full `make e2e-compat-dev`: `ok ... 82.590s`, counts `PASS:35 XFAIL:7`.
+the full `make e2e-compat-dev`: `ok ... 82.590s`, counts `PASS:35 XFAIL:7`; again after merging #402 (tailnet HTTPS): `ok ... 88.047s`, `PASS:35 XFAIL:7`.
 `ag-next-lifecycle`, `ag-next-routing` and `ag-playground` pass.
-`make compat-upstream`: cloudflare/agents is now 20 pass, 0 pass with a
-change, 3 fail, 46 not run; vercel/ai and mcp-handler unchanged.
+`make compat-upstream`: cloudflare/agents is now 20 pass, 1 pass with a
+change (`mcp-worker-authenticated`, from #402), 2 fail, 46 not run; vercel/ai and mcp-handler unchanged.
 `make compat-upstream-check compat-check`, `make lint`: ok.

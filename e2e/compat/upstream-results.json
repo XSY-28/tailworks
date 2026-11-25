@@ -1,7 +1,7 @@
 {
   "dev": {
     "date": "2026-11-25",
-    "commit": "52dbb038924bc77f530ed21dc013093be3cb99c0",
+    "commit": "fc52de0ae670cb0b09b50ed2f3ab7339bd0faad3",
     "platform": "darwin/arm64",
     "results": {
       "ag-cross-domain": {
