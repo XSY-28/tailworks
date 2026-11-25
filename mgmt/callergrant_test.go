@@ -80,8 +80,8 @@ func TestCallerGrantRule(t *testing.T) {
 		{name: "tag:tw", pol: `{}`, tags: []string{"tag:tw"}, keep: newAppSnippet("tag:tw"), manual: "isn't an app tag"},
 		{name: "the public tag", pol: base, tags: []string{PublicTag}, keep: newAppSnippet(PublicTag), manual: "isn't an app tag"},
 		{name: "the tag isn't being added", pol: base, tags: []string{appTag}, keep: policy.Snippet{}, manual: "isn't being added"},
-		{name: "Headscale has no autogroup sources", pol: base, tags: []string{appTag}, keep: newAppSnippet(appTag),
-			opts: policy.Options{Headscale: true}, manual: "callers:"},
+		{name: "Headscale accepts autogroup:member", pol: base, tags: []string{appTag}, keep: newAppSnippet(appTag),
+			opts: policy.Options{Headscale: true}, want: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var pol *Policy

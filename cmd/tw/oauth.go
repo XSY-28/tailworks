@@ -128,7 +128,7 @@ func mintModeRequired() *cliErr {
 	lines = append(lines, "  4. run tw up on a terminal and paste the Client Secret when asked (saved to ~/.config/tailworks/oauth.env, 0600)",
 		"     no terminal? put TS_OAUTH_CLIENT_SECRET=tskey-client-… in ~/.config/tailworks/oauth.env, or pass tw up --oauth-client-file <file>",
 		"",
-		"Headscale instead of Tailscale: tw up --control=headscale --control-url <server_url> --tailnet <base_domain> --api-key-file <file with HEADSCALE_API_KEY=…>",
+		"Headscale instead of Tailscale: tw up --control-url <server_url> --tailnet <base_domain> (the API key in ~/.config/tailworks/headscale.env, or --api-key-file <file with HEADSCALE_API_KEY=…>)",
 		"",
 		"policy:")
 	lines = append(lines, snippetLines(operatorSnippet())...)
